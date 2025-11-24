@@ -957,6 +957,402 @@ def maintenance_entry_page():
     else:
         st.info("No maintenance records found. Add your first record above!")
 
+def auto_create_driver_conductor(name, position, conn):
+    """
+    Auto-create driver or conductor if they don't exist
+    Returns: employee_id (int) or None
+    """
+    cursor = conn.cursor()
+    
+    # Check if employee exists
+    cursor.execute("""
+        SELECT employee_id FROM employees 
+        WHERE full_name = ? AND position LIKE ?
+    """, (name, f"%{position}%"))
+    
+    result = cursor.fetchone()
+    if result:
+        return result[0]
+    
+    # Create new employee
+    try:
+        # Generate employee ID
+        cursor.execute("""
+            SELECT MAX(CAST(SUBSTR(employee_id, 4) AS INTEGER)) 
+            FROM employees 
+            WHERE employee_id LIKE ?
+        """, (f"{position[:3].upper()}%",))
+        
+        max_num = cursor.fetchone()[0]
+        new_num = (max_num or 0) + 1
+        employee_id = f"{position[:3].upper()}{new_num:03d}"
+        
+        cursor.execute("""
+            INSERT INTO employees 
+            (employee_id, full_name, position, department, hire_date, salary, status, created_by)
+            VALUES (?, ?, ?, 'Operations', date('now'), 0.0, 'Active', 'AUTO_IMPORT')
+        """, (employee_id, name, position))
+        
+        conn.commit()
+        return employee_id
+    except:
+        return None
+
+
+def auto_create_assignment(bus_number, driver_name, conductor_name, date_str, route, conn):
+    """
+    Auto-create bus assignment from income entry
+    Returns: True if successful, False otherwise
+    """
+    cursor = conn.cursor()
+    
+    try:
+        # Get or create driver
+        driver_id = auto_create_driver_conductor(driver_name, "Driver", conn)
+        if not driver_id:
+            return False
+        
+        # Get or create conductor
+        conductor_id = auto_create_driver_conductor(conductor_name, "Conductor", conn)
+        if not conductor_id:
+            return False
+        
+        # Check if assignment already exists for this date and bus
+        cursor.execute("""
+            SELECT id FROM bus_assignments 
+            WHERE bus_number = ? AND assignment_date = ?
+        """, (bus_number, date_str))
+        
+        if cursor.fetchone():
+            # Update existing assignment
+            cursor.execute("""
+                UPDATE bus_assignments 
+                SET driver_id = (SELECT id FROM drivers WHERE name = ?),
+                    conductor_id = (SELECT id FROM conductors WHERE name = ?),
+                    route = ?
+                WHERE bus_number = ? AND assignment_date = ?
+            """, (driver_name, conductor_name, route, bus_number, date_str))
+        else:
+            # Get driver and conductor IDs from drivers/conductors tables
+            cursor.execute("SELECT id FROM drivers WHERE name = ?", (driver_name,))
+            driver_table_id = cursor.fetchone()
+            
+            cursor.execute("SELECT id FROM conductors WHERE name = ?", (conductor_name,))
+            conductor_table_id = cursor.fetchone()
+            
+            # Create new assignment
+            cursor.execute("""
+                INSERT INTO bus_assignments 
+                (bus_number, driver_id, conductor_id, assignment_date, shift, route, notes, created_at)
+                VALUES (?, ?, ?, ?, 'Full Day', ?, 'Auto-created from income import', CURRENT_TIMESTAMP)
+            """, (bus_number, 
+                 driver_table_id[0] if driver_table_id else None,
+                 conductor_table_id[0] if conductor_table_id else None,
+                 date_str, route))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error creating assignment: {e}")
+        return False
+
+
+"""
+REPLACE the import_data_page() function with this enhanced version
+that includes auto-assignment creation
+"""
+
+def import_data_page():
+    """Import data from Excel files with AUTO-ASSIGNMENT feature"""
+    
+    st.header("📥 Import from Excel")
+    st.markdown("Bulk import income and maintenance records")
+    st.markdown("---")
+    
+    # 🆕 Feature highlight
+    st.info("✨ **NEW:** When importing income data, assignments are automatically created for drivers and conductors!")
+    
+    # Instructions
+    with st.expander("📖 Instructions", expanded=True):
+        st.markdown("""
+        ### How to Import Data:
+        
+        1. **Download the template** below for the type of data you want to import
+        2. **Fill in your data** in the Excel file
+        3. **Upload the file** using the upload button
+        4. **Review the preview** and click Import
+        
+        ### 🆕 Auto-Assignment Feature (Income Import):
+        - Automatically creates bus assignments from income entries
+        - Creates missing drivers/conductors if needed
+        - Links bus + driver + conductor + date
+        - Shows summary of auto-created assignments
+        
+        ### Required Columns:
+        
+        **Income Data:**
+        - bus_number, route, driver_name, conductor_name, date, amount
+        - Optional: hire_destination (required if route = "Hire"), notes
+        
+        **Maintenance Data:**
+        - bus_number, maintenance_type, mechanic_name, date, cost, status, description, parts_used
+        
+        **Date Format:** YYYY-MM-DD (e.g., 2025-10-15)
+        """)
+    
+    # Download templates
+    st.subheader("📄 Download Templates")
+    
+    col_temp1, col_temp2 = st.columns(2)
+    
+    with col_temp1:
+        income_template = pd.DataFrame({
+            'bus_number': ['PAV-07', 'PAV-08', 'PAV-09'],
+            'route': ['Harare-Mutare', 'Hire', 'Harare-Bulawayo'],
+            'hire_destination': ['', 'Wedding at Lake Chivero', ''],
+            'driver_name': ['John Doe', 'Jane Smith', 'Bob Wilson'],
+            'conductor_name': ['Mike Johnson', 'Sarah Williams', 'Tom Brown'],
+            'date': ['2025-10-15', '2025-10-15', '2025-10-15'],
+            'amount': [500.00, 1200.00, 450.00],
+            'notes': ['Regular run', 'Private hire', 'Express service']
+        })
+        
+        csv_income = income_template.to_csv(index=False)
+        st.download_button(
+            label="📊 Download Income Template",
+            data=csv_income,
+            file_name="income_template.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    with col_temp2:
+        maint_template = pd.DataFrame({
+            'bus_number': ['PAV-07', 'PAV-08'],
+            'maintenance_type': ['Oil Change', 'Tire Replacement'],
+            'mechanic_name': ['Mike Smith', 'Tom Brown'],
+            'date': ['2025-10-15', '2025-10-15'],
+            'cost': [50.00, 200.00],
+            'status': ['Completed', 'Completed'],
+            'description': ['Regular oil change', 'Replaced front tires'],
+            'parts_used': ['Oil filter, 5L oil', '2x Front tires']
+        })
+        
+        csv_maint = maint_template.to_csv(index=False)
+        st.download_button(
+            label="🔧 Download Maintenance Template",
+            data=csv_maint,
+            file_name="maintenance_template.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    st.markdown("---")
+    
+    # Import section
+    st.subheader("📤 Upload and Import")
+    
+    import_type = st.radio("Select import type:", ["💰 Income Data", "🔧 Maintenance Data"], horizontal=True)
+    
+    # 🆕 Auto-assignment toggle for income imports
+    auto_assign = False
+    if import_type == "💰 Income Data":
+        auto_assign = st.checkbox("🤖 Auto-create bus assignments", value=True,
+                                  help="Automatically create assignments for drivers and conductors from income data")
+    
+    uploaded_file = st.file_uploader(
+        "Choose a CSV or Excel file",
+        type=['csv', 'xlsx', 'xls'],
+        help="Upload your data file (CSV or Excel format)"
+    )
+    
+    if uploaded_file is not None:
+        try:
+            # Read file
+            if uploaded_file.name.endswith('.csv'):
+                df = pd.read_csv(uploaded_file)
+            else:
+                df = pd.read_excel(uploaded_file)
+            
+            st.success(f"✅ File loaded successfully! Found {len(df)} records.")
+            
+            # Preview data
+            st.subheader("👀 Data Preview")
+            st.dataframe(df.head(10), use_container_width=True)
+            
+            # Validation
+            st.subheader("✓ Validation")
+            
+            if import_type == "💰 Income Data":
+                required_cols = ['bus_number', 'route', 'driver_name', 'conductor_name', 'date', 'amount']
+                optional_cols = ['hire_destination', 'notes']
+            else:  # Maintenance
+                required_cols = ['bus_number', 'maintenance_type', 'date', 'cost']
+                optional_cols = ['mechanic_name', 'status', 'description', 'parts_used']
+            
+            missing_cols = [col for col in required_cols if col not in df.columns]
+            
+            if missing_cols:
+                st.error(f"❌ Missing required columns: {', '.join(missing_cols)}")
+            else:
+                st.success(f"✅ All required columns present")
+                
+                # Fill optional columns with defaults
+                for col in optional_cols:
+                    if col not in df.columns:
+                        if col == 'status':
+                            df[col] = 'Completed'
+                        else:
+                            df[col] = ''
+                
+                # Import button
+                if st.button("🚀 Import Data", type="primary", use_container_width=True):
+                    conn = sqlite3.connect('bus_management.db')
+                    cursor = conn.cursor()
+                    
+                    success_count = 0
+                    error_count = 0
+                    errors = []
+                    
+                    # 🆕 Assignment tracking
+                    assignments_created = 0
+                    drivers_created = 0
+                    conductors_created = 0
+                    
+                    with st.spinner("Importing data..."):
+                        for idx, row in df.iterrows():
+                            try:
+                                if import_type == "💰 Income Data":
+                                    # Validate hire destination for Hire routes
+                                    if row['route'] == 'Hire' and not str(row.get('hire_destination', '')).strip():
+                                        raise ValueError("Hire destination required for Hire routes")
+                                    
+                                    cursor.execute('''
+                                        INSERT INTO income 
+                                        (bus_number, route, hire_destination, driver_name, conductor_name, 
+                                         date, amount, notes, created_by)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    ''', (
+                                        row['bus_number'],
+                                        row['route'],
+                                        row.get('hire_destination', ''),
+                                        row['driver_name'],
+                                        row['conductor_name'],
+                                        row['date'],
+                                        row['amount'],
+                                        row.get('notes', ''),
+                                        st.session_state['user']['username']
+                                    ))
+                                    
+                                    # 🆕 AUTO-CREATE ASSIGNMENT
+                                    if auto_assign:
+                                        # Check if driver/conductor were newly created
+                                        cursor.execute("""
+                                            SELECT COUNT(*) FROM employees 
+                                            WHERE full_name = ? AND created_by = 'AUTO_IMPORT'
+                                        """, (row['driver_name'],))
+                                        if cursor.fetchone()[0] > 0:
+                                            drivers_created += 1
+                                        
+                                        cursor.execute("""
+                                            SELECT COUNT(*) FROM employees 
+                                            WHERE full_name = ? AND created_by = 'AUTO_IMPORT'
+                                        """, (row['conductor_name'],))
+                                        if cursor.fetchone()[0] > 0:
+                                            conductors_created += 1
+                                        
+                                        # Create assignment
+                                        if auto_create_assignment(
+                                            row['bus_number'],
+                                            row['driver_name'],
+                                            row['conductor_name'],
+                                            row['date'],
+                                            row['route'],
+                                            conn
+                                        ):
+                                            assignments_created += 1
+                                
+                                else:  # Maintenance
+                                    cursor.execute('''
+                                        INSERT INTO maintenance
+                                        (bus_number, maintenance_type, mechanic_name, date, cost, 
+                                         status, description, parts_used, created_by)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                    ''', (
+                                        row['bus_number'],
+                                        row['maintenance_type'],
+                                        row.get('mechanic_name', ''),
+                                        row['date'],
+                                        row['cost'],
+                                        row.get('status', 'Completed'),
+                                        row.get('description', ''),
+                                        row.get('parts_used', ''),
+                                        st.session_state['user']['username']
+                                    ))
+                                
+                                success_count += 1
+                                
+                            except Exception as e:
+                                error_count += 1
+                                errors.append(f"Row {idx + 1}: {str(e)}")
+                        
+                        conn.commit()
+                        conn.close()
+                    
+                    # Audit logging
+                    module = "Income" if import_type == "💰 Income Data" else "Maintenance"
+                    AuditLogger.log_data_import(
+                        module=module,
+                        record_count=success_count,
+                        file_name=uploaded_file.name
+                    )
+                    
+                    # Results
+                    st.markdown("---")
+                    st.subheader("📊 Import Results")
+                    
+                    col_res1, col_res2, col_res3 = st.columns(3)
+                    with col_res1:
+                        st.metric("✅ Successful", success_count)
+                    with col_res2:
+                        st.metric("❌ Errors", error_count)
+                    with col_res3:
+                        st.metric("📊 Total", len(df))
+                    
+                    # 🆕 Auto-assignment results
+                    if import_type == "💰 Income Data" and auto_assign:
+                        st.markdown("---")
+                        st.subheader("🤖 Auto-Assignment Results")
+                        
+                        col_auto1, col_auto2, col_auto3 = st.columns(3)
+                        with col_auto1:
+                            st.metric("📅 Assignments Created", assignments_created)
+                        with col_auto2:
+                            st.metric("👨‍✈️ New Drivers Added", drivers_created)
+                        with col_auto3:
+                            st.metric("👨‍💼 New Conductors Added", conductors_created)
+                        
+                        if assignments_created > 0:
+                            st.success(f"🎉 Automatically created {assignments_created} bus assignments!")
+                        
+                        if drivers_created > 0 or conductors_created > 0:
+                            st.info(f"💡 Created {drivers_created} drivers and {conductors_created} conductors. Update their details in Employee Management.")
+                    
+                    if success_count > 0:
+                        st.success(f"🎉 Successfully imported {success_count} records!")
+                        st.balloons()
+                    
+                    if errors:
+                        with st.expander("⚠️ View Errors"):
+                            for error in errors[:10]:
+                                st.error(error)
+                            if len(errors) > 10:
+                                st.warning(f"... and {len(errors) - 10} more errors")
+        
+        except Exception as e:
+            st.error(f"❌ Error reading file: {str(e)}")
+            st.info("Please make sure your file is in the correct format (CSV or Excel)")
+
 
 # ============================================================================
 # IMPORT DATA PAGE - WITH HIRE SUPPORT

@@ -9,6 +9,357 @@ import sqlite3
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
 
+def get_bus_display_name(bus_number, conn=None):
+    """Get formatted bus display name with registration number"""
+    should_close = False
+    if conn is None:
+        conn = sqlite3.connect('bus_management.db')
+        should_close = True
+    
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT registration_number, model 
+            FROM buses 
+            WHERE bus_number = ?
+        """, (bus_number,))
+        result = cursor.fetchone()
+        
+        if result and result[0]:
+            return f"{result[0]} - {bus_number} ({result[1]})"
+        elif result:
+            return f"{bus_number} ({result[1]})"
+        else:
+            return bus_number
+    finally:
+        if should_close:
+            conn.close()
+
+
+"""
+REPLACE the manage_assignments() function with this enhanced version
+that includes registration numbers and route dropdown
+"""
+
+def manage_assignments():
+    """Manage driver and conductor assignments to buses - ENHANCED VERSION"""
+    
+    st.subheader("📊 Driver & Conductor Assignments")
+    st.markdown("*Assignments now show registration numbers and include route selection*")
+    
+    conn = sqlite3.connect('bus_management.db')
+    
+    # Create assignments table if it doesn't exist
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS bus_assignments (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            bus_number TEXT NOT NULL,
+            driver_id INTEGER,
+            conductor_id INTEGER,
+            assignment_date DATE NOT NULL,
+            shift TEXT,
+            route TEXT,
+            notes TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (driver_id) REFERENCES drivers(id),
+            FOREIGN KEY (conductor_id) REFERENCES conductors(id)
+        )
+    """)
+    conn.commit()
+    
+    action = st.radio("Select Action:", 
+                     ["View Current Assignments", "Create New Assignment", "Assignment History"], 
+                     horizontal=True, key="assign_action")
+    
+    if action == "View Current Assignments":
+        st.markdown("### 📋 Current Day Assignments")
+        
+        today = datetime.now().date()
+        
+        try:
+            query = """
+                SELECT 
+                    ba.id,
+                    ba.bus_number,
+                    d.name as driver_name,
+                    c.name as conductor_name,
+                    ba.assignment_date,
+                    ba.shift,
+                    ba.route,
+                    ba.notes
+                FROM bus_assignments ba
+                LEFT JOIN drivers d ON ba.driver_id = d.id
+                LEFT JOIN conductors c ON ba.conductor_id = c.id
+                WHERE ba.assignment_date = ?
+                ORDER BY ba.bus_number
+            """
+            
+            assignments_df = pd.read_sql_query(query, conn, params=[today])
+            
+            if assignments_df.empty:
+                st.info("No assignments for today. Create new assignments below.")
+            else:
+                # 🆕 ENHANCED: Display with registration numbers
+                display_df = assignments_df.copy()
+                display_df['bus_display'] = display_df['bus_number'].apply(
+                    lambda x: get_bus_display_name(x, conn)
+                )
+                
+                # Reorder columns for better display
+                display_columns = ['bus_display', 'driver_name', 'conductor_name', 
+                                 'shift', 'route', 'notes']
+                display_df_show = display_df[display_columns]
+                display_df_show.columns = ['Bus', 'Driver', 'Conductor', 'Shift', 'Route', 'Notes']
+                
+                st.dataframe(display_df_show, use_container_width=True, height=400)
+                
+                # Summary
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Buses Assigned", assignments_df['bus_number'].nunique())
+                with col2:
+                    st.metric("Drivers on Duty", assignments_df['driver_name'].nunique())
+                with col3:
+                    st.metric("Conductors on Duty", assignments_df['conductor_name'].nunique())
+                
+                # Delete assignment option
+                st.markdown("---")
+                assignment_options = ["Select to remove..."]
+                for idx, row in assignments_df.iterrows():
+                    bus_display = get_bus_display_name(row['bus_number'], conn)
+                    assignment_options.append(
+                        f"{bus_display} - {row['driver_name']} & {row['conductor_name']}"
+                    )
+                
+                assignment_to_delete = st.selectbox("Remove Assignment:", assignment_options)
+                
+                if assignment_to_delete != "Select to remove...":
+                    if st.button("🗑️ Remove Selected Assignment", type="secondary"):
+                        try:
+                            idx = assignment_options.index(assignment_to_delete) - 1
+                            assignment_id = assignments_df.iloc[idx]['id']
+                            
+                            cursor.execute("DELETE FROM bus_assignments WHERE id = ?", (assignment_id,))
+                            conn.commit()
+                            st.success("✅ Assignment removed!")
+                            AuditLogger.log_action("Delete", "Fleet Management", 
+                                                 f"Removed assignment: {assignment_to_delete}")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error removing assignment: {e}")
+        
+        except Exception as e:
+            st.error(f"Error loading assignments: {e}")
+    
+    elif action == "Create New Assignment":
+        st.markdown("### ➕ Create New Assignment")
+        
+        try:
+            # Get available buses, drivers, conductors
+            buses_df = pd.read_sql_query("""
+                SELECT bus_number, registration_number, model 
+                FROM buses 
+                WHERE status = 'Active' 
+                ORDER BY bus_number
+            """, conn)
+            
+            drivers_df = pd.read_sql_query("""
+                SELECT id, name 
+                FROM drivers 
+                WHERE status = 'Active' 
+                ORDER BY name
+            """, conn)
+            
+            conductors_df = pd.read_sql_query("""
+                SELECT id, name 
+                FROM conductors 
+                WHERE status = 'Active' 
+                ORDER BY name
+            """, conn)
+            
+            # 🆕 Get routes for dropdown
+            routes_df = pd.read_sql_query("""
+                SELECT name 
+                FROM routes 
+                ORDER BY name
+            """, conn)
+            
+            if buses_df.empty:
+                st.warning("No active buses available. Add buses first.")
+            elif drivers_df.empty:
+                st.warning("No active drivers available. Add drivers first.")
+            elif conductors_df.empty:
+                st.warning("No active conductors available. Add conductors first.")
+            else:
+                with st.form("assignment_form"):
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # 🆕 ENHANCED: Bus selection with registration numbers
+                        bus_options = []
+                        for _, bus in buses_df.iterrows():
+                            if bus['registration_number'] and str(bus['registration_number']).strip():
+                                bus_options.append(
+                                    f"{bus['registration_number']} - {bus['bus_number']} ({bus['model']})"
+                                )
+                            else:
+                                bus_options.append(f"{bus['bus_number']} ({bus['model']})")
+                        
+                        selected_bus_display = st.selectbox("🚌 Select Bus", bus_options)
+                        
+                        # Extract bus_number from selection
+                        if " - " in selected_bus_display:
+                            bus_number = selected_bus_display.split(" - ")[1].split(" (")[0]
+                        else:
+                            bus_number = selected_bus_display.split(" (")[0]
+                        
+                        driver_dict = {row['name']: row['id'] for _, row in drivers_df.iterrows()}
+                        selected_driver = st.selectbox("👨‍✈️ Select Driver", list(driver_dict.keys()))
+                        
+                        conductor_dict = {row['name']: row['id'] for _, row in conductors_df.iterrows()}
+                        selected_conductor = st.selectbox("👨‍💼 Select Conductor", list(conductor_dict.keys()))
+                    
+                    with col2:
+                        assignment_date = st.date_input("📅 Assignment Date", value=datetime.now())
+                        shift = st.selectbox("⏰ Shift", 
+                                           ["Morning", "Afternoon", "Evening", "Night", "Full Day"])
+                        
+                        # 🆕 ENHANCED: Route dropdown with all available routes
+                        route_options = ["Hire"]
+                        if not routes_df.empty:
+                            route_options.extend(routes_df['name'].tolist())
+                        route = st.selectbox("🛣️ Route", route_options)
+                        
+                        notes = st.text_area("📝 Notes", placeholder="Any special instructions")
+                    
+                    submitted = st.form_submit_button("✅ Create Assignment", use_container_width=True)
+                    
+                    if submitted:
+                        try:
+                            driver_id = driver_dict[selected_driver]
+                            conductor_id = conductor_dict[selected_conductor]
+                            
+                            cursor.execute("""
+                                INSERT INTO bus_assignments (
+                                    bus_number, driver_id, conductor_id,
+                                    assignment_date, shift, route, notes
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, (bus_number, driver_id, conductor_id, 
+                                 assignment_date, shift, route, notes))
+                            
+                            conn.commit()
+                            st.success(f"✅ Assignment created: {selected_bus_display} → {selected_driver} & {selected_conductor}")
+                            
+                            AuditLogger.log_action("Create", "Fleet Management", 
+                                                 f"Created assignment: Bus {bus_number} - {selected_driver} & {selected_conductor} on {assignment_date}")
+                            st.rerun()
+                        
+                        except Exception as e:
+                            st.error(f"Error creating assignment: {e}")
+        
+        except Exception as e:
+            st.error(f"Error: {e}")
+    
+    elif action == "Assignment History":
+        st.markdown("### 📜 Assignment History")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("From Date", value=datetime.now() - timedelta(days=30))
+        with col2:
+            end_date = st.date_input("To Date", value=datetime.now())
+        
+        try:
+            query = """
+                SELECT 
+                    ba.bus_number,
+                    d.name as driver_name,
+                    c.name as conductor_name,
+                    ba.assignment_date,
+                    ba.shift,
+                    ba.route,
+                    ba.notes
+                FROM bus_assignments ba
+                LEFT JOIN drivers d ON ba.driver_id = d.id
+                LEFT JOIN conductors c ON ba.conductor_id = c.id
+                WHERE ba.assignment_date BETWEEN ? AND ?
+                ORDER BY ba.assignment_date DESC, ba.bus_number
+            """
+            
+            history_df = pd.read_sql_query(query, conn, params=[start_date, end_date])
+            
+            if history_df.empty:
+                st.info("No assignment history found for the selected period.")
+            else:
+                # 🆕 ENHANCED: Display with registration numbers
+                display_df = history_df.copy()
+                display_df['bus_display'] = display_df['bus_number'].apply(
+                    lambda x: get_bus_display_name(x, conn)
+                )
+                
+                display_columns = ['assignment_date', 'bus_display', 'driver_name', 
+                                 'conductor_name', 'shift', 'route', 'notes']
+                display_df_show = display_df[display_columns]
+                display_df_show.columns = ['Date', 'Bus', 'Driver', 'Conductor', 
+                                          'Shift', 'Route', 'Notes']
+                
+                st.dataframe(display_df_show, use_container_width=True, height=400)
+                
+                # Statistics
+                st.markdown("---")
+                st.subheader("📊 Assignment Statistics")
+                
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Total Assignments", len(history_df))
+                with col2:
+                    st.metric("Unique Buses", history_df['bus_number'].nunique())
+                with col3:
+                    st.metric("Unique Drivers", history_df['driver_name'].nunique())
+                with col4:
+                    st.metric("Unique Conductors", history_df['conductor_name'].nunique())
+                
+                # Most active (with registration numbers)
+                st.markdown("---")
+                col_a, col_b, col_c = st.columns(3)
+                
+                with col_a:
+                    st.markdown("**🚌 Most Active Buses**")
+                    bus_counts = history_df['bus_number'].value_counts().head(5)
+                    bus_display_counts = pd.DataFrame({
+                        'Bus': [get_bus_display_name(bus, conn) for bus in bus_counts.index],
+                        'Assignments': bus_counts.values
+                    })
+                    st.dataframe(bus_display_counts, use_container_width=True, hide_index=True)
+                
+                with col_b:
+                    st.markdown("**👨‍✈️ Most Active Drivers**")
+                    driver_counts = history_df['driver_name'].value_counts().head(5)
+                    st.dataframe(driver_counts.reset_index(), use_container_width=True, hide_index=True)
+                
+                with col_c:
+                    st.markdown("**👨‍💼 Most Active Conductors**")
+                    conductor_counts = history_df['conductor_name'].value_counts().head(5)
+                    st.dataframe(conductor_counts.reset_index(), use_container_width=True, hide_index=True)
+                
+                # Export
+                st.markdown("---")
+                csv_data = display_df_show.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download Assignment History (CSV)",
+                    data=csv_data,
+                    file_name=f"assignment_history_{start_date}_to_{end_date}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+        
+        except Exception as e:
+            st.error(f"Error loading history: {e}")
+    
+    conn.close()
+
 def get_expiring_documents(days_threshold=30):
     """Get all documents expiring within the threshold"""
     conn = sqlite3.connect('bus_management.db')
