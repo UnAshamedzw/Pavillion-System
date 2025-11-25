@@ -23,6 +23,52 @@ from database import (
 )
 
 # ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+def get_active_drivers():
+    """Get list of active drivers from employees table"""
+    conn = sqlite3.connect('bus_management.db')
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT employee_id, full_name 
+        FROM employees 
+        WHERE position LIKE '%Driver%' AND status = 'Active'
+        ORDER BY full_name
+    """)
+    drivers = cursor.fetchall()
+    conn.close()
+    return drivers
+
+def get_active_conductors():
+    """Get list of active conductors from employees table"""
+    conn = sqlite3.connect('bus_management.db')
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT employee_id, full_name 
+        FROM employees 
+        WHERE position LIKE '%Conductor%' AND status = 'Active'
+        ORDER BY full_name
+    """)
+    conductors = cursor.fetchall()
+    conn.close()
+    return conductors
+
+def get_active_mechanics():
+    """Get list of active mechanics from employees table"""
+    conn = sqlite3.connect('bus_management.db')
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT employee_id, full_name 
+        FROM employees 
+        WHERE position LIKE '%Mechanic%' AND status = 'Active'
+        ORDER BY full_name
+    """)
+    mechanics = cursor.fetchall()
+    conn.close()
+    return mechanics
+
+# ============================================================================
 # BUSES AND ROUTES MANAGEMENT PAGE
 # ============================================================================
 
@@ -88,7 +134,6 @@ def buses_routes_management_page():
             st.subheader(f"📋 Fleet List ({len(buses)} buses)")
             
             for bus in buses:
-                # Display both bus_number and registration_number if available
                 display_title = f"🚌 {bus['bus_number']}"
                 if 'registration_number' in bus.keys() and bus['registration_number']:
                     display_title += f" ({bus['registration_number']})"
@@ -206,8 +251,6 @@ def buses_routes_management_page():
         
         if routes:
             st.subheader(f"📋 Routes List ({len(routes)} routes)")
-            
-            # Note about Hire route
             st.info("💡 **Note:** The 'Hire' route is automatically available for hire jobs. You don't need to add it here.")
             
             for route in routes:
@@ -264,100 +307,207 @@ def buses_routes_management_page():
 
 
 # ============================================================================
-# PDF GENERATION HELPER
+# BUS ASSIGNMENTS PAGE - FIXED
 # ============================================================================
 
-def generate_income_pdf(records_df, filters, username):
-    """Generate PDF report for income records"""
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter,
-                           leftMargin=0.5*inch, rightMargin=0.5*inch,
-                           topMargin=0.75*inch, bottomMargin=0.75*inch)
+def bus_assignments_page():
+    """Assign drivers and conductors to buses - REFERENCES HR employees only"""
     
-    elements = []
-    styles = getSampleStyleSheet()
+    st.header("📋 Bus Assignments")
+    st.markdown("Assign drivers and conductors to buses (employees managed in HR)")
+    st.markdown("---")
     
-    title_style = ParagraphStyle(
-        'CustomTitle',
-        parent=styles['Heading1'],
-        fontSize=18,
-        textColor=colors.HexColor('#2c3e50'),
-        spaceAfter=6,
-        alignment=TA_CENTER,
-        fontName='Helvetica-Bold'
-    )
+    # Check if we have employees
+    drivers = get_active_drivers()
+    conductors = get_active_conductors()
+    buses = get_active_buses()
     
-    subtitle_style = ParagraphStyle(
-        'Subtitle',
-        parent=styles['Normal'],
-        fontSize=11,
-        textColor=colors.HexColor('#34495e'),
-        alignment=TA_CENTER,
-        spaceAfter=12
-    )
+    if not drivers:
+        st.warning("⚠️ No active drivers found. Please add drivers in **HR > Employee Management** first.")
+        return
     
-    elements.append(Paragraph("🚌 Bus Management System", title_style))
-    elements.append(Paragraph("Income Report", title_style))
-    elements.append(Spacer(1, 0.2*inch))
+    if not conductors:
+        st.warning("⚠️ No active conductors found. Please add conductors in **HR > Employee Management** first.")
+        return
     
-    report_date = datetime.now().strftime("%B %d, %Y at %H:%M")
-    metadata = f"Generated: {report_date} | By: {username}"
-    elements.append(Paragraph(metadata, subtitle_style))
-    elements.append(Spacer(1, 0.3*inch))
+    if not buses:
+        st.warning("⚠️ No active buses found. Please add buses in **Fleet Management** first.")
+        return
     
-    if filters:
-        filter_text = "Filters: " + ", ".join([f"{k}: {v}" for k, v in filters.items()])
-        elements.append(Paragraph(filter_text, styles['Normal']))
-        elements.append(Spacer(1, 0.2*inch))
+    # Date selector
+    assignment_date = st.date_input("📅 Assignment Date", datetime.now())
     
-    if not records_df.empty:
-        table_data = [['Date', 'Bus', 'Driver', 'Conductor', 'Route', 'Amount', 'Notes']]
-        
-        for _, row in records_df.iterrows():
-            route_display = row.get('route', '')
-            if route_display == 'Hire' and row.get('hire_destination'):
-                route_display = f"Hire: {row.get('hire_destination', '')[:15]}"
+    st.markdown("---")
+    
+    # Add Assignment Form
+    with st.expander("➕ Create New Assignment", expanded=True):
+        with st.form("assignment_form"):
+            col1, col2 = st.columns(2)
             
-            table_data.append([
-                str(row.get('date', '')),
-                str(row.get('bus_number', '')),
-                str(row.get('driver_name', 'N/A')),
-                str(row.get('conductor_name', 'N/A')),
-                str(route_display),
-                f"${row.get('amount', 0):.2f}",
-                str(row.get('notes', ''))[:20]
-            ])
-        
-        total_amount = records_df['amount'].sum()
-        table_data.append(['TOTAL', '', '', '', '', f"${total_amount:.2f}", ''])
-        
-        table = Table(table_data, colWidths=[1.0*inch, 0.9*inch, 1.1*inch, 1.1*inch, 1.1*inch, 0.9*inch, 1.0*inch])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#3498db')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 9),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#ecf0f1')),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -2), [colors.white, colors.HexColor('#f8f9fa')])
-        ]))
-        elements.append(table)
-    else:
-        elements.append(Paragraph("No records found.", styles['Normal']))
+            with col1:
+                # Bus dropdown
+                bus_options = []
+                for bus in buses:
+                    reg_num = bus['registration_number'] if 'registration_number' in bus.keys() and bus['registration_number'] else 'No Reg'
+                    bus_options.append(f"{reg_num} - {bus['bus_number']}")
+                
+                selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
+                bus_number = selected_bus.split(" - ")[1]
+                
+                # Driver dropdown
+                driver_options = [f"{emp_id} - {name}" for emp_id, name in drivers]
+                selected_driver = st.selectbox("👨‍✈️ Select Driver*", driver_options)
+                driver_employee_id = selected_driver.split(" - ")[0]
+                
+                # Route
+                routes = get_all_routes()
+                route_options = ["Hire"] + [r['name'] for r in routes]
+                selected_route = st.selectbox("🛣️ Route", route_options)
+            
+            with col2:
+                # Conductor dropdown
+                conductor_options = [f"{emp_id} - {name}" for emp_id, name in conductors]
+                selected_conductor = st.selectbox("👨‍💼 Select Conductor*", conductor_options)
+                conductor_employee_id = selected_conductor.split(" - ")[0]
+                
+                # Shift
+                shift = st.selectbox("⏰ Shift", ["Full Day", "Morning", "Afternoon", "Night"])
+            
+            notes = st.text_area("📝 Notes", placeholder="Any special instructions...")
+            
+            submit_assignment = st.form_submit_button("➕ Create Assignment", use_container_width=True, type="primary")
+            
+            if submit_assignment:
+                conn = sqlite3.connect('bus_management.db')
+                cursor = conn.cursor()
+                
+                try:
+                    # Check if assignment already exists
+                    cursor.execute("""
+                        SELECT id FROM bus_assignments 
+                        WHERE bus_number = ? AND assignment_date = ?
+                    """, (bus_number, assignment_date.strftime("%Y-%m-%d")))
+                    
+                    if cursor.fetchone():
+                        st.error(f"❌ Assignment already exists for {bus_number} on {assignment_date}")
+                    else:
+                        cursor.execute("""
+                            INSERT INTO bus_assignments 
+                            (bus_number, driver_employee_id, conductor_employee_id, 
+                             assignment_date, shift, route, notes, created_by)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            bus_number,
+                            driver_employee_id,
+                            conductor_employee_id,
+                            assignment_date.strftime("%Y-%m-%d"),
+                            shift,
+                            selected_route,
+                            notes,
+                            st.session_state['user']['username']
+                        ))
+                        
+                        conn.commit()
+                        
+                        AuditLogger.log_action(
+                            action_type="Add",
+                            module="Assignment",
+                            description=f"Assignment created: {bus_number} - Driver: {driver_employee_id}, Conductor: {conductor_employee_id}",
+                            affected_table="bus_assignments"
+                        )
+                        
+                        st.success("✅ Assignment created successfully!")
+                        st.rerun()
+                
+                except Exception as e:
+                    st.error(f"❌ Error creating assignment: {e}")
+                finally:
+                    conn.close()
     
-    doc.build(elements)
-    buffer.seek(0)
-    return buffer
+    st.markdown("---")
+    
+    # Display Assignments for selected date
+    st.subheader(f"📋 Assignments for {assignment_date.strftime('%B %d, %Y')}")
+    
+    conn = sqlite3.connect('bus_management.db')
+    cursor = conn.cursor()
+    
+    try:
+        # FIXED QUERY - References employees table
+        cursor.execute("""
+            SELECT 
+                ba.id,
+                ba.bus_number,
+                e_driver.full_name as driver_name,
+                e_conductor.full_name as conductor_name,
+                ba.assignment_date,
+                ba.shift,
+                ba.route,
+                ba.notes,
+                ba.driver_employee_id,
+                ba.conductor_employee_id
+            FROM bus_assignments ba
+            LEFT JOIN employees e_driver ON ba.driver_employee_id = e_driver.employee_id
+            LEFT JOIN employees e_conductor ON ba.conductor_employee_id = e_conductor.employee_id
+            WHERE ba.assignment_date = ?
+            ORDER BY ba.bus_number
+        """, (assignment_date.strftime("%Y-%m-%d"),))
+        
+        assignments = cursor.fetchall()
+        
+        if assignments:
+            st.success(f"✅ {len(assignments)} assignment(s) found")
+            
+            for assignment in assignments:
+                (assign_id, bus_num, driver_name, conductor_name, date, shift, route, 
+                 notes_text, driver_emp_id, conductor_emp_id) = assignment
+                
+                with st.expander(f"🚌 {bus_num} - {driver_name} & {conductor_name}"):
+                    col_a, col_b = st.columns([3, 1])
+                    
+                    with col_a:
+                        st.write(f"**Bus:** {bus_num}")
+                        st.write(f"**Driver:** {driver_name} ({driver_emp_id})")
+                        st.write(f"**Conductor:** {conductor_name} ({conductor_emp_id})")
+                        st.write(f"**Shift:** {shift}")
+                        st.write(f"**Route:** {route}")
+                        if notes_text:
+                            st.write(f"**Notes:** {notes_text}")
+                    
+                    with col_b:
+                        if st.button("🗑️ Delete", key=f"del_assign_{assign_id}"):
+                            if st.session_state.get(f'confirm_del_assign_{assign_id}', False):
+                                cursor.execute("DELETE FROM bus_assignments WHERE id = ?", (assign_id,))
+                                conn.commit()
+                                
+                                AuditLogger.log_action(
+                                    action_type="Delete",
+                                    module="Assignment",
+                                    description=f"Assignment deleted: {bus_num}",
+                                    affected_table="bus_assignments",
+                                    affected_record_id=assign_id
+                                )
+                                
+                                st.success("Assignment deleted")
+                                st.rerun()
+                            else:
+                                st.session_state[f'confirm_del_assign_{assign_id}'] = True
+                                st.warning("Click again to confirm")
+        else:
+            st.info(f"ℹ️ No assignments for {assignment_date.strftime('%B %d, %Y')}. Create one above!")
+    
+    except Exception as e:
+        st.error(f"❌ Error loading assignments: {e}")
+    
+    finally:
+        conn.close()
 
 # ============================================================================
 # INCOME ENTRY PAGE - WITH DROPDOWN SELECTIONS
 # ============================================================================
 
 def income_entry_page():
-    """Income entry page with dropdown selections for buses and routes"""
+    """Income entry page with dropdown selections - FIXED VERSION"""
     
     st.header("📊 Income Entry")
     st.markdown("Record daily bus revenue with dropdown selections")
@@ -367,8 +517,6 @@ def income_entry_page():
     buses = get_active_buses()
     if not buses:
         st.warning("⚠️ No active buses found. Please add buses in Fleet Management first.")
-        st.info("💡 **How to add buses:** Use the sidebar menu: Operations → 🚌 Fleet Management")
-        st.info("📝 **Note:** You can also use 'Buses & Routes' for basic bus setup, but Fleet Management has more features including document tracking.")
         return
     
     # Get routes
@@ -387,11 +535,11 @@ def income_entry_page():
     conn.close()
     
     if not drivers:
-        st.warning("⚠️ No active drivers found. Please add drivers in Employee Management first.")
+        st.warning("⚠️ No active drivers found. Please add drivers in HR > Employee Management first.")
         return
     
     if not conductors:
-        st.warning("⚠️ No active conductors found. Please add conductors in Employee Management first.")
+        st.warning("⚠️ No active conductors found. Please add conductors in HR > Employee Management first.")
         return
     
     # Add Income Form
@@ -399,21 +547,20 @@ def income_entry_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            # Bus dropdown - UPDATED: Show registration_number first, then bus_number
+            # Bus dropdown
             bus_options = []
             for bus in buses:
                 reg_num = bus['registration_number'] if 'registration_number' in bus.keys() and bus['registration_number'] else 'No Reg'
                 bus_options.append(f"{reg_num} - {bus['bus_number']} ({bus['model']})")
             
             selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
-            # Extract bus_number from selection (it's between " - " and " (")
             bus_number = selected_bus.split(" - ")[1].split(" (")[0]
             
-            # Route dropdown (including Hire option)
+            # Route dropdown
             route_options = ["Hire"] + [route['name'] for route in routes]
             selected_route = st.selectbox("🛣️ Route*", route_options)
             
-            # Show hire destination field if Hire is selected
+            # Hire destination field
             hire_destination = ""
             if selected_route == "Hire":
                 hire_destination = st.text_input(
@@ -421,18 +568,20 @@ def income_entry_page():
                     placeholder="e.g., Wedding at Lake Chivero, Corporate trip to Nyanga"
                 )
             
-            # Driver selection
+            # Driver selection - FIXED: Extract employee_id
             driver_options = [f"{d[0]} - {d[1]}" for d in drivers]
             selected_driver = st.selectbox("👨‍✈️ Driver*", driver_options)
+            driver_employee_id = selected_driver.split(" - ")[0]  # FIXED: Store ID
             driver_name = selected_driver.split(" - ")[1]
         
         with col2:
             date = st.date_input("📅 Date*", datetime.now())
             amount = st.number_input("💰 Amount*", min_value=0.0, step=0.01, format="%.2f")
             
-            # Conductor selection
+            # Conductor selection - FIXED: Extract employee_id
             conductor_options = [f"{c[0]} - {c[1]}" for c in conductors]
             selected_conductor = st.selectbox("👨‍💼 Conductor*", conductor_options)
+            conductor_employee_id = selected_conductor.split(" - ")[0]  # FIXED: Store ID
             conductor_name = selected_conductor.split(" - ")[1]
         
         notes = st.text_area("📝 Notes", placeholder="Optional notes...")
@@ -446,20 +595,24 @@ def income_entry_page():
             elif selected_route == "Hire" and not hire_destination.strip():
                 st.error("⚠️ Please describe the hire destination")
             else:
-                # Insert into database
+                # Insert into database - FIXED: Store employee IDs
                 conn = sqlite3.connect('bus_management.db')
                 cursor = conn.cursor()
                 
                 try:
                     cursor.execute('''
-                        INSERT INTO income (bus_number, route, hire_destination, driver_name, conductor_name, 
+                        INSERT INTO income (bus_number, route, hire_destination, 
+                                          driver_employee_id, driver_name, 
+                                          conductor_employee_id, conductor_name, 
                                           date, amount, notes, created_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''', (
                         bus_number,
                         selected_route,
                         hire_destination if selected_route == "Hire" else None,
+                        driver_employee_id,  # FIXED: Store ID
                         driver_name,
+                        conductor_employee_id,  # FIXED: Store ID
                         conductor_name,
                         date.strftime("%Y-%m-%d"),
                         amount,
@@ -470,7 +623,7 @@ def income_entry_page():
                     record_id = cursor.lastrowid
                     conn.commit()
                     
-                    # ✅ AUTOMATIC AUDIT LOGGING
+                    # Audit logging
                     AuditLogger.log_income_add(
                         bus_number=bus_number,
                         route=selected_route,
@@ -957,106 +1110,6 @@ def maintenance_entry_page():
     else:
         st.info("No maintenance records found. Add your first record above!")
 
-def auto_create_driver_conductor(name, position, conn):
-    """
-    Auto-create driver or conductor if they don't exist
-    Returns: employee_id (int) or None
-    """
-    cursor = conn.cursor()
-    
-    # Check if employee exists
-    cursor.execute("""
-        SELECT employee_id FROM employees 
-        WHERE full_name = ? AND position LIKE ?
-    """, (name, f"%{position}%"))
-    
-    result = cursor.fetchone()
-    if result:
-        return result[0]
-    
-    # Create new employee
-    try:
-        # Generate employee ID
-        cursor.execute("""
-            SELECT MAX(CAST(SUBSTR(employee_id, 4) AS INTEGER)) 
-            FROM employees 
-            WHERE employee_id LIKE ?
-        """, (f"{position[:3].upper()}%",))
-        
-        max_num = cursor.fetchone()[0]
-        new_num = (max_num or 0) + 1
-        employee_id = f"{position[:3].upper()}{new_num:03d}"
-        
-        cursor.execute("""
-            INSERT INTO employees 
-            (employee_id, full_name, position, department, hire_date, salary, status, created_by)
-            VALUES (?, ?, ?, 'Operations', date('now'), 0.0, 'Active', 'AUTO_IMPORT')
-        """, (employee_id, name, position))
-        
-        conn.commit()
-        return employee_id
-    except:
-        return None
-
-
-def auto_create_assignment(bus_number, driver_name, conductor_name, date_str, route, conn):
-    """
-    Auto-create bus assignment from income entry
-    Returns: True if successful, False otherwise
-    """
-    cursor = conn.cursor()
-    
-    try:
-        # Get or create driver
-        driver_id = auto_create_driver_conductor(driver_name, "Driver", conn)
-        if not driver_id:
-            return False
-        
-        # Get or create conductor
-        conductor_id = auto_create_driver_conductor(conductor_name, "Conductor", conn)
-        if not conductor_id:
-            return False
-        
-        # Check if assignment already exists for this date and bus
-        cursor.execute("""
-            SELECT id FROM bus_assignments 
-            WHERE bus_number = ? AND assignment_date = ?
-        """, (bus_number, date_str))
-        
-        if cursor.fetchone():
-            # Update existing assignment
-            cursor.execute("""
-                UPDATE bus_assignments 
-                SET driver_id = (SELECT id FROM drivers WHERE name = ?),
-                    conductor_id = (SELECT id FROM conductors WHERE name = ?),
-                    route = ?
-                WHERE bus_number = ? AND assignment_date = ?
-            """, (driver_name, conductor_name, route, bus_number, date_str))
-        else:
-            # Get driver and conductor IDs from drivers/conductors tables
-            cursor.execute("SELECT id FROM drivers WHERE name = ?", (driver_name,))
-            driver_table_id = cursor.fetchone()
-            
-            cursor.execute("SELECT id FROM conductors WHERE name = ?", (conductor_name,))
-            conductor_table_id = cursor.fetchone()
-            
-            # Create new assignment
-            cursor.execute("""
-                INSERT INTO bus_assignments 
-                (bus_number, driver_id, conductor_id, assignment_date, shift, route, notes, created_at)
-                VALUES (?, ?, ?, ?, 'Full Day', ?, 'Auto-created from income import', CURRENT_TIMESTAMP)
-            """, (bus_number, 
-                 driver_table_id[0] if driver_table_id else None,
-                 conductor_table_id[0] if conductor_table_id else None,
-                 date_str, route))
-        
-        conn.commit()
-        return True
-    except Exception as e:
-        print(f"Error creating assignment: {e}")
-        return False
-
-
 """
 REPLACE the import_data_page() function with this enhanced version
 that includes auto-assignment creation
@@ -1359,7 +1412,7 @@ def import_data_page():
 # ============================================================================
 
 def import_data_page():
-    """Import data from Excel files with hire support"""
+    """Import data from Excel files - FIXED VERSION"""
     
     st.header("📥 Import from Excel")
     st.markdown("Bulk import income and maintenance records")
@@ -1372,8 +1425,14 @@ def import_data_page():
         
         1. **Download the template** below for the type of data you want to import
         2. **Fill in your data** in the Excel file
-        3. **Upload the file** using the upload button
-        4. **Review the preview** and click Import
+        3. **Important:** Use existing driver/conductor names from HR system
+        4. **Upload the file** using the upload button
+        5. **Review the preview** and click Import
+        
+        ### ⚠️ Important Notes:
+        - Drivers and conductors must exist in HR > Employee Management
+        - Use exact names as they appear in the system
+        - If an employee doesn't exist, add them in HR first
         
         ### Required Columns:
         
@@ -1393,7 +1452,6 @@ def import_data_page():
     col_temp1, col_temp2 = st.columns(2)
     
     with col_temp1:
-        # Income template with hire support
         income_template = pd.DataFrame({
             'bus_number': ['PAV-07', 'PAV-08', 'PAV-09'],
             'route': ['Harare-Mutare', 'Hire', 'Harare-Bulawayo'],
@@ -1415,7 +1473,6 @@ def import_data_page():
         )
     
     with col_temp2:
-        # Maintenance template
         maint_template = pd.DataFrame({
             'bus_number': ['PAV-07', 'PAV-08'],
             'maintenance_type': ['Oil Change', 'Tire Replacement'],
@@ -1464,7 +1521,7 @@ def import_data_page():
             st.dataframe(df.head(10), use_container_width=True)
             
             # Validation
-            st.subheader("✓ Validation")
+            st.subheader("✔ Validation")
             
             if import_type == "💰 Income Data":
                 required_cols = ['bus_number', 'route', 'driver_name', 'conductor_name', 'date', 'amount']
@@ -1488,6 +1545,33 @@ def import_data_page():
                         else:
                             df[col] = ''
                 
+                # FIXED: Validate employees exist
+                if import_type == "💰 Income Data":
+                    conn = sqlite3.connect('bus_management.db')
+                    cursor = conn.cursor()
+                    
+                    # Get all valid drivers and conductors
+                    cursor.execute("SELECT full_name FROM employees WHERE position LIKE '%Driver%' AND status = 'Active'")
+                    valid_drivers = set([row[0] for row in cursor.fetchall()])
+                    
+                    cursor.execute("SELECT full_name FROM employees WHERE position LIKE '%Conductor%' AND status = 'Active'")
+                    valid_conductors = set([row[0] for row in cursor.fetchall()])
+                    
+                    conn.close()
+                    
+                    # Check for missing employees
+                    missing_drivers = set(df['driver_name'].unique()) - valid_drivers
+                    missing_conductors = set(df['conductor_name'].unique()) - valid_conductors
+                    
+                    if missing_drivers or missing_conductors:
+                        st.error("❌ Some employees don't exist in the system:")
+                        if missing_drivers:
+                            st.warning(f"**Missing Drivers:** {', '.join(missing_drivers)}")
+                        if missing_conductors:
+                            st.warning(f"**Missing Conductors:** {', '.join(missing_conductors)}")
+                        st.info("💡 **Fix:** Add these employees in HR > Employee Management first, then try importing again.")
+                        return
+                
                 # Import button
                 if st.button("🚀 Import Data", type="primary", use_container_width=True):
                     conn = sqlite3.connect('bus_management.db')
@@ -1501,20 +1585,33 @@ def import_data_page():
                         for idx, row in df.iterrows():
                             try:
                                 if import_type == "💰 Income Data":
-                                    # Validate hire destination for Hire routes
+                                    # Validate hire destination
                                     if row['route'] == 'Hire' and not str(row.get('hire_destination', '')).strip():
                                         raise ValueError("Hire destination required for Hire routes")
                                     
+                                    # FIXED: Get employee IDs
+                                    cursor.execute("SELECT employee_id FROM employees WHERE full_name = ? AND position LIKE '%Driver%'", (row['driver_name'],))
+                                    driver_result = cursor.fetchone()
+                                    driver_employee_id = driver_result[0] if driver_result else None
+                                    
+                                    cursor.execute("SELECT employee_id FROM employees WHERE full_name = ? AND position LIKE '%Conductor%'", (row['conductor_name'],))
+                                    conductor_result = cursor.fetchone()
+                                    conductor_employee_id = conductor_result[0] if conductor_result else None
+                                    
                                     cursor.execute('''
                                         INSERT INTO income 
-                                        (bus_number, route, hire_destination, driver_name, conductor_name, 
+                                        (bus_number, route, hire_destination, 
+                                         driver_employee_id, driver_name, 
+                                         conductor_employee_id, conductor_name, 
                                          date, amount, notes, created_by)
-                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                                     ''', (
                                         row['bus_number'],
                                         row['route'],
                                         row.get('hire_destination', ''),
+                                        driver_employee_id,
                                         row['driver_name'],
+                                        conductor_employee_id,
                                         row['conductor_name'],
                                         row['date'],
                                         row['amount'],
@@ -1548,7 +1645,7 @@ def import_data_page():
                         conn.commit()
                         conn.close()
                     
-                    # ✅ AUTOMATIC AUDIT LOGGING
+                    # Audit logging
                     module = "Income" if import_type == "💰 Income Data" else "Maintenance"
                     AuditLogger.log_data_import(
                         module=module,
@@ -1574,14 +1671,14 @@ def import_data_page():
                     
                     if errors:
                         with st.expander("⚠️ View Errors"):
-                            for error in errors[:10]:  # Show first 10 errors
+                            for error in errors[:10]:
                                 st.error(error)
                             if len(errors) > 10:
                                 st.warning(f"... and {len(errors) - 10} more errors")
         
         except Exception as e:
             st.error(f"❌ Error reading file: {str(e)}")
-            st.info("Please make sure your file is in the correct format (CSV or Excel)")
+            st.info("Please make sure your file is in the correct format (CSV or Excel format)")
 
 
 # ============================================================================
