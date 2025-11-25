@@ -271,35 +271,35 @@ def get_active_buses():
     conn.close()
     return buses
 
-def add_bus(bus_number, model, capacity, year=None, status='Active', notes=None, created_by=None):
+def add_bus(bus_number, model, capacity, year=None, status='Active', notes=None, created_by=None, registration_number=None):
     """Add new bus"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('''
-            INSERT INTO buses (bus_number, model, capacity, year, status, notes, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (bus_number, model, capacity, year, status, notes, created_by))
+            INSERT INTO buses (bus_number, registration_number, model, capacity, year, status, notes, created_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (bus_number, registration_number, model, capacity, year, status, notes, created_by))
         conn.commit()
         bus_id = cursor.lastrowid
         log_audit_trail(created_by or 'System', 'INSERT', 'buses', bus_id, None, 
-                       {'bus_number': bus_number, 'model': model})
+                       {'bus_number': bus_number, 'registration_number': registration_number, 'model': model})
         return bus_id
     except sqlite3.IntegrityError:
         return None
     finally:
         conn.close()
 
-def update_bus(bus_id, bus_number, model, capacity, year=None, status='Active', notes=None):
+def update_bus(bus_id, bus_number, model, capacity, year=None, status='Active', notes=None, registration_number=None):
     """Update bus details"""
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute('''
         UPDATE buses 
-        SET bus_number = ?, model = ?, capacity = ?, year = ?, status = ?, notes = ?,
+        SET bus_number = ?, registration_number = ?, model = ?, capacity = ?, year = ?, status = ?, notes = ?,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
-    ''', (bus_number, model, capacity, year, status, notes, bus_id))
+    ''', (bus_number, registration_number, model, capacity, year, status, notes, bus_id))
     conn.commit()
     conn.close()
 
