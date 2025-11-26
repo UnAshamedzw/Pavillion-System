@@ -22,9 +22,13 @@ from pages_hr import (
     disciplinary_records_page
 )
 from pages_hr import get_expiring_documents, display_document_expiry_alerts
-
-# Initialize database on startup
-init_database()
+from pages_users import user_management_page, my_profile_page
+from pages_audit import activity_log_page, user_activity_dashboard
+from pages_bus_analysis import bus_analysis_page
+from pages_performance_metrics import performance_metrics_page
+from fleet_management_page import fleet_management_page, show_expiry_alerts
+import base64
+from pathlib import Path
 
 # In your homepage/dashboard function:
 def homepage():
@@ -34,13 +38,6 @@ def homepage():
     display_document_expiry_alerts()
     
     st.markdown("---")
-from pages_users import user_management_page, my_profile_page
-from pages_audit import activity_log_page, user_activity_dashboard
-from pages_bus_analysis import bus_analysis_page
-from pages_performance_metrics import performance_metrics_page
-from fleet_management_page import fleet_management_page, show_expiry_alerts
-import base64
-from pathlib import Path
 
 def get_base64_image(image_path):
     """Convert image to base64 for display"""
@@ -62,11 +59,14 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # Initialize database only once per session
-    if 'initialized' not in st.session_state:
-        init_database() 
+    # CRITICAL: Initialize database FIRST, before anything else
+    # This ensures tables exist before any queries run
+    try:
+        init_database()
         create_users_table()
-        st.session_state.initialized = True
+    except Exception as e:
+        st.error(f"Database initialization failed: {e}")
+        st.stop()
     
     # Check authentication
     if not st.session_state.get('authenticated', False):
