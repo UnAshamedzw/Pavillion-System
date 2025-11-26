@@ -4,7 +4,7 @@ Pavillion Coaches Bus Management System
 """
 
 import streamlit as st
-from database import init_database
+from database import init_database, USE_POSTGRES
 from auth import create_users_table, login_page, logout
 from pages_operations import (
     income_entry_page, 
@@ -62,10 +62,49 @@ def main():
     # CRITICAL: Initialize database FIRST, before anything else
     # This ensures tables exist before any queries run
     try:
+        print("=" * 50)
+        print("🔄 Starting database initialization...")
         init_database()
+        print("✅ init_database() completed")
+        
+        # Verify tables were created
+        from database import get_connection
+        conn = get_connection()
+        cursor = conn.cursor()
+        
+        # Check if income table exists
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT EXISTS (
+                    SELECT FROM information_schema.tables 
+                    WHERE table_name = 'income'
+                );
+            """)
+            table_exists = cursor.fetchone()[0]
+        else:
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='income';
+            """)
+            table_exists = cursor.fetchone() is not None
+        
+        conn.close()
+        
+        if not table_exists:
+            raise Exception("❌ CRITICAL: income table was not created!")
+        
+        print("✅ Database verification passed - income table exists")
+        
         create_users_table()
+        print("✅ Users table ready")
+        print("=" * 50)
+        
     except Exception as e:
-        st.error(f"Database initialization failed: {e}")
+        print(f"❌ DATABASE INITIALIZATION FAILED: {e}")
+        import traceback
+        traceback.print_exc()
+        st.error(f"❌ Database initialization failed: {e}")
+        st.error("Please check Railway logs for details")
         st.stop()
     
     # Check authentication
