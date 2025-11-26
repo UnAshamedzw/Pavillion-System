@@ -23,6 +23,9 @@ from pages_hr import (
 )
 from pages_hr import get_expiring_documents, display_document_expiry_alerts
 
+# Initialize database on startup
+init_database()
+
 # In your homepage/dashboard function:
 def homepage():
     st.title("🏠 Dashboard")
