@@ -5,7 +5,6 @@ Employees are READ-ONLY from HR
 """
 
 import streamlit as st
-import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
@@ -20,7 +19,7 @@ from reportlab.lib.enums import TA_CENTER
 import io
 from database import (
     get_active_buses, get_all_routes, add_route, update_route, delete_route,
-    get_active_drivers, get_active_conductors, get_active_mechanics
+    get_active_drivers, get_active_conductors, get_active_mechanics, get_db_connection
 )
 
 # ============================================================================
