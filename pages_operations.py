@@ -19,7 +19,8 @@ from reportlab.lib.enums import TA_CENTER
 import io
 from database import (
     get_active_buses, get_all_routes, add_route, update_route, delete_route,
-    get_active_drivers, get_active_conductors, get_active_mechanics, get_db_connection, USE_POSTGRES
+    get_active_drivers, get_active_conductors, get_active_mechanics, get_db_connection,
+    USE_POSTGRES
 )
 
 # ============================================================================
@@ -1723,31 +1724,27 @@ def dashboard_page():
     # Fetch data
     conn = get_db_connection()
     
-    # Database-agnostic date filtering
-from database import USE_POSTGRES
-
-if USE_POSTGRES:
-    income_df = pd.read_sql_query(
-        f"SELECT * FROM income WHERE date >= CURRENT_DATE - INTERVAL '{days_back} days'",
-        conn
-    )
-    
-    maint_df = pd.read_sql_query(
-        f"SELECT * FROM maintenance WHERE date >= CURRENT_DATE - INTERVAL '{days_back} days'",
-        conn
-    )
-else:
-    income_df = pd.read_sql_query(
-        "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
-        conn, params=(days_back,)
-    )
-    
-    maint_df = pd.read_sql_query(
-        "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
-        conn, params=(days_back,)
-    )
-    
-    conn.close()
+    # Database-agnostic queries
+    if USE_POSTGRES:
+        income_df = pd.read_sql_query(
+            f"SELECT * FROM income WHERE date >= CURRENT_DATE - INTERVAL '{days_back} days'",
+            conn
+        )
+        
+        maint_df = pd.read_sql_query(
+            f"SELECT * FROM maintenance WHERE date >= CURRENT_DATE - INTERVAL '{days_back} days'",
+            conn
+        )
+    else:
+        income_df = pd.read_sql_query(
+            "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
+            conn, params=(days_back,)
+        )
+        
+        maint_df = pd.read_sql_query(
+            "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
+            conn, params=(days_back,)
+        )
     
     # KPIs
     total_revenue = income_df['amount'].sum() if not income_df.empty else 0
