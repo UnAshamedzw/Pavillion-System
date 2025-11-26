@@ -80,7 +80,8 @@ def main():
                     WHERE table_name = 'income'
                 );
             """)
-            table_exists = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            table_exists = result['exists'] if result else False
         else:
             cursor.execute("""
                 SELECT name FROM sqlite_master 
