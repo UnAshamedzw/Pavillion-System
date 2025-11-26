@@ -204,7 +204,7 @@ def bus_assignments_page():
             submit_assignment = st.form_submit_button("➕ Create Assignment", use_container_width=True, type="primary")
             
             if submit_assignment:
-                conn = sqlite3.connect('bus_management.db')
+                conn = get_db_connection()
                 cursor = conn.cursor()
                 
                 try:
@@ -255,7 +255,7 @@ def bus_assignments_page():
     # Display Assignments
     st.subheader(f"📋 Assignments for {assignment_date.strftime('%B %d, %Y')}")
     
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     try:
@@ -348,7 +348,7 @@ def income_entry_page():
     routes = get_all_routes()
     
     # Get drivers and conductors from employees table
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     cursor.execute("SELECT employee_id, full_name FROM employees WHERE position LIKE '%Driver%' AND status = 'Active'")
@@ -421,7 +421,7 @@ def income_entry_page():
                 st.error("⚠️ Please describe the hire destination")
             else:
                 # Insert into database - FIXED: Store employee IDs
-                conn = sqlite3.connect('bus_management.db')
+                conn = get_db_connection()
                 cursor = conn.cursor()
                 
                 try:
@@ -484,7 +484,7 @@ def income_entry_page():
     with col_filter4:
         days_back = st.selectbox("📅 Show last", [7, 30, 90, 365], index=1)
     
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Build query with filters
@@ -606,7 +606,7 @@ def income_entry_page():
                     # Delete button
                     if st.button("🗑️ Delete", key=f"delete_{record_id}"):
                         if st.session_state.get(f'confirm_delete_{record_id}', False):
-                            conn = sqlite3.connect('bus_management.db')
+                            conn = get_db_connection()
                             cursor = conn.cursor()
                             cursor.execute('DELETE FROM income WHERE id = ?', (record_id,))
                             conn.commit()
@@ -701,7 +701,7 @@ def income_entry_page():
                                     'notes': new_notes
                                 }
                                 
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_db_connection()
                                 cursor = conn.cursor()
                                 
                                 cursor.execute('''
@@ -788,7 +788,7 @@ def maintenance_entry_page():
             if not all([bus_number, maintenance_type, cost >= 0]):
                 st.error("⚠️ Please fill in all required fields")
             else:
-                conn = sqlite3.connect('bus_management.db')
+                conn = get_db_connection()
                 cursor = conn.cursor()
                 
                 try:
@@ -847,7 +847,7 @@ def maintenance_entry_page():
     with col_filter3:
         days_back = st.selectbox("📅 Show last", [7, 30, 90, 365], index=1, key="maint_days_back")
     
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_db_connection()
     cursor = conn.cursor()
     
     # Build query with filters
@@ -914,7 +914,7 @@ def maintenance_entry_page():
                     # Delete button
                     if st.button("🗑️ Delete", key=f"delete_maint_{record_id}"):
                         if st.session_state.get(f'confirm_delete_maint_{record_id}', False):
-                            conn = sqlite3.connect('bus_management.db')
+                            conn = get_db_connection()
                             cursor = conn.cursor()
                             cursor.execute('DELETE FROM maintenance WHERE id = ?', (record_id,))
                             conn.commit()
@@ -1085,7 +1085,7 @@ def import_data_page():
                 
                 # Import button
                 if st.button("🚀 Import Data", type="primary", use_container_width=True):
-                    conn = sqlite3.connect('bus_management.db')
+                    conn = get_db_connection()
                     cursor = conn.cursor()
                     
                     success_count = 0
@@ -1372,7 +1372,7 @@ def import_data_page():
                 
                 # FIXED: Validate employees exist
                 if import_type == "💰 Income Data":
-                    conn = sqlite3.connect('bus_management.db')
+                    conn = get_db_connection()
                     cursor = conn.cursor()
                     
                     # Get all valid drivers and conductors
@@ -1399,7 +1399,7 @@ def import_data_page():
                 
                 # Import button
                 if st.button("🚀 Import Data", type="primary", use_container_width=True):
-                    conn = sqlite3.connect('bus_management.db')
+                    conn = get_db_connection()
                     cursor = conn.cursor()
                     
                     success_count = 0
@@ -1539,7 +1539,7 @@ def revenue_history_page():
             filter_conductor = st.text_input("🔍 Filter by Conductor", placeholder="Leave empty for all")
     
     # Fetch data
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_db_connection()
     
     if view_type in ["📊 Income", "📈 Combined"]:
         query = "SELECT * FROM income WHERE date BETWEEN ? AND ?"
@@ -1721,7 +1721,7 @@ def dashboard_page():
         st.info(f"📅 {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
     # Fetch data
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_db_connection()
     
     income_df = pd.read_sql_query(
         "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
