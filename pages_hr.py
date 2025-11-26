@@ -16,6 +16,193 @@ from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 import io
 
+def generate_employee_id(position, conn):
+    """
+    Automatically generate the next employee ID based on position/role
+    
+    Rules:
+    - Drivers: PavD001, PavD002, PavD003...
+    - Conductors: PavC001, PavC002, PavC003...
+    - Mechanics/Office Staff/Others: Pav001, Pav002, Pav003...
+    """
+    cursor = conn.cursor()
+    
+    position_lower = position.lower()
+    
+    if 'driver' in position_lower:
+        prefix = 'PavD'
+        pattern = 'PavD%'
+    elif 'conductor' in position_lower:
+        prefix = 'PavC'
+        pattern = 'PavC%'
+    else:
+        prefix = 'Pav'
+        pattern = 'Pav%'
+    
+    if 'driver' in position_lower or 'conductor' in position_lower:
+        query = """
+            SELECT employee_id 
+            FROM employees 
+            WHERE employee_id LIKE ? 
+            ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+            LIMIT 1
+        """
+        cursor.execute(query, (pattern, prefix))
+    else:
+        query = """
+            SELECT employee_id 
+            FROM employees 
+            WHERE employee_id LIKE ? 
+            AND employee_id NOT LIKE 'PavD%' 
+            AND employee_id NOT LIKE 'PavC%'
+            ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+            LIMIT 1
+        """
+        cursor.execute(query, (pattern, prefix))
+    
+    result = cursor.fetchone()
+    
+    if result:
+        last_id = result[0]
+        numeric_part = ''.join(filter(str.isdigit, last_id))
+        if numeric_part:
+            next_number = int(numeric_part) + 1
+        else:
+            next_number = 1
+    else:
+        next_number = 1
+    
+    new_id = f"{prefix}{next_number:03d}"
+    return new_id
+
+def get_expiring_documents(days_threshold=30):
+    """
+    Check for documents expiring within the specified days
+    Returns: List of alerts with employee info and expiring document type
+    """
+    conn = sqlite3.connect('bus_management.db')
+    cursor = conn.cursor()
+    
+    alerts = []
+    current_date = datetime.now().date()
+    threshold_date = current_date + timedelta(days=days_threshold)
+    
+    # Check all document types
+    document_checks = [
+        ('license_expiry', 'Driver License'),
+        ('defensive_driving_expiry', 'Defensive Driving Certificate'),
+        ('medical_cert_expiry', 'Medical Certificate'),
+        ('retest_date', 'Retest Due')
+    ]
+    
+    for date_column, doc_name in document_checks:
+        query = f"""
+            SELECT employee_id, full_name, position, {date_column}
+            FROM employees
+            WHERE {date_column} IS NOT NULL
+            AND {date_column} != ''
+            AND date({date_column}) <= date(?)
+            AND status = 'Active'
+            ORDER BY {date_column}
+        """
+        
+        cursor.execute(query, (threshold_date.strftime('%Y-%m-%d'),))
+        results = cursor.fetchall()
+        
+        for emp_id, name, position, expiry_date in results:
+            try:
+                expiry = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                days_until = (expiry - current_date).days
+                
+                urgency = 'critical' if days_until <= 7 else 'warning' if days_until <= 14 else 'info'
+                
+                alerts.append({
+                    'employee_id': emp_id,
+                    'name': name,
+                    'position': position,
+                    'document': doc_name,
+                    'expiry_date': expiry_date,
+                    'days_until': days_until,
+                    'urgency': urgency,
+                    'expired': days_until < 0
+                })
+            except ValueError:
+                continue
+    
+    conn.close()
+    
+    # Sort by urgency and days remaining
+    alerts.sort(key=lambda x: (x['expired'], x['days_until']))
+    
+    return alerts
+
+def display_document_expiry_alerts():
+    """Display document expiry alerts on the homepage"""
+    
+    st.markdown("### 📋 Document Expiry Alerts")
+    
+    alerts = get_expiring_documents(days_threshold=30)
+    
+    if not alerts:
+        st.success("✅ All documents are up to date!")
+        return
+    
+    # Count alerts by urgency
+    expired = [a for a in alerts if a['expired']]
+    critical = [a for a in alerts if a['urgency'] == 'critical' and not a['expired']]
+    warning = [a for a in alerts if a['urgency'] == 'warning']
+    info = [a for a in alerts if a['urgency'] == 'info']
+    
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if expired:
+            st.metric("🔴 EXPIRED", len(expired), delta=None)
+        else:
+            st.metric("✅ Expired", 0)
+    
+    with col2:
+        if critical:
+            st.metric("🟠 Critical (≤7 days)", len(critical))
+        else:
+            st.metric("✅ Critical", 0)
+    
+    with col3:
+        if warning:
+            st.metric("🟡 Warning (≤14 days)", len(warning))
+        else:
+            st.metric("✅ Warning", 0)
+    
+    with col4:
+        st.metric("ℹ️ Upcoming (≤30 days)", len(info))
+    
+    st.markdown("---")
+    
+    # Display alerts
+    for alert in alerts:
+        if alert['expired']:
+            icon = "🔴"
+            message_type = st.error
+            status_text = f"**EXPIRED** {abs(alert['days_until'])} days ago"
+        elif alert['urgency'] == 'critical':
+            icon = "🟠"
+            message_type = st.warning
+            status_text = f"Expires in **{alert['days_until']} days**"
+        elif alert['urgency'] == 'warning':
+            icon = "🟡"
+            message_type = st.warning
+            status_text = f"Expires in {alert['days_until']} days"
+        else:
+            icon = "ℹ️"
+            message_type = st.info
+            status_text = f"Expires in {alert['days_until']} days"
+        
+        with message_type(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}", icon=None):
+            st.write(f"Employee ID: {alert['employee_id']}")
+            st.write(f"Expiry Date: {alert['expiry_date']}")
+            st.write(status_text)
+
 # ============================================================================
 # PDF GENERATION HELPER FOR HR REPORTS
 # ============================================================================
@@ -157,14 +344,22 @@ def employee_management_page():
         st.subheader("Employee Directory")
         
         # Filters
-        col_f1, col_f2, col_f3 = st.columns(3)
+        col_f1, col_f2, col_f3, col_f4 = st.columns(4)
         
         with col_f1:
             filter_dept = st.selectbox("Department", ["All", "Operations", "Maintenance", "Administration", "HR"])
         with col_f2:
             filter_status = st.selectbox("Status", ["All", "Active", "On Leave", "Terminated"])
         with col_f3:
+            filter_position = st.selectbox("Position Type", ["All", "Drivers", "Conductors", "Other Staff"])
+        with col_f4:
             search_name = st.text_input("🔍 Search by name", placeholder="Employee name")
+        
+        # Check for expiring documents
+        with st.expander("⚠️ Document Expiry Alerts", expanded=False):
+            display_document_expiry_alerts()
+        
+        st.markdown("---")
         
         # Fetch employees
         conn = sqlite3.connect('bus_management.db')
@@ -172,7 +367,10 @@ def employee_management_page():
         
         query = """
             SELECT id, employee_id, full_name, position, department, hire_date, 
-                   salary, phone, email, address, status, created_by, created_at 
+                   salary, phone, email, address, status, date_of_birth, 
+                   emergency_contact, emergency_phone, license_number, license_expiry,
+                   defensive_driving_expiry, medical_cert_expiry, retest_date,
+                   created_by, created_at 
             FROM employees WHERE 1=1
         """
         params = []
@@ -184,6 +382,13 @@ def employee_management_page():
         if filter_status != "All":
             query += " AND status = ?"
             params.append(filter_status)
+        
+        if filter_position == "Drivers":
+            query += " AND position LIKE '%Driver%'"
+        elif filter_position == "Conductors":
+            query += " AND position LIKE '%Conductor%'"
+        elif filter_position == "Other Staff":
+            query += " AND position NOT LIKE '%Driver%' AND position NOT LIKE '%Conductor%'"
         
         if search_name:
             query += " AND full_name LIKE ?"
@@ -197,13 +402,16 @@ def employee_management_page():
         
         if employees:
             # Summary stats
-            col_stat1, col_stat2, col_stat3 = st.columns(3)
+            col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
             with col_stat1:
                 st.metric("👥 Total Employees", len(employees))
             with col_stat2:
                 active_count = sum(1 for emp in employees if emp[10] == 'Active')
                 st.metric("✅ Active", active_count)
             with col_stat3:
+                drivers_count = sum(1 for emp in employees if 'driver' in emp[3].lower())
+                st.metric("🚗 Drivers", drivers_count)
+            with col_stat4:
                 total_salary = sum(emp[6] for emp in employees)
                 st.metric("💰 Total Salary", f"${total_salary:,.2f}")
             
@@ -212,25 +420,130 @@ def employee_management_page():
             # Display employees
             for emp in employees:
                 (emp_id, employee_id, full_name, position, department, hire_date, 
-                 salary, phone, email, address, status, created_by, created_at) = emp
+                 salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
+                 license_num, license_exp, defensive_exp, medical_exp, retest,
+                 created_by, created_at) = emp
                 
                 status_icon = "✅" if status == "Active" else "⏸️" if status == "On Leave" else "❌"
                 
-                with st.expander(f"{status_icon} {full_name} - {position} ({employee_id})"):
+                # Check for expiring documents
+                doc_warnings = []
+                if 'driver' in position.lower():
+                    current_date = datetime.now().date()
+                    threshold = current_date + timedelta(days=30)
+                    
+                    if license_exp:
+                        try:
+                            exp_date = datetime.strptime(license_exp, '%Y-%m-%d').date()
+                            if exp_date <= threshold:
+                                days_left = (exp_date - current_date).days
+                                if days_left < 0:
+                                    doc_warnings.append(f"🔴 License EXPIRED")
+                                elif days_left <= 7:
+                                    doc_warnings.append(f"🟠 License expires in {days_left} days")
+                                else:
+                                    doc_warnings.append(f"🟡 License expires in {days_left} days")
+                        except:
+                            pass
+                    
+                    # Check other documents similarly
+                    for exp_date, doc_name in [(defensive_exp, "Defensive"), (medical_exp, "Medical"), (retest, "Retest")]:
+                        if exp_date:
+                            try:
+                                exp = datetime.strptime(exp_date, '%Y-%m-%d').date()
+                                if exp <= threshold:
+                                    days_left = (exp - current_date).days
+                                    if days_left < 0:
+                                        doc_warnings.append(f"🔴 {doc_name} EXPIRED")
+                                    elif days_left <= 7:
+                                        doc_warnings.append(f"🟠 {doc_name} expires in {days_left} days")
+                            except:
+                                pass
+                
+                # Build expander title
+                title = f"{status_icon} {full_name} - {position} ({employee_id})"
+                if doc_warnings:
+                    title += f" ⚠️ {len(doc_warnings)} Alert(s)"
+                
+                with st.expander(title):
+                    # Show document warnings first if any
+                    if doc_warnings:
+                        st.warning("**⚠️ Document Alerts:**")
+                        for warning in doc_warnings:
+                            st.markdown(f"- {warning}")
+                        st.markdown("---")
+                    
                     col_info1, col_info2 = st.columns(2)
                     
                     with col_info1:
+                        st.markdown("##### 👤 Basic Information")
                         st.write(f"**Employee ID:** {employee_id}")
                         st.write(f"**Position:** {position}")
                         st.write(f"**Department:** {department}")
                         st.write(f"**Salary:** ${salary:,.2f}")
                         st.write(f"**Status:** {status}")
+                        st.write(f"**Hire Date:** {hire_date}")
+                        if dob:
+                            age = (datetime.now().date() - datetime.strptime(dob, '%Y-%m-%d').date()).days // 365
+                            st.write(f"**Age:** {age} years")
                     
                     with col_info2:
-                        st.write(f"**Hire Date:** {hire_date}")
+                        st.markdown("##### 📞 Contact Information")
                         st.write(f"**Phone:** {phone or 'N/A'}")
                         st.write(f"**Email:** {email or 'N/A'}")
                         st.write(f"**Address:** {address or 'N/A'}")
+                        
+                        if emerg_contact:
+                            st.markdown("##### 🚨 Emergency Contact")
+                            st.write(f"**Name:** {emerg_contact}")
+                            st.write(f"**Phone:** {emerg_phone or 'N/A'}")
+                    
+                    # Driver documents section
+                    if 'driver' in position.lower():
+                        st.markdown("---")
+                        st.markdown("##### 🚗 Driver Documents")
+                        
+                        doc_col1, doc_col2 = st.columns(2)
+                        
+                        with doc_col1:
+                            if license_num:
+                                st.write(f"**License Number:** {license_num}")
+                            if license_exp:
+                                days_to_exp = (datetime.strptime(license_exp, '%Y-%m-%d').date() - datetime.now().date()).days
+                                if days_to_exp < 0:
+                                    st.error(f"**License Expiry:** {license_exp} (EXPIRED)")
+                                elif days_to_exp <= 30:
+                                    st.warning(f"**License Expiry:** {license_exp} ({days_to_exp} days)")
+                                else:
+                                    st.info(f"**License Expiry:** {license_exp}")
+                            
+                            if defensive_exp:
+                                days_to_exp = (datetime.strptime(defensive_exp, '%Y-%m-%d').date() - datetime.now().date()).days
+                                if days_to_exp < 0:
+                                    st.error(f"**Defensive Driving:** {defensive_exp} (EXPIRED)")
+                                elif days_to_exp <= 30:
+                                    st.warning(f"**Defensive Driving:** {defensive_exp} ({days_to_exp} days)")
+                                else:
+                                    st.info(f"**Defensive Driving:** {defensive_exp}")
+                        
+                        with doc_col2:
+                            if medical_exp:
+                                days_to_exp = (datetime.strptime(medical_exp, '%Y-%m-%d').date() - datetime.now().date()).days
+                                if days_to_exp < 0:
+                                    st.error(f"**Medical Certificate:** {medical_exp} (EXPIRED)")
+                                elif days_to_exp <= 30:
+                                    st.warning(f"**Medical Certificate:** {medical_exp} ({days_to_exp} days)")
+                                else:
+                                    st.info(f"**Medical Certificate:** {medical_exp}")
+                            
+                            if retest:
+                                days_to_exp = (datetime.strptime(retest, '%Y-%m-%d').date() - datetime.now().date()).days
+                                if days_to_exp < 0:
+                                    st.error(f"**Retest Date:** {retest} (OVERDUE)")
+                                elif days_to_exp <= 30:
+                                    st.warning(f"**Retest Date:** {retest} ({days_to_exp} days)")
+                                else:
+                                    st.info(f"**Retest Date:** {retest}")
                     
                     st.markdown("---")
                     
@@ -285,15 +598,16 @@ def employee_management_page():
                                 st.session_state[f'confirm_del_emp_{emp_id}'] = True
                                 st.warning("Click again to confirm")
                     
-                    # Edit mode
+                    # Edit mode (includes all new fields)
                     if st.session_state.get(f'edit_emp_mode_{emp_id}', False):
                         st.markdown("---")
                         st.markdown("**Edit Employee:**")
                         
                         with st.form(f"edit_emp_form_{emp_id}"):
-                            col_edit1, col_edit2 = st.columns(2)
+                            st.markdown("#### 👤 Basic Information")
+                            edit_col1, edit_col2 = st.columns(2)
                             
-                            with col_edit1:
+                            with edit_col1:
                                 new_full_name = st.text_input("Full Name", value=full_name)
                                 new_position = st.text_input("Position", value=position)
                                 new_department = st.selectbox(
@@ -302,52 +616,87 @@ def employee_management_page():
                                     index=["Operations", "Maintenance", "Administration", "HR"].index(department) if department in ["Operations", "Maintenance", "Administration", "HR"] else 0
                                 )
                                 new_salary = st.number_input("Salary", value=float(salary))
-                            
-                            with col_edit2:
-                                new_phone = st.text_input("Phone", value=phone or "")
-                                new_email = st.text_input("Email", value=email or "")
-                                new_address = st.text_area("Address", value=address or "")
                                 new_status = st.selectbox(
                                     "Status",
                                     ["Active", "On Leave", "Terminated"],
                                     index=["Active", "On Leave", "Terminated"].index(status) if status in ["Active", "On Leave", "Terminated"] else 0
                                 )
                             
+                            with edit_col2:
+                                if dob:
+                                    new_dob = st.date_input("Date of Birth", value=datetime.strptime(dob, '%Y-%m-%d'))
+                                else:
+                                    new_dob = st.date_input("Date of Birth", value=datetime(1990, 1, 1))
+                                
+                                new_phone = st.text_input("Phone", value=phone or "")
+                                new_email = st.text_input("Email", value=email or "")
+                                new_address = st.text_area("Address", value=address or "")
+                            
+                            st.markdown("#### 📞 Emergency Contact")
+                            emerg_col1, emerg_col2 = st.columns(2)
+                            
+                            with emerg_col1:
+                                new_emerg_contact = st.text_input("Emergency Contact Name", value=emerg_contact or "")
+                            with emerg_col2:
+                                new_emerg_phone = st.text_input("Emergency Contact Phone", value=emerg_phone or "")
+                            
+                            # Driver documents
+                            if 'driver' in new_position.lower():
+                                st.markdown("#### 🚗 Driver Documents")
+                                doc_edit_col1, doc_edit_col2 = st.columns(2)
+                                
+                                with doc_edit_col1:
+                                    new_license_num = st.text_input("License Number", value=license_num or "")
+                                    if license_exp:
+                                        new_license_exp = st.date_input("License Expiry", value=datetime.strptime(license_exp, '%Y-%m-%d'))
+                                    else:
+                                        new_license_exp = st.date_input("License Expiry", value=datetime.now() + timedelta(days=365))
+                                    
+                                    if defensive_exp:
+                                        new_defensive_exp = st.date_input("Defensive Driving Expiry", value=datetime.strptime(defensive_exp, '%Y-%m-%d'))
+                                    else:
+                                        new_defensive_exp = st.date_input("Defensive Driving Expiry", value=datetime.now() + timedelta(days=365))
+                                
+                                with doc_edit_col2:
+                                    if medical_exp:
+                                        new_medical_exp = st.date_input("Medical Certificate Expiry", value=datetime.strptime(medical_exp, '%Y-%m-%d'))
+                                    else:
+                                        new_medical_exp = st.date_input("Medical Certificate Expiry", value=datetime.now() + timedelta(days=365))
+                                    
+                                    if retest:
+                                        new_retest = st.date_input("Next Retest Date", value=datetime.strptime(retest, '%Y-%m-%d'))
+                                    else:
+                                        new_retest = st.date_input("Next Retest Date", value=datetime.now() + timedelta(days=180))
+                            else:
+                                new_license_num = None
+                                new_license_exp = None
+                                new_defensive_exp = None
+                                new_medical_exp = None
+                                new_retest = None
+                            
                             col_save, col_cancel = st.columns(2)
                             
                             with col_save:
                                 if st.form_submit_button("💾 Save", use_container_width=True):
-                                    old_data = {
-                                        'full_name': full_name,
-                                        'position': position,
-                                        'department': department,
-                                        'salary': salary,
-                                        'phone': phone,
-                                        'email': email,
-                                        'address': address,
-                                        'status': status
-                                    }
-                                    
-                                    new_data = {
-                                        'full_name': new_full_name,
-                                        'position': new_position,
-                                        'department': new_department,
-                                        'salary': new_salary,
-                                        'phone': new_phone,
-                                        'email': new_email,
-                                        'address': new_address,
-                                        'status': new_status
-                                    }
-                                    
                                     conn = sqlite3.connect('bus_management.db')
                                     cursor = conn.cursor()
                                     cursor.execute('''
                                         UPDATE employees
                                         SET full_name = ?, position = ?, department = ?, salary = ?,
-                                            phone = ?, email = ?, address = ?, status = ?
+                                            phone = ?, email = ?, address = ?, status = ?, date_of_birth = ?,
+                                            emergency_contact = ?, emergency_phone = ?, license_number = ?,
+                                            license_expiry = ?, defensive_driving_expiry = ?, 
+                                            medical_cert_expiry = ?, retest_date = ?
                                         WHERE id = ?
                                     ''', (new_full_name, new_position, new_department, new_salary,
-                                          new_phone, new_email, new_address, new_status, emp_id))
+                                          new_phone, new_email, new_address, new_status,
+                                          new_dob.strftime("%Y-%m-%d") if new_dob else None,
+                                          new_emerg_contact, new_emerg_phone, new_license_num,
+                                          new_license_exp.strftime("%Y-%m-%d") if new_license_exp else None,
+                                          new_defensive_exp.strftime("%Y-%m-%d") if new_defensive_exp else None,
+                                          new_medical_exp.strftime("%Y-%m-%d") if new_medical_exp else None,
+                                          new_retest.strftime("%Y-%m-%d") if new_retest else None,
+                                          emp_id))
                                     conn.commit()
                                     conn.close()
                                     
@@ -356,9 +705,7 @@ def employee_management_page():
                                         module="Employee",
                                         description=f"Updated employee: {new_full_name} (ID: {employee_id})",
                                         affected_table="employees",
-                                        affected_record_id=emp_id,
-                                        old_values=old_data,
-                                        new_values=new_data
+                                        affected_record_id=emp_id
                                     )
                                     
                                     st.success("Employee updated!")
@@ -375,55 +722,167 @@ def employee_management_page():
     with tab2:
         st.subheader("Add New Employee")
         
+        # Position selection for auto-ID generation
+        position_preview = st.selectbox(
+            "Position/Role*",
+            ["Bus Driver", "Conductor", "Mechanic", "Office Staff", "HR Staff", 
+             "Supervisor", "Manager", "Other"],
+            key="position_preview"
+        )
+        
+        # Generate and display auto ID
+        conn_preview = sqlite3.connect('bus_management.db')
+        auto_employee_id = generate_employee_id(position_preview, conn_preview)
+        conn_preview.close()
+        
+        st.info(f"🆔 **Auto-Generated Employee ID:** `{auto_employee_id}`")
+        st.caption("This ID is automatically assigned based on the selected position")
+        
+        st.markdown("---")
+        
         with st.form("new_employee_form"):
+            # Basic Information
+            st.markdown("#### 👤 Basic Information")
             col1, col2 = st.columns(2)
             
             with col1:
-                employee_id = st.text_input("Employee ID*", placeholder="e.g., EMP001")
+                st.text_input("Employee ID* (Auto-Generated)", value=auto_employee_id, disabled=True)
                 full_name = st.text_input("Full Name*", placeholder="e.g., John Doe")
-                position = st.text_input("Position*", placeholder="e.g., Bus Driver")
+                position = st.selectbox(
+                    "Position/Role*",
+                    ["Bus Driver", "Conductor", "Mechanic", "Office Staff", "HR Staff", 
+                     "Supervisor", "Manager", "Other"],
+                    index=["Bus Driver", "Conductor", "Mechanic", "Office Staff", "HR Staff", 
+                           "Supervisor", "Manager", "Other"].index(position_preview)
+                )
                 department = st.selectbox("Department*", ["Operations", "Maintenance", "Administration", "HR"])
             
             with col2:
+                date_of_birth = st.date_input("Date of Birth", 
+                    value=datetime(1990, 1, 1),
+                    min_value=datetime(1940, 1, 1),
+                    max_value=datetime.now() - timedelta(days=365*18))  # Must be 18+
                 hire_date = st.date_input("Hire Date*", datetime.now())
                 salary = st.number_input("Salary*", min_value=0.0, step=100.0, format="%.2f")
+            
+            st.markdown("---")
+            
+            # Contact Information
+            st.markdown("#### 📞 Contact Information")
+            col3, col4 = st.columns(2)
+            
+            with col3:
                 phone = st.text_input("Phone", placeholder="+263 xxx xxx xxx")
                 email = st.text_input("Email", placeholder="employee@example.com")
             
-            address = st.text_area("Address", placeholder="Full address...")
+            with col4:
+                emergency_contact = st.text_input("Emergency Contact Name", placeholder="Full name")
+                emergency_phone = st.text_input("Emergency Contact Phone", placeholder="+263 xxx xxx xxx")
+            
+            address = st.text_area("Address", placeholder="Full residential address...")
+            
+            # Driver-specific documents (only show if position is Driver)
+            if 'driver' in position.lower():
+                st.markdown("---")
+                st.markdown("#### 🚗 Driver Documents & Certifications")
+                
+                col5, col6 = st.columns(2)
+                
+                with col5:
+                    license_number = st.text_input("Driver License Number*", placeholder="e.g., 12345678")
+                    license_expiry = st.date_input("License Expiry Date*", 
+                        value=datetime.now() + timedelta(days=365))
+                    defensive_driving_expiry = st.date_input("Defensive Driving Cert Expiry", 
+                        value=datetime.now() + timedelta(days=365))
+                
+                with col6:
+                    medical_cert_expiry = st.date_input("Medical Certificate Expiry", 
+                        value=datetime.now() + timedelta(days=365))
+                    retest_date = st.date_input("Next Retest Date", 
+                        value=datetime.now() + timedelta(days=180))
+                
+                st.info("📅 **Reminder:** You'll receive alerts 30 days before any document expires")
+            else:
+                license_number = None
+                license_expiry = None
+                defensive_driving_expiry = None
+                medical_cert_expiry = None
+                retest_date = None
+            
+            st.markdown("---")
+            
+            # Info box
+            with st.expander("ℹ️ About Employee ID System"):
+                st.write("""
+                **Automatic ID Assignment:**
+                - **Drivers**: PavD001, PavD002, PavD003... (for bus pairing & income tracking)
+                - **Conductors**: PavC001, PavC002, PavC003... (for bus pairing & income tracking)
+                - **Other Staff**: Pav001, Pav002, Pav003... (Mechanics, Office Staff, HR, etc.)
+                
+                The system automatically assigns the next available ID based on your selected position.
+                """)
             
             submitted = st.form_submit_button("➕ Add Employee", use_container_width=True, type="primary")
             
             if submitted:
-                if not all([employee_id, full_name, position, department, salary > 0]):
+                # Validation
+                required_fields = [full_name, position, department, salary > 0]
+                
+                if 'driver' in position.lower():
+                    required_fields.extend([license_number, license_expiry])
+                
+                if not all(required_fields):
                     st.error("⚠️ Please fill in all required fields")
                 else:
                     conn = sqlite3.connect('bus_management.db')
                     cursor = conn.cursor()
                     
+                    # Generate final employee ID
+                    final_employee_id = generate_employee_id(position, conn)
+                    
                     try:
                         cursor.execute('''
                             INSERT INTO employees 
                             (employee_id, full_name, position, department, hire_date, salary, 
-                             phone, email, address, status, created_by)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?)
-                        ''', (employee_id, full_name, position, department, hire_date.strftime("%Y-%m-%d"),
-                              salary, phone, email, address, st.session_state['user']['username']))
+                             phone, email, address, status, date_of_birth, emergency_contact, 
+                             emergency_phone, license_number, license_expiry, 
+                             defensive_driving_expiry, medical_cert_expiry, retest_date, created_by)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            final_employee_id, full_name, position, department, 
+                            hire_date.strftime("%Y-%m-%d"), salary, phone, email, address,
+                            date_of_birth.strftime("%Y-%m-%d") if date_of_birth else None,
+                            emergency_contact, emergency_phone,
+                            license_number,
+                            license_expiry.strftime("%Y-%m-%d") if license_expiry else None,
+                            defensive_driving_expiry.strftime("%Y-%m-%d") if defensive_driving_expiry else None,
+                            medical_cert_expiry.strftime("%Y-%m-%d") if medical_cert_expiry else None,
+                            retest_date.strftime("%Y-%m-%d") if retest_date else None,
+                            st.session_state['user']['username']
+                        ))
                         
                         conn.commit()
                         
                         AuditLogger.log_action(
                             action_type="Add",
                             module="Employee",
-                            description=f"New employee added: {full_name}, {position}, {department}, Salary: ${salary:,.2f}",
+                            description=f"New employee added: {full_name} (ID: {final_employee_id}), {position}, {department}, Salary: ${salary:,.2f}",
                             affected_table="employees"
                         )
                         
-                        st.success(f"✅ Employee {full_name} added successfully!")
+                        st.success(f"✅ Employee {full_name} added successfully with ID: **{final_employee_id}**")
+                        
+                        # Check if any documents expire soon
+                        if 'driver' in position.lower():
+                            alerts = get_expiring_documents(days_threshold=30)
+                            driver_alerts = [a for a in alerts if a['employee_id'] == final_employee_id]
+                            if driver_alerts:
+                                st.warning(f"⚠️ Note: {len(driver_alerts)} document(s) expire within 30 days for this driver")
+                        
                         st.balloons()
                         
                     except sqlite3.IntegrityError:
-                        st.error(f"❌ Employee ID '{employee_id}' already exists!")
+                        st.error(f"❌ Employee ID '{final_employee_id}' already exists! Please refresh the page.")
                     except Exception as e:
                         st.error(f"❌ Error: {str(e)}")
                     finally:

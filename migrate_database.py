@@ -1,158 +1,239 @@
 """
-migrate_database.py - Database Migration Script
-Run this ONCE to add buses and routes tables to existing database
+migrate_database.py - Run this script to update the database schema
+Usage: python migrate_database.py
 """
 
 import sqlite3
+import os
 from datetime import datetime
 
-DATABASE_PATH = "bus_management.db"
+def backup_database():
+    """Create a backup of the database before migration"""
+    db_file = 'bus_management.db'
+    
+    if not os.path.exists(db_file):
+        print(f"❌ Database file '{db_file}' not found!")
+        return False
+    
+    # Create backup with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_file = f'bus_management_backup_{timestamp}.db'
+    
+    try:
+        import shutil
+        shutil.copy2(db_file, backup_file)
+        print(f"✅ Backup created: {backup_file}")
+        return True
+    except Exception as e:
+        print(f"❌ Backup failed: {e}")
+        return False
 
-def migrate_database():
-    """Add buses and routes tables, update income table"""
+def migrate_income_table():
+    """Add employee ID columns to income table"""
     
-    print("🔄 Starting database migration...")
+    print("\n🔄 Starting migration...")
     
-    conn = sqlite3.connect(DATABASE_PATH)
+    conn = sqlite3.connect('bus_management.db')
     cursor = conn.cursor()
     
     try:
-        # 1. Create buses table
-        print("📦 Creating buses table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS buses (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                number_plate TEXT UNIQUE NOT NULL,
-                model TEXT NOT NULL,
-                capacity INTEGER,
-                year INTEGER,
-                status TEXT DEFAULT 'Active',
-                notes TEXT,
-                created_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        print("✅ Buses table created")
-        
-        # 2. Create routes table
-        print("📦 Creating routes table...")
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS routes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL,
-                distance REAL,
-                description TEXT,
-                created_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        print("✅ Routes table created")
-        
-        # 3. Check if income table needs hire_destination column
-        print("🔍 Checking income table structure...")
+        # Check if migration is needed
         cursor.execute("PRAGMA table_info(income)")
         columns = [col[1] for col in cursor.fetchall()]
         
-        if 'hire_destination' not in columns:
-            print("📦 Adding hire_destination column to income table...")
-            cursor.execute('ALTER TABLE income ADD COLUMN hire_destination TEXT')
-            print("✅ hire_destination column added")
-        else:
-            print("✅ hire_destination column already exists")
+        if 'driver_employee_id' in columns and 'conductor_employee_id' in columns:
+            print("✅ Database already migrated! No changes needed.")
+            return True
         
-        # 4. Extract unique buses from existing income records
-        print("🚌 Extracting existing buses from income records...")
-        cursor.execute("SELECT DISTINCT bus_number FROM income WHERE bus_number IS NOT NULL AND bus_number != ''")
-        existing_buses = cursor.fetchall()
+        print("📝 Migration needed. Updating schema...")
         
-        if existing_buses:
-            print(f"📋 Found {len(existing_buses)} unique buses in income records")
-            
-            for (bus_number,) in existing_buses:
-                # Check if bus already exists
-                cursor.execute("SELECT id FROM buses WHERE number_plate = ?", (bus_number,))
-                if not cursor.fetchone():
-                    # Add bus to buses table
-                    cursor.execute('''
-                        INSERT INTO buses (number_plate, model, capacity, status, notes, created_by)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    ''', (bus_number, 'Unknown Model', 50, 'Active', 'Migrated from income records', 'System'))
-                    print(f"  ✅ Added bus: {bus_number}")
-                else:
-                    print(f"  ⏭️  Bus already exists: {bus_number}")
-        else:
-            print("ℹ️  No existing buses found in income records")
+        # Step 1: Create new table with proper schema
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS income_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bus_number TEXT NOT NULL,
+                route TEXT NOT NULL,
+                hire_destination TEXT,
+                driver_employee_id TEXT,
+                driver_name TEXT,
+                conductor_employee_id TEXT,
+                conductor_name TEXT,
+                date TEXT NOT NULL,
+                amount REAL NOT NULL,
+                notes TEXT,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        print("✅ Created new income table structure")
         
-        # 5. Extract unique routes from existing income records
-        print("🛣️  Extracting existing routes from income records...")
-        cursor.execute("SELECT DISTINCT route FROM income WHERE route IS NOT NULL AND route != '' AND route != 'Hire'")
-        existing_routes = cursor.fetchall()
+        # Step 2: Copy existing data
+        cursor.execute('''
+            INSERT INTO income_new 
+            (id, bus_number, route, hire_destination, driver_name, conductor_name, 
+             date, amount, notes, created_by, created_at)
+            SELECT id, bus_number, route, hire_destination, driver_name, conductor_name, 
+                   date, amount, notes, created_by, created_at
+            FROM income
+        ''')
         
-        if existing_routes:
-            print(f"📋 Found {len(existing_routes)} unique routes in income records")
-            
-            for (route_name,) in existing_routes:
-                # Check if route already exists
-                cursor.execute("SELECT id FROM routes WHERE name = ?", (route_name,))
-                if not cursor.fetchone():
-                    # Add route to routes table
-                    cursor.execute('''
-                        INSERT INTO routes (name, distance, description, created_by)
-                        VALUES (?, ?, ?, ?)
-                    ''', (route_name, None, 'Migrated from income records', 'System'))
-                    print(f"  ✅ Added route: {route_name}")
-                else:
-                    print(f"  ⏭️  Route already exists: {route_name}")
-        else:
-            print("ℹ️  No existing routes found in income records")
+        rows_copied = cursor.rowcount
+        print(f"✅ Copied {rows_copied} existing records")
         
-        # 6. Commit all changes
+        # Step 3: Drop old table and rename new one
+        cursor.execute('DROP TABLE income')
+        cursor.execute('ALTER TABLE income_new RENAME TO income')
+        print("✅ Replaced old table with new structure")
+        
+        # Step 4: Update existing records to populate employee IDs
+        cursor.execute('''
+            UPDATE income
+            SET driver_employee_id = (
+                SELECT employee_id 
+                FROM employees 
+                WHERE employees.full_name = income.driver_name 
+                AND employees.position LIKE '%Driver%'
+                LIMIT 1
+            )
+            WHERE driver_employee_id IS NULL AND driver_name IS NOT NULL
+        ''')
+        
+        drivers_updated = cursor.rowcount
+        print(f"✅ Updated {drivers_updated} driver employee IDs")
+        
+        cursor.execute('''
+            UPDATE income
+            SET conductor_employee_id = (
+                SELECT employee_id 
+                FROM employees 
+                WHERE employees.full_name = income.conductor_name 
+                AND employees.position LIKE '%Conductor%'
+                LIMIT 1
+            )
+            WHERE conductor_employee_id IS NULL AND conductor_name IS NOT NULL
+        ''')
+        
+        conductors_updated = cursor.rowcount
+        print(f"✅ Updated {conductors_updated} conductor employee IDs")
+        
+        # Commit all changes
         conn.commit()
         print("\n🎉 Migration completed successfully!")
-        print("\n📊 Summary:")
         
-        # Count buses
-        cursor.execute("SELECT COUNT(*) FROM buses")
-        bus_count = cursor.fetchone()[0]
-        print(f"  🚌 Total buses: {bus_count}")
-        
-        # Count routes
-        cursor.execute("SELECT COUNT(*) FROM routes")
-        route_count = cursor.fetchone()[0]
-        print(f"  🛣️  Total routes: {route_count}")
-        
-        # Count income records
+        # Show summary
         cursor.execute("SELECT COUNT(*) FROM income")
-        income_count = cursor.fetchone()[0]
-        print(f"  💰 Total income records: {income_count}")
+        total_records = cursor.fetchone()[0]
         
-        print("\n✅ Your database is now ready!")
-        print("👉 You can now run: streamlit run app.py")
+        cursor.execute("SELECT COUNT(*) FROM income WHERE driver_employee_id IS NOT NULL")
+        matched_drivers = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM income WHERE conductor_employee_id IS NOT NULL")
+        matched_conductors = cursor.fetchone()[0]
+        
+        print("\n📊 Migration Summary:")
+        print(f"   Total income records: {total_records}")
+        print(f"   Drivers matched: {matched_drivers}/{total_records}")
+        print(f"   Conductors matched: {matched_conductors}/{total_records}")
+        
+        if matched_drivers < total_records or matched_conductors < total_records:
+            print("\n⚠️  Warning: Some employees could not be matched.")
+            print("   This is normal if:")
+            print("   - Employee names have changed")
+            print("   - Employees were deleted")
+            print("   - Names don't match exactly")
+        
+        return True
         
     except Exception as e:
-        print(f"\n❌ Migration failed: {str(e)}")
+        print(f"\n❌ Migration failed: {e}")
         conn.rollback()
-        raise
-    
+        return False
+        
     finally:
         conn.close()
 
+def verify_migration():
+    """Verify the migration was successful"""
+    
+    print("\n🔍 Verifying migration...")
+    
+    conn = sqlite3.connect('bus_management.db')
+    cursor = conn.cursor()
+    
+    try:
+        # Check table structure
+        cursor.execute("PRAGMA table_info(income)")
+        columns = {col[1]: col[2] for col in cursor.fetchall()}
+        
+        required_columns = ['driver_employee_id', 'conductor_employee_id']
+        missing = [col for col in required_columns if col not in columns]
+        
+        if missing:
+            print(f"❌ Missing columns: {', '.join(missing)}")
+            return False
+        
+        print("✅ All required columns present")
+        
+        # Check data integrity
+        cursor.execute("SELECT COUNT(*) FROM income")
+        total = cursor.fetchone()[0]
+        
+        cursor.execute("SELECT COUNT(*) FROM income WHERE date IS NOT NULL AND amount IS NOT NULL")
+        valid = cursor.fetchone()[0]
+        
+        if total != valid:
+            print(f"⚠️  Warning: {total - valid} records have missing data")
+        else:
+            print(f"✅ All {total} records are valid")
+        
+        return True
+        
+    except Exception as e:
+        print(f"❌ Verification failed: {e}")
+        return False
+        
+    finally:
+        conn.close()
+
+def main():
+    """Main migration process"""
+    
+    print("=" * 60)
+    print("🚌 Pavillion Coaches - Database Migration Tool")
+    print("=" * 60)
+    print("\nThis will update the income table to store employee IDs")
+    print("\n⚠️  IMPORTANT: A backup will be created automatically")
+    
+    response = input("\nContinue with migration? (yes/no): ").strip().lower()
+    
+    if response != 'yes':
+        print("\n❌ Migration cancelled by user")
+        return
+    
+    # Step 1: Backup
+    if not backup_database():
+        print("\n❌ Cannot proceed without backup")
+        return
+    
+    # Step 2: Migrate
+    if not migrate_income_table():
+        print("\n❌ Migration failed. Your backup is safe.")
+        return
+    
+    # Step 3: Verify
+    if not verify_migration():
+        print("\n⚠️  Migration completed but verification found issues")
+        print("   Please check your data before continuing")
+        return
+    
+    print("\n" + "=" * 60)
+    print("✅ Migration completed successfully!")
+    print("=" * 60)
+    print("\nNext steps:")
+    print("1. Test your application")
+    print("2. If everything works, you can delete the backup file")
+    print("3. If there are issues, restore from backup")
+    print("\n💡 Backup location: bus_management_backup_*.db")
+
 if __name__ == "__main__":
-    print("="*60)
-    print("🚌 BUS MANAGEMENT SYSTEM - DATABASE MIGRATION")
-    print("="*60)
-    print()
-    
-    response = input("⚠️  This will modify your database. Have you backed it up? (yes/no): ")
-    
-    if response.lower() in ['yes', 'y']:
-        print()
-        migrate_database()
-        print()
-        print("="*60)
-    else:
-        print("\n❌ Migration cancelled. Please backup your database first:")
-        print("   Backup command: cp bus_management.db bus_management_backup.db")
-        print()
+    main()

@@ -21,6 +21,16 @@ from pages_hr import (
     leave_management_page,
     disciplinary_records_page
 )
+from pages_hr import get_expiring_documents, display_document_expiry_alerts
+
+# In your homepage/dashboard function:
+def homepage():
+    st.title("🏠 Dashboard")
+    
+    # Document Expiry Alerts - Shows at the top
+    display_document_expiry_alerts()
+    
+    st.markdown("---")
 from pages_users import user_management_page, my_profile_page
 from pages_audit import activity_log_page, user_activity_dashboard
 from pages_bus_analysis import bus_analysis_page

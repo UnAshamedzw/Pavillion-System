@@ -1,6 +1,6 @@
 """
 database.py - Database initialization and management
-Enhanced with buses, routes, and hire support - POSTGRES + SQLITE SUPPORT
+COMPLETE FIXED VERSION with driver documents tracking
 """
 
 import os
@@ -35,7 +35,7 @@ def init_database():
     cursor = conn.cursor()
     
     if USE_POSTGRES:
-        # PostgreSQL syntax (SERIAL instead of AUTOINCREMENT)
+        # PostgreSQL syntax
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS buses (
                 id SERIAL PRIMARY KEY,
@@ -72,6 +72,7 @@ def init_database():
             )
         ''')
         
+        # ENHANCED EMPLOYEES TABLE with driver documents
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS employees (
                 id SERIAL PRIMARY KEY,
@@ -86,20 +87,30 @@ def init_database():
                 salary REAL,
                 commission_rate REAL DEFAULT 0,
                 address TEXT,
+                date_of_birth TEXT,
                 emergency_contact TEXT,
+                emergency_phone TEXT,
+                license_number TEXT,
+                license_expiry TEXT,
+                defensive_driving_expiry TEXT,
+                medical_cert_expiry TEXT,
+                retest_date TEXT,
                 created_by TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
+        # ENHANCED INCOME TABLE with employee IDs
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS income (
                 id SERIAL PRIMARY KEY,
                 bus_number TEXT NOT NULL,
                 route TEXT NOT NULL,
                 hire_destination TEXT,
+                driver_employee_id TEXT,
                 driver_name TEXT,
+                conductor_employee_id TEXT,
                 conductor_name TEXT,
                 date TEXT NOT NULL,
                 amount REAL NOT NULL,
@@ -128,15 +139,32 @@ def init_database():
         ''')
         
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bus_assignments (
+                id SERIAL PRIMARY KEY,
+                bus_number TEXT NOT NULL,
+                driver_employee_id TEXT,
+                conductor_employee_id TEXT,
+                assignment_date DATE NOT NULL,
+                shift TEXT DEFAULT 'Full Day',
+                route TEXT,
+                notes TEXT,
+                created_by TEXT DEFAULT 'SYSTEM',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS leave_records (
                 id SERIAL PRIMARY KEY,
-                employee_id INTEGER NOT NULL,
+                employee_id TEXT NOT NULL,
                 leave_type TEXT NOT NULL,
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 reason TEXT,
                 status TEXT DEFAULT 'Pending',
                 approved_by TEXT,
+                approved_date TEXT,
+                created_by TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -144,14 +172,18 @@ def init_database():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS payroll (
                 id SERIAL PRIMARY KEY,
-                employee_id INTEGER NOT NULL,
-                month TEXT NOT NULL,
+                employee_id TEXT NOT NULL,
+                pay_period TEXT NOT NULL,
                 basic_salary REAL NOT NULL,
-                commission REAL DEFAULT 0,
+                allowances REAL DEFAULT 0,
                 deductions REAL DEFAULT 0,
+                commission REAL DEFAULT 0,
                 net_salary REAL NOT NULL,
+                payment_method TEXT,
                 status TEXT DEFAULT 'Pending',
-                paid_date TEXT,
+                payment_date TEXT,
+                notes TEXT,
+                created_by TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -159,11 +191,16 @@ def init_database():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS performance_records (
                 id SERIAL PRIMARY KEY,
-                employee_id INTEGER NOT NULL,
-                rating_period TEXT NOT NULL,
-                rating REAL NOT NULL,
-                comments TEXT,
-                reviewed_by TEXT,
+                employee_id TEXT NOT NULL,
+                evaluation_period TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                strengths TEXT,
+                weaknesses TEXT,
+                goals TEXT,
+                evaluator TEXT,
+                evaluation_date TEXT NOT NULL,
+                notes TEXT,
+                created_by TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
@@ -171,28 +208,18 @@ def init_database():
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS disciplinary_records (
                 id SERIAL PRIMARY KEY,
-                employee_id INTEGER NOT NULL,
-                incident_date TEXT NOT NULL,
-                incident_type TEXT NOT NULL,
-                description TEXT,
-                action_taken TEXT,
-                reported_by TEXT,
+                employee_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                violation_description TEXT,
+                action_details TEXT,
+                record_date TEXT NOT NULL,
+                due_date TEXT,
+                resolution_date TEXT,
+                issued_by TEXT,
+                status TEXT DEFAULT 'Active',
+                notes TEXT,
+                created_by TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS audit_trail (
-                id SERIAL PRIMARY KEY,
-                user_id TEXT,
-                username TEXT,
-                action TEXT NOT NULL,
-                table_name TEXT,
-                record_id INTEGER,
-                old_values TEXT,
-                new_values TEXT,
-                ip_address TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -217,11 +244,11 @@ def init_database():
         # Create indexes
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_action_type ON activity_log(action_type)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_module ON activity_log(module)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_income_driver ON income(driver_employee_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_income_conductor ON income(conductor_employee_id)')
         
     else:
-        # SQLite syntax (your original code)
+        # SQLite syntax
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS buses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -258,6 +285,7 @@ def init_database():
             )
         ''')
         
+        # ENHANCED EMPLOYEES TABLE with driver documents
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -272,20 +300,30 @@ def init_database():
                 salary REAL,
                 commission_rate REAL DEFAULT 0,
                 address TEXT,
+                date_of_birth TEXT,
                 emergency_contact TEXT,
+                emergency_phone TEXT,
+                license_number TEXT,
+                license_expiry TEXT,
+                defensive_driving_expiry TEXT,
+                medical_cert_expiry TEXT,
+                retest_date TEXT,
                 created_by TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
+        # ENHANCED INCOME TABLE with employee IDs
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS income (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 bus_number TEXT NOT NULL,
                 route TEXT NOT NULL,
                 hire_destination TEXT,
+                driver_employee_id TEXT,
                 driver_name TEXT,
+                conductor_employee_id TEXT,
                 conductor_name TEXT,
                 date TEXT NOT NULL,
                 amount REAL NOT NULL,
@@ -314,75 +352,89 @@ def init_database():
         ''')
         
         cursor.execute('''
+            CREATE TABLE IF NOT EXISTS bus_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                bus_number TEXT NOT NULL,
+                driver_employee_id TEXT,
+                conductor_employee_id TEXT,
+                assignment_date DATE NOT NULL,
+                shift TEXT DEFAULT 'Full Day',
+                route TEXT,
+                notes TEXT,
+                created_by TEXT DEFAULT 'SYSTEM',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (driver_employee_id) REFERENCES employees(employee_id),
+                FOREIGN KEY (conductor_employee_id) REFERENCES employees(employee_id)
+            )
+        ''')
+        
+        cursor.execute('''
             CREATE TABLE IF NOT EXISTS leave_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id INTEGER NOT NULL,
+                employee_id TEXT NOT NULL,
                 leave_type TEXT NOT NULL,
                 start_date TEXT NOT NULL,
                 end_date TEXT NOT NULL,
                 reason TEXT,
                 status TEXT DEFAULT 'Pending',
                 approved_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (employee_id) REFERENCES employees(id)
+                approved_date TEXT,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS payroll (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id INTEGER NOT NULL,
-                month TEXT NOT NULL,
+                employee_id TEXT NOT NULL,
+                pay_period TEXT NOT NULL,
                 basic_salary REAL NOT NULL,
-                commission REAL DEFAULT 0,
+                allowances REAL DEFAULT 0,
                 deductions REAL DEFAULT 0,
+                commission REAL DEFAULT 0,
                 net_salary REAL NOT NULL,
+                payment_method TEXT,
                 status TEXT DEFAULT 'Pending',
-                paid_date TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (employee_id) REFERENCES employees(id)
+                payment_date TEXT,
+                notes TEXT,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS performance_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id INTEGER NOT NULL,
-                rating_period TEXT NOT NULL,
-                rating REAL NOT NULL,
-                comments TEXT,
-                reviewed_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (employee_id) REFERENCES employees(id)
+                employee_id TEXT NOT NULL,
+                evaluation_period TEXT NOT NULL,
+                rating INTEGER NOT NULL,
+                strengths TEXT,
+                weaknesses TEXT,
+                goals TEXT,
+                evaluator TEXT,
+                evaluation_date TEXT NOT NULL,
+                notes TEXT,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS disciplinary_records (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                employee_id INTEGER NOT NULL,
-                incident_date TEXT NOT NULL,
-                incident_type TEXT NOT NULL,
-                description TEXT,
-                action_taken TEXT,
-                reported_by TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (employee_id) REFERENCES employees(id)
-            )
-        ''')
-        
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS audit_trail (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id TEXT,
-                username TEXT,
-                action TEXT NOT NULL,
-                table_name TEXT,
-                record_id INTEGER,
-                old_values TEXT,
-                new_values TEXT,
-                ip_address TEXT,
-                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                employee_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                violation_description TEXT,
+                action_details TEXT,
+                record_date TEXT NOT NULL,
+                due_date TEXT,
+                resolution_date TEXT,
+                issued_by TEXT,
+                status TEXT DEFAULT 'Active',
+                notes TEXT,
+                created_by TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         ''')
         
@@ -400,37 +452,254 @@ def init_database():
                 affected_table TEXT,
                 affected_record_id INTEGER,
                 old_values TEXT,
-                new_values TEXT,
-                FOREIGN KEY (user_id) REFERENCES users(id)
+                new_values TEXT
             )
         ''')
         
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_action_type ON activity_log(action_type)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_module ON activity_log(module)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_income_driver ON income(driver_employee_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_income_conductor ON income(conductor_employee_id)')
     
     conn.commit()
     conn.close()
+    print("✅ Database initialized successfully")
 
-def log_audit_trail(username, action, table_name, record_id, old_values=None, new_values=None):
-    """Log actions to audit trail"""
+# ============================================================================
+# EMPLOYEE HELPER FUNCTIONS
+# ============================================================================
+
+def get_active_drivers():
+    """Get list of active drivers - READ ONLY"""
     conn = get_connection()
     cursor = conn.cursor()
     
     if USE_POSTGRES:
-        cursor.execute('''
-            INSERT INTO audit_trail (username, action, table_name, record_id, old_values, new_values)
-            VALUES (%s, %s, %s, %s, %s, %s)
-        ''', (username, action, table_name, record_id, str(old_values), str(new_values)))
+        cursor.execute("""
+            SELECT employee_id, full_name 
+            FROM employees 
+            WHERE position LIKE %s AND status = %s
+            ORDER BY full_name
+        """, ('%Driver%', 'Active'))
     else:
-        cursor.execute('''
-            INSERT INTO audit_trail (username, action, table_name, record_id, old_values, new_values)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (username, action, table_name, record_id, str(old_values), str(new_values)))
+        cursor.execute("""
+            SELECT employee_id, full_name 
+            FROM employees 
+            WHERE position LIKE '%Driver%' AND status = 'Active'
+            ORDER BY full_name
+        """)
     
-    conn.commit()
+    drivers = cursor.fetchall()
     conn.close()
+    return drivers
+
+def get_active_conductors():
+    """Get list of active conductors - READ ONLY"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute("""
+            SELECT employee_id, full_name 
+            FROM employees 
+            WHERE position LIKE %s AND status = %s
+            ORDER BY full_name
+        """, ('%Conductor%', 'Active'))
+    else:
+        cursor.execute("""
+            SELECT employee_id, full_name 
+            FROM employees 
+            WHERE position LIKE '%Conductor%' AND status = 'Active'
+            ORDER BY full_name
+        """)
+    
+    conductors = cursor.fetchall()
+    conn.close()
+    return conductors
+
+def get_active_mechanics():
+    """Get list of active mechanics - READ ONLY"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute("""
+            SELECT employee_id, full_name 
+            FROM employees 
+            WHERE position LIKE %s AND status = %s
+            ORDER BY full_name
+        """, ('%Mechanic%', 'Active'))
+    else:
+        cursor.execute("""
+            SELECT employee_id, full_name 
+            FROM employees 
+            WHERE position LIKE '%Mechanic%' AND status = 'Active'
+            ORDER BY full_name
+        """)
+    
+    mechanics = cursor.fetchall()
+    conn.close()
+    return mechanics
+
+def check_employee_usage(employee_id):
+    """Check if employee is used in any records"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    usage = {
+        'income_records': 0,
+        'assignments': 0,
+        'payroll': 0,
+        'performance': 0,
+        'leave': 0,
+        'disciplinary': 0,
+        'can_delete': False
+    }
+    
+    try:
+        # Check income records
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) as count FROM income WHERE driver_employee_id = %s OR conductor_employee_id = %s", 
+                         (employee_id, employee_id))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM income WHERE driver_employee_id = ? OR conductor_employee_id = ?", 
+                         (employee_id, employee_id))
+        usage['income_records'] = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['count']
+        
+        # Check assignments
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) as count FROM bus_assignments WHERE driver_employee_id = %s OR conductor_employee_id = %s", 
+                         (employee_id, employee_id))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM bus_assignments WHERE driver_employee_id = ? OR conductor_employee_id = ?", 
+                         (employee_id, employee_id))
+        usage['assignments'] = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['count']
+        
+        # Check payroll
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) as count FROM payroll WHERE employee_id = %s", (employee_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM payroll WHERE employee_id = ?", (employee_id,))
+        usage['payroll'] = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['count']
+        
+        # Check performance records
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) as count FROM performance_records WHERE employee_id = %s", (employee_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM performance_records WHERE employee_id = ?", (employee_id,))
+        usage['performance'] = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['count']
+        
+        # Check leave records
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) as count FROM leave_records WHERE employee_id = %s", (employee_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM leave_records WHERE employee_id = ?", (employee_id,))
+        usage['leave'] = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['count']
+        
+        # Check disciplinary records
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) as count FROM disciplinary_records WHERE employee_id = %s", (employee_id,))
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM disciplinary_records WHERE employee_id = ?", (employee_id,))
+        usage['disciplinary'] = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['count']
+        
+        # Can only delete if no records exist
+        total_usage = sum([usage['income_records'], usage['assignments'], usage['payroll'], 
+                          usage['performance'], usage['leave'], usage['disciplinary']])
+        usage['can_delete'] = total_usage == 0
+        usage['total_records'] = total_usage
+        
+    except Exception as e:
+        print(f"Error checking employee usage: {e}")
+    finally:
+        conn.close()
+    
+    return usage
+
+def get_expiring_driver_documents(days_threshold=30):
+    """Get drivers with expiring documents"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    from datetime import datetime, timedelta
+    
+    alerts = []
+    current_date = datetime.now().date()
+    threshold_date = current_date + timedelta(days=days_threshold)
+    
+    # Check all document types for drivers
+    document_checks = [
+        ('license_expiry', 'Driver License'),
+        ('defensive_driving_expiry', 'Defensive Driving Certificate'),
+        ('medical_cert_expiry', 'Medical Certificate'),
+        ('retest_date', 'Retest Due')
+    ]
+    
+    for date_column, doc_name in document_checks:
+        if USE_POSTGRES:
+            query = f"""
+                SELECT employee_id, full_name, position, {date_column}
+                FROM employees
+                WHERE {date_column} IS NOT NULL
+                AND {date_column}::date <= %s
+                AND status = %s
+                AND position LIKE %s
+                ORDER BY {date_column}
+            """
+            cursor.execute(query, (threshold_date.strftime('%Y-%m-%d'), 'Active', '%Driver%'))
+        else:
+            query = f"""
+                SELECT employee_id, full_name, position, {date_column}
+                FROM employees
+                WHERE {date_column} IS NOT NULL
+                AND {date_column} != ''
+                AND date({date_column}) <= date(?)
+                AND status = 'Active'
+                AND position LIKE '%Driver%'
+                ORDER BY {date_column}
+            """
+            cursor.execute(query, (threshold_date.strftime('%Y-%m-%d'),))
+        
+        results = cursor.fetchall()
+        
+        for row in results:
+            emp_id = row[0] if USE_POSTGRES else row['employee_id']
+            name = row[1] if USE_POSTGRES else row['full_name']
+            position = row[2] if USE_POSTGRES else row['position']
+            expiry_date = row[3] if USE_POSTGRES else row[date_column]
+            
+            try:
+                expiry = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                days_until = (expiry - current_date).days
+                
+                if days_until < 0:
+                    urgency = 'expired'
+                elif days_until <= 7:
+                    urgency = 'critical'
+                elif days_until <= 14:
+                    urgency = 'warning'
+                else:
+                    urgency = 'info'
+                
+                alerts.append({
+                    'employee_id': emp_id,
+                    'name': name,
+                    'position': position,
+                    'document': doc_name,
+                    'expiry_date': expiry_date,
+                    'days_until': days_until,
+                    'urgency': urgency,
+                    'expired': days_until < 0
+                })
+            except ValueError:
+                continue
+    
+    conn.close()
+    
+    # Sort by urgency and days remaining
+    alerts.sort(key=lambda x: (not x['expired'], x['days_until']))
+    
+    return alerts
 
 # ============================================================================
 # BUS MANAGEMENT FUNCTIONS
@@ -469,7 +738,7 @@ def add_bus(bus_number, model, capacity, year=None, status='Active', notes=None,
                 INSERT INTO buses (bus_number, registration_number, model, capacity, year, status, notes, created_by)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
             ''', (bus_number, registration_number, model, capacity, year, status, notes, created_by))
-            bus_id = cursor.fetchone()['id']
+            bus_id = cursor.fetchone()[0]
         else:
             cursor.execute('''
                 INSERT INTO buses (bus_number, registration_number, model, capacity, year, status, notes, created_by)
@@ -478,8 +747,6 @@ def add_bus(bus_number, model, capacity, year=None, status='Active', notes=None,
             bus_id = cursor.lastrowid
         
         conn.commit()
-        log_audit_trail(created_by or 'System', 'INSERT', 'buses', bus_id, None, 
-                       {'bus_number': bus_number, 'registration_number': registration_number, 'model': model})
         return bus_id
     except Exception:
         return None
@@ -494,15 +761,15 @@ def update_bus(bus_id, bus_number, model, capacity, year=None, status='Active', 
     if USE_POSTGRES:
         cursor.execute('''
             UPDATE buses 
-            SET bus_number = %s, registration_number = %s, model = %s, capacity = %s, year = %s, status = %s, notes = %s,
-                updated_at = CURRENT_TIMESTAMP
+            SET bus_number = %s, registration_number = %s, model = %s, capacity = %s, 
+                year = %s, status = %s, notes = %s, updated_at = CURRENT_TIMESTAMP
             WHERE id = %s
         ''', (bus_number, registration_number, model, capacity, year, status, notes, bus_id))
     else:
         cursor.execute('''
             UPDATE buses 
-            SET bus_number = ?, registration_number = ?, model = ?, capacity = ?, year = ?, status = ?, notes = ?,
-                updated_at = CURRENT_TIMESTAMP
+            SET bus_number = ?, registration_number = ?, model = ?, capacity = ?, 
+                year = ?, status = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
             WHERE id = ?
         ''', (bus_number, registration_number, model, capacity, year, status, notes, bus_id))
     
@@ -521,6 +788,49 @@ def delete_bus(bus_id):
     
     conn.commit()
     conn.close()
+
+def check_bus_usage(bus_number):
+    """Check if bus is used in any records"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    usage = {
+        'income_records': 0,
+        'maintenance_records': 0,
+        'assignments': 0,
+        'can_delete': False
+    }
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute("SELECT COUNT(*) FROM income WHERE bus_number = %s", (bus_number,))
+            usage['income_records'] = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM maintenance WHERE bus_number = %s", (bus_number,))
+            usage['maintenance_records'] = cursor.fetchone()[0]
+            
+            cursor.execute("SELECT COUNT(*) FROM bus_assignments WHERE bus_number = %s", (bus_number,))
+            usage['assignments'] = cursor.fetchone()[0]
+        else:
+            cursor.execute("SELECT COUNT(*) as count FROM income WHERE bus_number = ?", (bus_number,))
+            usage['income_records'] = cursor.fetchone()['count']
+            
+            cursor.execute("SELECT COUNT(*) as count FROM maintenance WHERE bus_number = ?", (bus_number,))
+            usage['maintenance_records'] = cursor.fetchone()['count']
+            
+            cursor.execute("SELECT COUNT(*) as count FROM bus_assignments WHERE bus_number = ?", (bus_number,))
+            usage['assignments'] = cursor.fetchone()['count']
+        
+        total_usage = sum([usage['income_records'], usage['maintenance_records'], usage['assignments']])
+        usage['can_delete'] = total_usage == 0
+        usage['total_records'] = total_usage
+        
+    except Exception as e:
+        print(f"Error checking bus usage: {e}")
+    finally:
+        conn.close()
+    
+    return usage
 
 # ============================================================================
 # ROUTE MANAGEMENT FUNCTIONS
@@ -545,7 +855,7 @@ def add_route(name, distance=None, description=None, created_by=None):
                 INSERT INTO routes (name, distance, description, created_by)
                 VALUES (%s, %s, %s, %s) RETURNING id
             ''', (name, distance, description, created_by))
-            route_id = cursor.fetchone()['id']
+            route_id = cursor.fetchone()[0]
         else:
             cursor.execute('''
                 INSERT INTO routes (name, distance, description, created_by)
@@ -554,8 +864,6 @@ def add_route(name, distance=None, description=None, created_by=None):
             route_id = cursor.lastrowid
         
         conn.commit()
-        log_audit_trail(created_by or 'System', 'INSERT', 'routes', route_id, None, 
-                       {'name': name, 'distance': distance})
         return route_id
     except Exception:
         return None
@@ -595,123 +903,3 @@ def delete_route(route_id):
     
     conn.commit()
     conn.close()
-
-# ============================================================================
-# EMPLOYEE FUNCTIONS
-# ============================================================================
-
-def get_employees_by_role(role):
-    """Get all employees with a specific role"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    if USE_POSTGRES:
-        cursor.execute('SELECT * FROM employees WHERE position LIKE %s AND status = %s', 
-                      (f'%{role}%', 'Active'))
-    else:
-        cursor.execute('SELECT * FROM employees WHERE position LIKE ? AND status = "Active"', 
-                      (f'%{role}%',))
-    
-    employees = cursor.fetchall()
-    conn.close()
-    return employees
-
-def get_employee_by_id(emp_id):
-    """Get employee by ID"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    if USE_POSTGRES:
-        cursor.execute('SELECT * FROM employees WHERE id = %s', (emp_id,))
-    else:
-        cursor.execute('SELECT * FROM employees WHERE id = ?', (emp_id,))
-    
-    employee = cursor.fetchone()
-    conn.close()
-    return employee
-
-def get_all_employees(filters=None):
-    """Get all employees with optional filters"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    query = 'SELECT * FROM employees WHERE 1=1'
-    params = []
-    
-    if filters:
-        if filters.get('department'):
-            query += ' AND department = %s' if USE_POSTGRES else ' AND department = ?'
-            params.append(filters['department'])
-        if filters.get('position'):
-            query += ' AND position LIKE %s' if USE_POSTGRES else ' AND position LIKE ?'
-            params.append(f"%{filters['position']}%")
-        if filters.get('status'):
-            query += ' AND status = %s' if USE_POSTGRES else ' AND status = ?'
-            params.append(filters['status'])
-    
-    query += ' ORDER BY full_name'
-    cursor.execute(query, params)
-    employees = cursor.fetchall()
-    conn.close()
-    return employees
-
-# ============================================================================
-# INCOME FUNCTIONS
-# ============================================================================
-
-def get_income_records(filters=None):
-    """Get income records with optional filters"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    query = 'SELECT * FROM income WHERE 1=1'
-    params = []
-    
-    if filters:
-        if filters.get('date'):
-            query += ' AND date = %s' if USE_POSTGRES else ' AND date = ?'
-            params.append(filters['date'])
-        if filters.get('bus_number'):
-            query += ' AND bus_number LIKE %s' if USE_POSTGRES else ' AND bus_number LIKE ?'
-            params.append(f"%{filters['bus_number']}%")
-        if filters.get('route'):
-            query += ' AND route LIKE %s' if USE_POSTGRES else ' AND route LIKE ?'
-            params.append(f"%{filters['route']}%")
-        if filters.get('driver_name'):
-            query += ' AND driver_name LIKE %s' if USE_POSTGRES else ' AND driver_name LIKE ?'
-            params.append(f"%{filters['driver_name']}%")
-    
-    query += ' ORDER BY date DESC, id DESC'
-    cursor.execute(query, params)
-    records = cursor.fetchall()
-    conn.close()
-    return records
-
-def add_income_record(bus_number, route, hire_destination, driver_name, conductor_name,
-                     date, amount, notes=None, created_by=None):
-    """Add new income record"""
-    conn = get_connection()
-    cursor = conn.cursor()
-    
-    if USE_POSTGRES:
-        cursor.execute('''
-            INSERT INTO income (bus_number, route, hire_destination, driver_name, conductor_name,
-                               date, amount, notes, created_by)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
-        ''', (bus_number, route, hire_destination, driver_name, conductor_name, 
-              date, amount, notes, created_by))
-        record_id = cursor.fetchone()['id']
-    else:
-        cursor.execute('''
-            INSERT INTO income (bus_number, route, hire_destination, driver_name, conductor_name,
-                               date, amount, notes, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (bus_number, route, hire_destination, driver_name, conductor_name, 
-              date, amount, notes, created_by))
-        record_id = cursor.lastrowid
-    
-    conn.commit()
-    conn.close()
-    log_audit_trail(created_by or 'System', 'INSERT', 'income', record_id, None,
-                   {'bus_number': bus_number, 'route': route, 'amount': amount})
-    return record_id
