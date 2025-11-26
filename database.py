@@ -28,6 +28,10 @@ def get_connection():
         conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         return conn
+# Add the alias
+$content = Get-Content database.py -Raw
+$content = $content -replace "(def get_connection\(\):[\s\S]*?    return conn)", "`$0`n`n# Alias for compatibility`nget_db_connection = get_connection"
+Set-Content database.py $content
 
 def init_database():
     """Initialize all database tables"""
