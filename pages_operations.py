@@ -6,6 +6,7 @@ Employees are READ-ONLY from HR
 
 import streamlit as st
 import pandas as pd
+import sqlite3  # ✅ ADDED: Missing import
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
 import plotly.express as px
@@ -24,312 +25,229 @@ from database import (
 )
 
 # ============================================================================
-# ROUTES MANAGEMENT PAGE (NO BUS CREATION)
+# DASHBOARD PAGE - FIXED DATABASE COMPATIBILITY
 # ============================================================================
 
-def routes_management_page():
-    """Manage routes ONLY - Buses managed in Fleet Management"""
+def dashboard_page():
+    """Main operations dashboard with charts and KPIs"""
     
-    st.header("🛣️ Routes Management")
-    st.markdown("Manage your route information")
-    st.info("💡 **Note:** Buses are managed in **Fleet Management**. This section is for routes only.")
+    st.header("📈 Operations Dashboard")
+    st.markdown("Real-time business intelligence and analytics")
     st.markdown("---")
     
-    # Add Route Form
-    with st.expander("➕ Add New Route", expanded=False):
-        with st.form("add_route_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                route_name = st.text_input("Route Name*", placeholder="e.g., Harare - Mutare")
-            
-            with col2:
-                distance = st.number_input("Distance (km)", min_value=0.0, step=1.0, value=0.0)
-            
-            description = st.text_area("Description", placeholder="Additional route information...")
-            
-            submit_route = st.form_submit_button("➕ Add Route", use_container_width=True, type="primary")
-            
-            if submit_route:
-                if not route_name:
-                    st.error("⚠️ Please enter a route name")
-                else:
-                    route_id = add_route(
-                        name=route_name,
-                        distance=distance if distance > 0 else None,
-                        description=description,
-                        created_by=st.session_state['user']['username']
-                    )
-                    
-                    if route_id:
-                        st.success(f"✅ Route '{route_name}' added successfully!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Route with this name already exists")
+    # Date range
+    col1, col2 = st.columns(2)
+    with col1:
+        days_back = st.selectbox("Time Period", [7, 30, 90, 365], index=1)
+    with col2:
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=days_back)
+        st.info(f"📅 {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
-    st.markdown("---")
-    
-    # Display Routes
-    routes = get_all_routes()
-    
-    if routes:
-        st.subheader(f"📋 Routes List ({len(routes)} routes)")
-        st.info("💡 **Note:** The 'Hire' route is automatically available for hire jobs.")
-        
-        for route in routes:
-            with st.expander(f"🛣️ {route['name']}"):
-                col_info, col_actions = st.columns([3, 1])
-                
-                with col_info:
-                    st.write(f"**Route:** {route['name']}")
-                    st.write(f"**Distance:** {route['distance']} km" if route['distance'] else "**Distance:** Not specified")
-                    if route['description']:
-                        st.write(f"**Description:** {route['description']}")
-                    st.caption(f"Added: {route['created_at']} by {route['created_by']}")
-                
-                with col_actions:
-                    if st.button("✏️ Edit", key=f"edit_route_{route['id']}"):
-                        st.session_state[f'edit_route_{route["id"]}'] = True
-                        st.rerun()
-                    
-                    if st.button("🗑️ Delete", key=f"delete_route_{route['id']}"):
-                        if st.session_state.get(f'confirm_delete_route_{route["id"]}', False):
-                            delete_route(route['id'])
-                            st.success(f"Route '{route['name']}' deleted")
-                            st.rerun()
-                        else:
-                            st.session_state[f'confirm_delete_route_{route["id"]}'] = True
-                            st.warning("Click again to confirm")
-                
-                # Edit Form
-                if st.session_state.get(f'edit_route_{route["id"]}', False):
-                    st.markdown("---")
-                    with st.form(f"edit_route_form_{route['id']}"):
-                        edit_name = st.text_input("Route Name", value=route['name'])
-                        edit_distance = st.number_input("Distance (km)", value=route['distance'] or 0.0, min_value=0.0, step=1.0)
-                        edit_desc = st.text_area("Description", value=route['description'] or "")
-                        
-                        col_save, col_cancel = st.columns(2)
-                        
-                        with col_save:
-                            save_btn = st.form_submit_button("💾 Save", use_container_width=True)
-                        with col_cancel:
-                            cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
-                        
-                        if save_btn:
-                            update_route(route['id'], edit_name, edit_distance if edit_distance > 0 else None, edit_desc)
-                            st.success("✅ Route updated successfully!")
-                            st.session_state[f'edit_route_{route["id"]}'] = False
-                            st.rerun()
-                        
-                        if cancel_btn:
-                            st.session_state[f'edit_route_{route["id"]}'] = False
-                            st.rerun()
-    else:
-        st.info("🔭 No routes added yet. Add your first route above!")
-
-
-# ============================================================================
-# BUS ASSIGNMENTS PAGE - REFERENCES HR EMPLOYEES ONLY
-# ============================================================================
-
-def bus_assignments_page():
-    """Assign drivers and conductors to buses - READ-ONLY employees from HR"""
-    
-    st.header("📋 Bus Assignments")
-    st.markdown("Assign drivers and conductors to buses")
-    st.info("💡 Employees are managed in **HR > Employee Management**")
-    st.markdown("---")
-    
-    # Get data
-    drivers = get_active_drivers()
-    conductors = get_active_conductors()
-    buses = get_active_buses()
-    
-    if not drivers:
-        st.warning("⚠️ No active drivers found.")
-        st.info("👉 **Add drivers in:** HR > Employee Management")
-        return
-    
-    if not conductors:
-        st.warning("⚠️ No active conductors found.")
-        st.info("👉 **Add conductors in:** HR > Employee Management")
-        return
-    
-    if not buses:
-        st.warning("⚠️ No active buses found.")
-        st.info("👉 **Add buses in:** Operations > Fleet Management")
-        return
-    
-    # Date selector
-    assignment_date = st.date_input("📅 Assignment Date", datetime.now())
-    
-    st.markdown("---")
-    
-    # Add Assignment Form
-    with st.expander("➕ Create New Assignment", expanded=True):
-        with st.form("assignment_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Bus dropdown
-                bus_options = []
-                for bus in buses:
-                    reg_num = bus.get('registration_number', 'No Reg') or 'No Reg'
-                    bus_options.append(f"{reg_num} - {bus['bus_number']}")
-                
-                selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
-                bus_number = selected_bus.split(" - ")[1]
-                
-                # Driver dropdown
-                driver_options = [f"{emp_id} - {name}" for emp_id, name in drivers]
-                selected_driver = st.selectbox("👨‍✈️ Select Driver*", driver_options)
-                driver_employee_id = selected_driver.split(" - ")[0]
-                
-                # Route
-                routes = get_all_routes()
-                route_options = ["Hire"] + [r['name'] for r in routes]
-                selected_route = st.selectbox("🛣️ Route", route_options)
-            
-            with col2:
-                # Conductor dropdown
-                conductor_options = [f"{emp_id} - {name}" for emp_id, name in conductors]
-                selected_conductor = st.selectbox("👨‍💼 Select Conductor*", conductor_options)
-                conductor_employee_id = selected_conductor.split(" - ")[0]
-                
-                # Shift
-                shift = st.selectbox("⏰ Shift", ["Full Day", "Morning", "Afternoon", "Night"])
-            
-            notes = st.text_area("📝 Notes", placeholder="Any special instructions...")
-            
-            submit_assignment = st.form_submit_button("➕ Create Assignment", use_container_width=True, type="primary")
-            
-            if submit_assignment:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                
-                try:
-                    # Check if assignment already exists
-                    cursor.execute("""
-                        SELECT id FROM bus_assignments 
-                        WHERE bus_number = ? AND assignment_date = ?
-                    """, (bus_number, assignment_date.strftime("%Y-%m-%d")))
-                    
-                    if cursor.fetchone():
-                        st.error(f"❌ Assignment already exists for {bus_number} on {assignment_date}")
-                    else:
-                        cursor.execute("""
-                            INSERT INTO bus_assignments 
-                            (bus_number, driver_employee_id, conductor_employee_id, 
-                             assignment_date, shift, route, notes, created_by)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            bus_number,
-                            driver_employee_id,
-                            conductor_employee_id,
-                            assignment_date.strftime("%Y-%m-%d"),
-                            shift,
-                            selected_route,
-                            notes,
-                            st.session_state['user']['username']
-                        ))
-                        
-                        conn.commit()
-                        
-                        AuditLogger.log_action(
-                            action_type="Add",
-                            module="Assignment",
-                            description=f"Assignment created: {bus_number} - Driver: {driver_employee_id}, Conductor: {conductor_employee_id}",
-                            affected_table="bus_assignments"
-                        )
-                        
-                        st.success("✅ Assignment created successfully!")
-                        st.rerun()
-                
-                except Exception as e:
-                    st.error(f"❌ Error creating assignment: {e}")
-                finally:
-                    conn.close()
-    
-    st.markdown("---")
-    
-    # Display Assignments
-    st.subheader(f"📋 Assignments for {assignment_date.strftime('%B %d, %Y')}")
-    
+    # Fetch data with proper database-specific queries
     conn = get_db_connection()
-    cursor = conn.cursor()
     
     try:
-        cursor.execute("""
-            SELECT 
-                ba.id,
-                ba.bus_number,
-                e_driver.full_name as driver_name,
-                e_conductor.full_name as conductor_name,
-                ba.assignment_date,
-                ba.shift,
-                ba.route,
-                ba.notes,
-                ba.driver_employee_id,
-                ba.conductor_employee_id
-            FROM bus_assignments ba
-            LEFT JOIN employees e_driver ON ba.driver_employee_id = e_driver.employee_id
-            LEFT JOIN employees e_conductor ON ba.conductor_employee_id = e_conductor.employee_id
-            WHERE ba.assignment_date = ?
-            ORDER BY ba.bus_number
-        """, (assignment_date.strftime("%Y-%m-%d"),))
-        
-        assignments = cursor.fetchall()
-        
-        if assignments:
-            st.success(f"✅ {len(assignments)} assignment(s) found")
+        # ✅ FIXED: Proper PostgreSQL vs SQLite queries with type casting
+        if USE_POSTGRES:
+            # PostgreSQL syntax with explicit type casting
+            income_df = pd.read_sql_query(
+                """SELECT * FROM income 
+                   WHERE date::date >= CURRENT_DATE - make_interval(days => %s)""",
+                conn, 
+                params=(days_back,)
+            )
             
-            for assignment in assignments:
-                (assign_id, bus_num, driver_name, conductor_name, date, shift, route, 
-                 notes_text, driver_emp_id, conductor_emp_id) = assignment
-                
-                with st.expander(f"🚌 {bus_num} - {driver_name} & {conductor_name}"):
-                    col_a, col_b = st.columns([3, 1])
-                    
-                    with col_a:
-                        st.write(f"**Bus:** {bus_num}")
-                        st.write(f"**Driver:** {driver_name} ({driver_emp_id})")
-                        st.write(f"**Conductor:** {conductor_name} ({conductor_emp_id})")
-                        st.write(f"**Shift:** {shift}")
-                        st.write(f"**Route:** {route}")
-                        if notes_text:
-                            st.write(f"**Notes:** {notes_text}")
-                    
-                    with col_b:
-                        if st.button("🗑️ Delete", key=f"del_assign_{assign_id}"):
-                            if st.session_state.get(f'confirm_del_assign_{assign_id}', False):
-                                cursor.execute("DELETE FROM bus_assignments WHERE id = ?", (assign_id,))
-                                conn.commit()
-                                
-                                AuditLogger.log_action(
-                                    action_type="Delete",
-                                    module="Assignment",
-                                    description=f"Assignment deleted: {bus_num}",
-                                    affected_table="bus_assignments",
-                                    affected_record_id=assign_id
-                                )
-                                
-                                st.success("Assignment deleted")
-                                st.rerun()
-                            else:
-                                st.session_state[f'confirm_del_assign_{assign_id}'] = True
-                                st.warning("Click again to confirm")
+            maint_df = pd.read_sql_query(
+                """SELECT * FROM maintenance 
+                   WHERE date::date >= CURRENT_DATE - make_interval(days => %s)""",
+                conn, 
+                params=(days_back,)
+            )
         else:
-            st.info(f"ℹ️ No assignments for {assignment_date.strftime('%B %d, %Y')}. Create one above!")
+            # SQLite syntax
+            income_df = pd.read_sql_query(
+                "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
+                conn, 
+                params=(days_back,)
+            )
+            
+            maint_df = pd.read_sql_query(
+                "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
+                conn, 
+                params=(days_back,)
+            )
     
     except Exception as e:
-        st.error(f"❌ Error loading assignments: {e}")
+        st.error(f"❌ Database error: {e}")
+        st.info("💡 If you see 'operator does not exist', your date column needs type casting")
+        conn.close()
+        return
     
     finally:
         conn.close()
+    
+    # KPIs
+    total_revenue = income_df['amount'].sum() if not income_df.empty else 0
+    total_expenses = maint_df['cost'].sum() if not maint_df.empty else 0
+    net_profit = total_revenue - total_expenses
+    num_records = len(income_df)
+    num_buses = income_df['bus_number'].nunique() if not income_df.empty else 0
+    
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+    
+    with col_kpi1:
+        st.metric("💰 Revenue", f"${total_revenue:,.2f}")
+    with col_kpi2:
+        st.metric("🔧 Expenses", f"${total_expenses:,.2f}")
+    with col_kpi3:
+        st.metric("💵 Profit", f"${net_profit:,.2f}")
+    with col_kpi4:
+        st.metric("🚌 Records", num_records)
+    with col_kpi5:
+        st.metric("🚗 Active Buses", num_buses)
+    
+    st.markdown("---")
+    
+    # Charts
+    if not income_df.empty or not maint_df.empty:
+        
+        # Revenue vs Expenses Chart
+        st.subheader("📊 Revenue vs Expenses Trend")
+        
+        if not income_df.empty:
+            income_daily = income_df.groupby('date')['amount'].sum().reset_index()
+            income_daily.columns = ['date', 'revenue']
+        else:
+            income_daily = pd.DataFrame(columns=['date', 'revenue'])
+        
+        if not maint_df.empty:
+            maint_daily = maint_df.groupby('date')['cost'].sum().reset_index()
+            maint_daily.columns = ['date', 'expenses']
+        else:
+            maint_daily = pd.DataFrame(columns=['date', 'expenses'])
+        
+        if not income_daily.empty or not maint_daily.empty:
+            combined = pd.merge(income_daily, maint_daily, on='date', how='outer').fillna(0)
+            combined['profit'] = combined['revenue'] - combined['expenses']
+            combined = combined.sort_values('date')
+            
+            fig = go.Figure()
+            
+            fig.add_trace(go.Scatter(
+                x=combined['date'],
+                y=combined['revenue'],
+                mode='lines+markers',
+                name='Revenue',
+                line=dict(color='green', width=3)
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=combined['date'],
+                y=combined['expenses'],
+                mode='lines+markers',
+                name='Expenses',
+                line=dict(color='red', width=3)
+            ))
+            
+            fig.update_layout(
+                xaxis_title='Date',
+                yaxis_title='Amount ($)',
+                hovermode='x unified',
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Two columns for additional charts
+        col_chart1, col_chart2 = st.columns(2)
+        
+        with col_chart1:
+            # Top buses by revenue
+            if not income_df.empty:
+                st.subheader("🏆 Top Buses by Revenue")
+                top_buses = income_df.groupby('bus_number')['amount'].sum().sort_values(ascending=False).head(10)
+                
+                fig_buses = px.bar(
+                    x=top_buses.values,
+                    y=top_buses.index,
+                    orientation='h',
+                    labels={'x': 'Revenue ($)', 'y': 'Bus Number'}
+                )
+                fig_buses.update_layout(height=400, showlegend=False)
+                st.plotly_chart(fig_buses, use_container_width=True)
+        
+        with col_chart2:
+            # Maintenance by type
+            if not maint_df.empty:
+                st.subheader("🔧 Maintenance by Type")
+                maint_types = maint_df.groupby('maintenance_type')['cost'].sum().sort_values(ascending=False)
+                
+                fig_maint = px.pie(
+                    values=maint_types.values,
+                    names=maint_types.index,
+                    hole=0.4
+                )
+                fig_maint.update_layout(height=400)
+                st.plotly_chart(fig_maint, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Driver and Conductor performance
+        if not income_df.empty:
+            col_perf1, col_perf2 = st.columns(2)
+            
+            with col_perf1:
+                if 'driver_name' in income_df.columns:
+                    st.subheader("👨‍✈️ Top Drivers by Revenue")
+                    driver_perf = income_df.groupby('driver_name')['amount'].sum().sort_values(ascending=False).head(5)
+                    st.dataframe(driver_perf, use_container_width=True)
+            
+            with col_perf2:
+                if 'conductor_name' in income_df.columns:
+                    st.subheader("👨‍💼 Top Conductors by Revenue")
+                    conductor_perf = income_df.groupby('conductor_name')['amount'].sum().sort_values(ascending=False).head(5)
+                    st.dataframe(conductor_perf, use_container_width=True)
+        
+        st.markdown("---")
+        
+        # Route analysis - WITH HIRE GROUPING
+        if not income_df.empty and 'route' in income_df.columns:
+            st.subheader("🛣️ Route Performance")
+            
+            # Group all hire entries under "Hire"
+            route_analysis = income_df.groupby('route').agg({
+                'amount': ['sum', 'count', 'mean']
+            }).round(2)
+            
+            route_analysis.columns = ['Total Revenue', 'Number of Trips', 'Avg per Trip']
+            route_analysis = route_analysis.sort_values('Total Revenue', ascending=False)
+            
+            st.dataframe(route_analysis, use_container_width=True)
+            
+            # Show hire destinations breakdown if there are hire records
+            hire_records = income_df[income_df['route'] == 'Hire']
+            if not hire_records.empty:
+                with st.expander("🚐 View Hire Destinations Details"):
+                    st.markdown("**Individual Hire Jobs:**")
+                    hire_details = hire_records[['date', 'bus_number', 'hire_destination', 'amount']].sort_values('date', ascending=False)
+                    st.dataframe(hire_details, use_container_width=True)
+    
+    else:
+        st.info("🔭 No data available for the selected period. Start adding records to see your dashboard!")
+    
+    # Log dashboard view
+    AuditLogger.log_action(
+        action_type="View",
+        module="Dashboard",
+        description=f"Viewed operations dashboard for last {days_back} days"
+    )
+
 
 # ============================================================================
-# INCOME ENTRY PAGE - WITH DROPDOWN SELECTIONS
+# INCOME ENTRY - FIXED QUERY
 # ============================================================================
 
 def income_entry_page():
@@ -376,8 +294,8 @@ def income_entry_page():
             # Bus dropdown
             bus_options = []
             for bus in buses:
-                reg_num = bus['registration_number'] if 'registration_number' in bus.keys() and bus['registration_number'] else 'No Reg'
-                bus_options.append(f"{reg_num} - {bus['bus_number']} ({bus['model']})")
+                reg_num = bus.get('registration_number', 'No Reg') or 'No Reg'
+                bus_options.append(f"{reg_num} - {bus['bus_number']} ({bus.get('model', 'Unknown')})")
             
             selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
             bus_number = selected_bus.split(" - ")[1].split(" (")[0]
@@ -397,7 +315,7 @@ def income_entry_page():
             # Driver selection - FIXED: Extract employee_id
             driver_options = [f"{d[0]} - {d[1]}" for d in drivers]
             selected_driver = st.selectbox("👨‍✈️ Driver*", driver_options)
-            driver_employee_id = selected_driver.split(" - ")[0]  # FIXED: Store ID
+            driver_employee_id = selected_driver.split(" - ")[0]
             driver_name = selected_driver.split(" - ")[1]
         
         with col2:
@@ -407,7 +325,7 @@ def income_entry_page():
             # Conductor selection - FIXED: Extract employee_id
             conductor_options = [f"{c[0]} - {c[1]}" for c in conductors]
             selected_conductor = st.selectbox("👨‍💼 Conductor*", conductor_options)
-            conductor_employee_id = selected_conductor.split(" - ")[0]  # FIXED: Store ID
+            conductor_employee_id = selected_conductor.split(" - ")[0]
             conductor_name = selected_conductor.split(" - ")[1]
         
         notes = st.text_area("📝 Notes", placeholder="Optional notes...")
@@ -426,27 +344,34 @@ def income_entry_page():
                 cursor = conn.cursor()
                 
                 try:
-                    cursor.execute('''
-                        INSERT INTO income (bus_number, route, hire_destination, 
-                                          driver_employee_id, driver_name, 
-                                          conductor_employee_id, conductor_name, 
-                                          date, amount, notes, created_by)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ''', (
-                        bus_number,
-                        selected_route,
-                        hire_destination if selected_route == "Hire" else None,
-                        driver_employee_id,  # FIXED: Store ID
-                        driver_name,
-                        conductor_employee_id,  # FIXED: Store ID
-                        conductor_name,
-                        date.strftime("%Y-%m-%d"),
-                        amount,
-                        notes,
-                        st.session_state['user']['username']
-                    ))
+                    # ✅ FIXED: Use parameterized query properly
+                    if USE_POSTGRES:
+                        cursor.execute('''
+                            INSERT INTO income (bus_number, route, hire_destination, 
+                                              driver_employee_id, driver_name, 
+                                              conductor_employee_id, conductor_name, 
+                                              date, amount, notes, created_by)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        ''', (
+                            bus_number, selected_route, hire_destination if selected_route == "Hire" else None,
+                            driver_employee_id, driver_name, conductor_employee_id, conductor_name,
+                            date.strftime("%Y-%m-%d"), amount, notes,
+                            st.session_state['user']['username']
+                        ))
+                    else:
+                        cursor.execute('''
+                            INSERT INTO income (bus_number, route, hire_destination, 
+                                              driver_employee_id, driver_name, 
+                                              conductor_employee_id, conductor_name, 
+                                              date, amount, notes, created_by)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            bus_number, selected_route, hire_destination if selected_route == "Hire" else None,
+                            driver_employee_id, driver_name, conductor_employee_id, conductor_name,
+                            date.strftime("%Y-%m-%d"), amount, notes,
+                            st.session_state['user']['username']
+                        ))
                     
-                    record_id = cursor.lastrowid
                     conn.commit()
                     
                     # Audit logging
@@ -457,17 +382,17 @@ def income_entry_page():
                         date=date.strftime("%Y-%m-%d")
                     )
                     
-                    st.success(f"✅ Income record added successfully! (ID: {record_id})")
+                    st.success(f"✅ Income record added successfully!")
                     st.balloons()
                     
-                except sqlite3.Error as e:
+                except Exception as e:
                     st.error(f"❌ Database error: {e}")
                 finally:
                     conn.close()
     
     st.markdown("---")
     
-    # Recent Income Records with Edit/Delete
+    # Recent Income Records - FIXED QUERY
     st.subheader("📋 Recent Income Records")
     
     # Filter options
@@ -486,94 +411,61 @@ def income_entry_page():
         days_back = st.selectbox("📅 Show last", [7, 30, 90, 365], index=1)
     
     conn = get_db_connection()
-    cursor = conn.cursor()
     
-    # Build query with filters
-    query = '''
-        SELECT id, bus_number, route, hire_destination, driver_name, conductor_name, 
-               date, amount, notes, created_by
-        FROM income
-        WHERE date >= date('now', '-' || ? || ' days')
-    '''
-    params = [days_back]
+    # ✅ FIXED: Build query with proper database syntax
+    if USE_POSTGRES:
+        query = '''
+            SELECT id, bus_number, route, hire_destination, driver_name, conductor_name, 
+                   date, amount, notes, created_by
+            FROM income
+            WHERE date::date >= CURRENT_DATE - make_interval(days => %s)
+        '''
+        params = [days_back]
+        
+        if filter_bus:
+            query += " AND bus_number ILIKE %s"
+            params.append(f"%{filter_bus}%")
+        
+        if filter_route:
+            query += " AND route ILIKE %s"
+            params.append(f"%{filter_route}%")
+        
+        if filter_driver:
+            query += " AND driver_name ILIKE %s"
+            params.append(f"%{filter_driver}%")
+        
+        query += " ORDER BY date DESC, id DESC LIMIT 50"
+    else:
+        query = '''
+            SELECT id, bus_number, route, hire_destination, driver_name, conductor_name, 
+                   date, amount, notes, created_by
+            FROM income
+            WHERE date >= date('now', '-' || ? || ' days')
+        '''
+        params = [days_back]
+        
+        if filter_bus:
+            query += " AND bus_number LIKE ?"
+            params.append(f"%{filter_bus}%")
+        
+        if filter_route:
+            query += " AND route LIKE ?"
+            params.append(f"%{filter_route}%")
+        
+        if filter_driver:
+            query += " AND driver_name LIKE ?"
+            params.append(f"%{filter_driver}%")
+        
+        query += " ORDER BY date DESC, id DESC LIMIT 50"
     
-    if filter_bus:
-        query += " AND bus_number LIKE ?"
-        params.append(f"%{filter_bus}%")
-    
-    if filter_route:
-        query += " AND route LIKE ?"
-        params.append(f"%{filter_route}%")
-    
-    if filter_driver:
-        query += " AND driver_name LIKE ?"
-        params.append(f"%{filter_driver}%")
-    
-    query += " ORDER BY date DESC, id DESC LIMIT 50"
-    
-    cursor.execute(query, params)
-    records = cursor.fetchall()
-    conn.close()
-    
-    if records:
-        # Summary stats
-        total_revenue = sum(record[7] for record in records)
-        
-        col_stat1, col_stat2, col_stat3 = st.columns(3)
-        with col_stat1:
-            st.metric("📊 Total Records", len(records))
-        with col_stat2:
-            st.metric("💰 Total Revenue", f"${total_revenue:,.2f}")
-        with col_stat3:
-            avg_revenue = total_revenue / len(records) if records else 0
-            st.metric("📈 Average Revenue", f"${avg_revenue:,.2f}")
-        
-        st.markdown("---")
-        
-        # Export buttons
-        col_exp1, col_exp2, col_exp3 = st.columns(3)
-        
-        with col_exp1:
-            if st.button("📄 Download PDF Report", use_container_width=True):
-                records_df = pd.DataFrame(records, columns=['id', 'bus_number', 'route', 'hire_destination', 
-                                                           'driver_name', 'conductor_name', 'date', 'amount', 
-                                                           'notes', 'created_by'])
-                filters_dict = {}
-                if filter_bus:
-                    filters_dict['Bus'] = filter_bus
-                if filter_route:
-                    filters_dict['Route'] = filter_route
-                if filter_driver:
-                    filters_dict['Driver'] = filter_driver
-                
-                pdf_buffer = generate_income_pdf(records_df, filters_dict, st.session_state['user']['full_name'])
-                st.download_button(
-                    label="📥 Download",
-                    data=pdf_buffer,
-                    file_name=f"income_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-        
-        with col_exp2:
-            records_df = pd.DataFrame(records, columns=['id', 'bus_number', 'route', 'hire_destination',
-                                                       'driver_name', 'conductor_name', 'date', 'amount', 
-                                                       'notes', 'created_by'])
-            excel_buffer = io.BytesIO()
-            records_df.to_excel(excel_buffer, sheet_name='Income', index=False)
-            excel_buffer.seek(0)
-            st.download_button(
-                label="📊 Download Excel Report",
-                data=excel_buffer,
-                file_name=f"income_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
-            )
-        
-        with col_exp3:
-            st.write("")
-        
-        st.markdown("---")
+    try:
+        records_df = pd.read_sql_query(query, conn, params=params)
+        records = records_df.values.tolist()
+    except Exception as e:
+        st.error(f"❌ Error loading records: {e}")
+        records = []
+    finally:
+        conn.close()
         
         # Display records
         for record in records:
@@ -1706,7 +1598,7 @@ def revenue_history_page():
 # ============================================================================
 
 def dashboard_page():
-    """Main operations dashboard with charts and KPIs"""
+    """Main operations dashboard with charts and KPIs - FIXED"""
     
     st.header("📈 Operations Dashboard")
     st.markdown("Real-time business intelligence and analytics")
@@ -1721,30 +1613,48 @@ def dashboard_page():
         start_date = end_date - timedelta(days=days_back)
         st.info(f"📅 {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
-    # Fetch data
+    # Fetch data with proper database-specific queries
     conn = get_db_connection()
     
-    # Database-agnostic queries
-    if USE_POSTGRES:
-        income_df = pd.read_sql_query(
-            f"SELECT * FROM income WHERE date >= CURRENT_DATE - INTERVAL '{days_back} days'",
-            conn
-        )
-        
-        maint_df = pd.read_sql_query(
-            f"SELECT * FROM maintenance WHERE date >= CURRENT_DATE - INTERVAL '{days_back} days'",
-            conn
-        )
-    else:
-        income_df = pd.read_sql_query(
-            "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
-            conn, params=(days_back,)
-        )
-        
-        maint_df = pd.read_sql_query(
-            "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
-            conn, params=(days_back,)
-        )
+    try:
+        # ✅ FIXED: Proper PostgreSQL vs SQLite queries with type casting
+        if USE_POSTGRES:
+            # PostgreSQL syntax with explicit type casting
+            income_df = pd.read_sql_query(
+                """SELECT * FROM income 
+                   WHERE date::date >= CURRENT_DATE - make_interval(days => %s)""",
+                conn, 
+                params=(days_back,)
+            )
+            
+            maint_df = pd.read_sql_query(
+                """SELECT * FROM maintenance 
+                   WHERE date::date >= CURRENT_DATE - make_interval(days => %s)""",
+                conn, 
+                params=(days_back,)
+            )
+        else:
+            # SQLite syntax
+            income_df = pd.read_sql_query(
+                "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
+                conn, 
+                params=(days_back,)
+            )
+            
+            maint_df = pd.read_sql_query(
+                "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
+                conn, 
+                params=(days_back,)
+            )
+    
+    except Exception as e:
+        st.error(f"❌ Database error: {e}")
+        st.info("💡 If you see 'operator does not exist', your date column needs type casting")
+        conn.close()
+        return
+    
+    finally:
+        conn.close()
     
     # KPIs
     total_revenue = income_df['amount'].sum() if not income_df.empty else 0
