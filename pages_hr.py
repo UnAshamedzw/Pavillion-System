@@ -56,70 +56,56 @@ def generate_employee_id(position, conn):
         prefix = 'Pav'
         pattern = 'Pav%'
     
-    # Use database-agnostic query
+    # Simpler approach: fetch all matching IDs and process in Python
     if USE_POSTGRES:
         if 'driver' in position_lower or 'conductor' in position_lower:
-            # For drivers and conductors, get the highest number with their specific prefix
-            query = """
-                SELECT employee_id 
-                FROM employees 
-                WHERE employee_id LIKE %s 
-                ORDER BY CAST(SUBSTRING(employee_id FROM %s) AS INTEGER) DESC
-                LIMIT 1
-            """
-            # SUBSTRING needs the starting position (length of prefix + 1)
-            cursor.execute(query, (pattern, len(prefix) + 1))
+            query = "SELECT employee_id FROM employees WHERE employee_id LIKE %s"
+            cursor.execute(query, (pattern,))
         else:
-            # For other staff, exclude driver and conductor IDs
             query = """
-                SELECT employee_id 
-                FROM employees 
+                SELECT employee_id FROM employees 
                 WHERE employee_id LIKE %s 
                 AND employee_id NOT LIKE 'PavD%' 
                 AND employee_id NOT LIKE 'PavC%'
-                ORDER BY CAST(SUBSTRING(employee_id FROM %s) AS INTEGER) DESC
-                LIMIT 1
             """
-            cursor.execute(query, (pattern, len(prefix) + 1))
+            cursor.execute(query, (pattern,))
     else:
         # SQLite version
         if 'driver' in position_lower or 'conductor' in position_lower:
-            query = """
-                SELECT employee_id 
-                FROM employees 
-                WHERE employee_id LIKE ? 
-                ORDER BY CAST(SUBSTR(employee_id, ?, LENGTH(employee_id) - ? + 1) AS INTEGER) DESC
-                LIMIT 1
-            """
-            cursor.execute(query, (pattern, len(prefix) + 1, len(prefix)))
+            query = "SELECT employee_id FROM employees WHERE employee_id LIKE ?"
+            cursor.execute(query, (pattern,))
         else:
             query = """
-                SELECT employee_id 
-                FROM employees 
+                SELECT employee_id FROM employees 
                 WHERE employee_id LIKE ? 
                 AND employee_id NOT LIKE 'PavD%' 
                 AND employee_id NOT LIKE 'PavC%'
-                ORDER BY CAST(SUBSTR(employee_id, ?, LENGTH(employee_id) - ? + 1) AS INTEGER) DESC
-                LIMIT 1
             """
-            cursor.execute(query, (pattern, len(prefix) + 1, len(prefix)))
+            cursor.execute(query, (pattern,))
     
-    result = cursor.fetchone()
+    results = cursor.fetchall()
     
-    if result:
+    # Extract all numeric parts and find the maximum
+    max_number = 0
+    for row in results:
         # Handle both dict-like (PostgreSQL) and tuple (SQLite) results
-        if hasattr(result, 'keys'):
-            last_id = result['employee_id']
+        if hasattr(row, 'keys'):
+            emp_id = row['employee_id']
         else:
-            last_id = result[0]
-        numeric_part = ''.join(filter(str.isdigit, last_id))
+            emp_id = row[0]
+        
+        # Extract numeric part from employee ID
+        numeric_part = ''.join(filter(str.isdigit, emp_id))
         if numeric_part:
-            next_number = int(numeric_part) + 1
-        else:
-            next_number = 1
-    else:
-        next_number = 1
+            try:
+                num = int(numeric_part)
+                if num > max_number:
+                    max_number = num
+            except ValueError:
+                continue
     
+    # Generate next ID
+    next_number = max_number + 1
     new_id = f"{prefix}{next_number:03d}"
     return new_id
 
