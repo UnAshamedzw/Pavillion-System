@@ -481,23 +481,61 @@ def employee_management_page():
             with col_stat1:
                 st.metric("👥 Total Employees", len(employees))
             with col_stat2:
-                active_count = sum(1 for emp in employees if emp[10] == 'Active')
+                # Handle both dict-like and tuple results
+                active_count = 0
+                for emp in employees:
+                    status = emp['status'] if hasattr(emp, 'keys') else emp[10]
+                    if status == 'Active':
+                        active_count += 1
                 st.metric("✅ Active", active_count)
             with col_stat3:
-                drivers_count = sum(1 for emp in employees if 'driver' in emp[3].lower())
+                # Handle both dict-like and tuple results
+                drivers_count = 0
+                for emp in employees:
+                    position = emp['position'] if hasattr(emp, 'keys') else emp[3]
+                    if 'driver' in position.lower():
+                        drivers_count += 1
                 st.metric("🚗 Drivers", drivers_count)
             with col_stat4:
-                total_salary = sum(emp[6] for emp in employees)
+                # Handle both dict-like and tuple results
+                total_salary = 0
+                for emp in employees:
+                    salary = emp['salary'] if hasattr(emp, 'keys') else emp[6]
+                    total_salary += salary
                 st.metric("💰 Total Salary", f"${total_salary:,.2f}")
             
             st.markdown("---")
             
             # Display employees
             for emp in employees:
-                (emp_id, employee_id, full_name, position, department, hire_date, 
-                 salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
-                 license_num, license_exp, defensive_exp, medical_exp, retest,
-                 created_by, created_at) = emp
+                # Handle both dict-like (PostgreSQL with RealDictCursor) and tuple (SQLite) results
+                if hasattr(emp, 'keys'):
+                    emp_id = emp['id']
+                    employee_id = emp['employee_id']
+                    full_name = emp['full_name']
+                    position = emp['position']
+                    department = emp['department']
+                    hire_date = emp['hire_date']
+                    salary = emp['salary']
+                    phone = emp['phone']
+                    email = emp['email']
+                    address = emp['address']
+                    status = emp['status']
+                    dob = emp['date_of_birth']
+                    emerg_contact = emp['emergency_contact']
+                    emerg_phone = emp['emergency_phone']
+                    license_num = emp['license_number']
+                    license_exp = emp['license_expiry']
+                    defensive_exp = emp['defensive_driving_expiry']
+                    medical_exp = emp['medical_cert_expiry']
+                    retest = emp['retest_date']
+                    created_by = emp['created_by']
+                    created_at = emp['created_at']
+                else:
+                    (emp_id, employee_id, full_name, position, department, hire_date, 
+                     salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
+                     license_num, license_exp, defensive_exp, medical_exp, retest,
+                     created_by, created_at) = emp
                 
                 status_icon = "✅" if status == "Active" else "⏸️" if status == "On Leave" else "❌"
                 
