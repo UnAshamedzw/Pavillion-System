@@ -119,15 +119,21 @@ def user_management_page():
                                 if st.form_submit_button("Reset Password"):
                                     if new_pwd == confirm_pwd and len(new_pwd) >= 6:
                                         from auth import hash_password
-                                        import sqlite3
+                                        from database import get_connection, USE_POSTGRES
                                         
                                         hashed_pwd, salt = hash_password(new_pwd)
-                                        conn = sqlite3.connect('bus_management.db')
+                                        conn = get_connection()
                                         cursor = conn.cursor()
-                                        cursor.execute('''
-                                            UPDATE users SET password_hash = ?, salt = ? 
-                                            WHERE id = ?
-                                        ''', (hashed_pwd, salt, user_id))
+                                        if USE_POSTGRES:
+                                            cursor.execute('''
+                                                UPDATE users SET password_hash = %s, salt = %s 
+                                                WHERE id = %s
+                                            ''', (hashed_pwd, salt, user_id))
+                                        else:
+                                            cursor.execute('''
+                                                UPDATE users SET password_hash = ?, salt = ? 
+                                                WHERE id = ?
+                                            ''', (hashed_pwd, salt, user_id))
                                         conn.commit()
                                         conn.close()
                                         
@@ -446,17 +452,24 @@ def my_profile_page():
     st.subheader("📈 Account Statistics")
     
     # Get user's first login and total activities
-    import sqlite3
-    conn = sqlite3.connect('bus_management.db')
+    from database import get_connection, USE_POSTGRES
+    conn = get_connection()
     cursor = conn.cursor()
     
     # Get account creation date
-    cursor.execute('SELECT created_at, last_login FROM users WHERE id = ?', (user['id'],))
+    if USE_POSTGRES:
+        cursor.execute('SELECT created_at, last_login FROM users WHERE id = %s', (user['id'],))
+    else:
+        cursor.execute('SELECT created_at, last_login FROM users WHERE id = ?', (user['id'],))
     account_info = cursor.fetchone()
     
     # Get total activity count
-    cursor.execute('SELECT COUNT(*) FROM activity_log WHERE username = ?', (username,))
-    total_activities = cursor.fetchone()[0]
+    if USE_POSTGRES:
+        cursor.execute('SELECT COUNT(*) FROM activity_log WHERE username = %s', (username,))
+    else:
+        cursor.execute('SELECT COUNT(*) FROM activity_log WHERE username = ?', (username,))
+    result = cursor.fetchone()
+    total_activities = result['count'] if hasattr(result, 'keys') else result[0]
     
     conn.close()
     

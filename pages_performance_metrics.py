@@ -9,19 +9,29 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-import sqlite3
+from database import get_connection, USE_POSTGRES
 import numpy as np
 from audit_logger import AuditLogger
 
 def table_exists(conn, table_name):
     """Check if a table exists in the database"""
     cursor = conn.cursor()
-    cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
+    if USE_POSTGRES:
+        cursor.execute("""
+            SELECT EXISTS (
+                SELECT FROM information_schema.tables 
+                WHERE table_name = %s
+            )
+        """, (table_name,))
+        result = cursor.fetchone()
+        return result['exists'] if hasattr(result, 'keys') else result[0]
+    else:
+        cursor.execute(f"SELECT name FROM sqlite_master WHERE type='table' AND name='{table_name}'")
     return cursor.fetchone() is not None
 
 def get_performance_data(start_date, end_date):
     """Fetch all performance-related data with error handling for missing tables"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     
     try:
         # Income data

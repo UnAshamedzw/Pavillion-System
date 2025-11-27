@@ -1,13 +1,17 @@
 """
 auth.py - User Authentication Module
 Handles user login, registration, and session management
+CORRECTED VERSION - Uses database abstraction for PostgreSQL/SQLite compatibility
 """
 
 import streamlit as st
-import sqlite3
 import hashlib
 import secrets
 from datetime import datetime
+
+# Import database abstraction layer
+from database import get_connection, USE_POSTGRES
+
 
 def hash_password(password: str, salt: str = None) -> tuple:
     """
@@ -23,134 +27,213 @@ def hash_password(password: str, salt: str = None) -> tuple:
     
     return hashed, salt
 
+
 def verify_password(password: str, hashed_password: str, salt: str) -> bool:
     """Verify if password matches the hashed password"""
     test_hash, _ = hash_password(password, salt)
     return test_hash == hashed_password
 
+
 def create_users_table():
     """Create users table if it doesn't exist"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            username TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            salt TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            email TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP,
-            is_active INTEGER DEFAULT 1
-        )
-    ''')
+    if USE_POSTGRES:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                is_active INTEGER DEFAULT 1
+            )
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                salt TEXT NOT NULL,
+                full_name TEXT NOT NULL,
+                role TEXT NOT NULL,
+                email TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_login TIMESTAMP,
+                is_active INTEGER DEFAULT 1
+            )
+        ''')
+    
+    conn.commit()
     
     # Create default admin account if no users exist
     cursor.execute('SELECT COUNT(*) FROM users')
-    if cursor.fetchone()[0] == 0:
+    result = cursor.fetchone()
+    # Handle both dict-like (PostgreSQL) and tuple (SQLite) results
+    count = result['count'] if hasattr(result, 'keys') else result[0]
+    
+    if count == 0:
         hashed_pwd, salt = hash_password('admin123')
-        cursor.execute('''
-            INSERT INTO users (username, password_hash, salt, full_name, role, email)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', ('admin', hashed_pwd, salt, 'System Administrator', 'Admin', 'admin@busmanagement.com'))
+        if USE_POSTGRES:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, salt, full_name, role, email)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', ('admin', hashed_pwd, salt, 'System Administrator', 'Admin', 'admin@busmanagement.com'))
+        else:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, salt, full_name, role, email)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', ('admin', hashed_pwd, salt, 'System Administrator', 'Admin', 'admin@busmanagement.com'))
     
     conn.commit()
     conn.close()
+
 
 def authenticate_user(username: str, password: str) -> dict:
     """
     Authenticate user and return user details if successful
     Returns: dict with user info or None if authentication fails
     """
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute('''
-        SELECT id, username, password_hash, salt, full_name, role, email, is_active
-        FROM users WHERE username = ?
-    ''', (username,))
+    if USE_POSTGRES:
+        cursor.execute('''
+            SELECT id, username, password_hash, salt, full_name, role, email, is_active
+            FROM users WHERE username = %s
+        ''', (username,))
+    else:
+        cursor.execute('''
+            SELECT id, username, password_hash, salt, full_name, role, email, is_active
+            FROM users WHERE username = ?
+        ''', (username,))
     
     user = cursor.fetchone()
     
-    if user and user[7] == 1:  # Check if user exists and is active
-        user_id, username, password_hash, salt, full_name, role, email, is_active = user
+    if user:
+        # Handle both dict-like (PostgreSQL) and tuple (SQLite) results
+        if hasattr(user, 'keys'):
+            user_id = user['id']
+            db_username = user['username']
+            password_hash = user['password_hash']
+            salt = user['salt']
+            full_name = user['full_name']
+            role = user['role']
+            email = user['email']
+            is_active = user['is_active']
+        else:
+            user_id, db_username, password_hash, salt, full_name, role, email, is_active = user
         
-        if verify_password(password, password_hash, salt):
-            # Update last login
-            cursor.execute('''
-                UPDATE users SET last_login = ? WHERE id = ?
-            ''', (datetime.now(), user_id))
-            conn.commit()
-            conn.close()
-            
-            # Generate unique session ID
-            session_id = secrets.token_hex(16)
-            
-            return {
-                'id': user_id,
-                'username': username,
-                'full_name': full_name,
-                'role': role,
-                'email': email,
-                'session_id': session_id
-            }
+        if is_active == 1:  # Check if user is active
+            if verify_password(password, password_hash, salt):
+                # Update last login
+                if USE_POSTGRES:
+                    cursor.execute('''
+                        UPDATE users SET last_login = %s WHERE id = %s
+                    ''', (datetime.now(), user_id))
+                else:
+                    cursor.execute('''
+                        UPDATE users SET last_login = ? WHERE id = ?
+                    ''', (datetime.now(), user_id))
+                conn.commit()
+                conn.close()
+                
+                # Generate unique session ID
+                session_id = secrets.token_hex(16)
+                
+                return {
+                    'id': user_id,
+                    'username': db_username,
+                    'full_name': full_name,
+                    'role': role,
+                    'email': email,
+                    'session_id': session_id
+                }
     
     conn.close()
     return None
+
 
 def register_user(username: str, password: str, full_name: str, role: str, email: str = None) -> bool:
     """
     Register a new user
     Returns: True if successful, False if username already exists
     """
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
     try:
         hashed_pwd, salt = hash_password(password)
-        cursor.execute('''
-            INSERT INTO users (username, password_hash, salt, full_name, role, email)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (username, hashed_pwd, salt, full_name, role, email))
+        if USE_POSTGRES:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, salt, full_name, role, email)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            ''', (username, hashed_pwd, salt, full_name, role, email))
+        else:
+            cursor.execute('''
+                INSERT INTO users (username, password_hash, salt, full_name, role, email)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (username, hashed_pwd, salt, full_name, role, email))
         
         conn.commit()
         conn.close()
         return True
-    except sqlite3.IntegrityError:
+    except Exception:
         conn.close()
         return False
+
 
 def change_password(user_id: int, old_password: str, new_password: str) -> bool:
     """
     Change user password
     Returns: True if successful, False if old password is incorrect
     """
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
     # Verify old password
-    cursor.execute('SELECT password_hash, salt FROM users WHERE id = ?', (user_id,))
+    if USE_POSTGRES:
+        cursor.execute('SELECT password_hash, salt FROM users WHERE id = %s', (user_id,))
+    else:
+        cursor.execute('SELECT password_hash, salt FROM users WHERE id = ?', (user_id,))
     result = cursor.fetchone()
     
-    if result and verify_password(old_password, result[0], result[1]):
-        # Update with new password
-        new_hash, new_salt = hash_password(new_password)
-        cursor.execute('''
-            UPDATE users SET password_hash = ?, salt = ? WHERE id = ?
-        ''', (new_hash, new_salt, user_id))
-        conn.commit()
-        conn.close()
-        return True
+    if result:
+        # Handle both dict-like and tuple results
+        if hasattr(result, 'keys'):
+            password_hash = result['password_hash']
+            salt = result['salt']
+        else:
+            password_hash, salt = result[0], result[1]
+        
+        if verify_password(old_password, password_hash, salt):
+            # Update with new password
+            new_hash, new_salt = hash_password(new_password)
+            if USE_POSTGRES:
+                cursor.execute('''
+                    UPDATE users SET password_hash = %s, salt = %s WHERE id = %s
+                ''', (new_hash, new_salt, user_id))
+            else:
+                cursor.execute('''
+                    UPDATE users SET password_hash = ?, salt = ? WHERE id = ?
+                ''', (new_hash, new_salt, user_id))
+            conn.commit()
+            conn.close()
+            return True
     
     conn.close()
     return False
 
+
 def get_all_users():
     """Get all users (excluding password info)"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
     cursor.execute('''
@@ -162,25 +245,34 @@ def get_all_users():
     conn.close()
     return users
 
+
 def update_user_status(user_id: int, is_active: bool) -> bool:
     """Activate or deactivate a user account"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute('UPDATE users SET is_active = ? WHERE id = ?', (1 if is_active else 0, user_id))
+    if USE_POSTGRES:
+        cursor.execute('UPDATE users SET is_active = %s WHERE id = %s', (1 if is_active else 0, user_id))
+    else:
+        cursor.execute('UPDATE users SET is_active = ? WHERE id = ?', (1 if is_active else 0, user_id))
     conn.commit()
     conn.close()
     return True
 
+
 def delete_user(user_id: int) -> bool:
     """Delete a user account"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
-    cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    if USE_POSTGRES:
+        cursor.execute('DELETE FROM users WHERE id = %s', (user_id,))
+    else:
+        cursor.execute('DELETE FROM users WHERE id = ?', (user_id,))
     conn.commit()
     conn.close()
     return True
+
 
 def login_page():
     """Display login page"""
@@ -220,11 +312,13 @@ def login_page():
                 Please change the default password after first login.
                 """)
 
+
 def logout():
     """Logout current user"""
     st.session_state['authenticated'] = False
     st.session_state['user'] = None
     st.rerun()
+
 
 def require_auth(func):
     """Decorator to require authentication for a page"""
@@ -234,6 +328,7 @@ def require_auth(func):
             return
         return func(*args, **kwargs)
     return wrapper
+
 
 def check_permission(required_role: str) -> bool:
     """

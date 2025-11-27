@@ -56,63 +56,66 @@ def generate_employee_id(position, conn):
         prefix = 'Pav'
         pattern = 'Pav%'
     
-    # Fetch all matching IDs - use correct placeholder for database type
-    try:
-        if USE_POSTGRES:
-            # PostgreSQL uses %s
-            if 'driver' in position_lower or 'conductor' in position_lower:
-                query = "SELECT employee_id FROM employees WHERE employee_id LIKE %s"
-                cursor.execute(query, (pattern,))
-            else:
-                query = """
-                    SELECT employee_id FROM employees 
-                    WHERE employee_id LIKE %s 
-                    AND employee_id NOT LIKE %s 
-                    AND employee_id NOT LIKE %s
-                """
-                cursor.execute(query, (pattern, 'PavD%', 'PavC%'))
+    # Use database-agnostic query
+    if USE_POSTGRES:
+        if 'driver' in position_lower or 'conductor' in position_lower:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE %s 
+                ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
         else:
-            # SQLite uses ?
-            if 'driver' in position_lower or 'conductor' in position_lower:
-                query = "SELECT employee_id FROM employees WHERE employee_id LIKE ?"
-                cursor.execute(query, (pattern,))
-            else:
-                query = """
-                    SELECT employee_id FROM employees 
-                    WHERE employee_id LIKE ? 
-                    AND employee_id NOT LIKE ? 
-                    AND employee_id NOT LIKE ?
-                """
-                cursor.execute(query, (pattern, 'PavD%', 'PavC%'))
-        
-        results = cursor.fetchall()
-    except Exception as e:
-        # If table doesn't exist yet or any error, start from 1
-        print(f"Note: Could not fetch existing IDs: {e}")
-        results = []
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE %s 
+                AND employee_id NOT LIKE 'PavD%' 
+                AND employee_id NOT LIKE 'PavC%'
+                ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
+    else:
+        if 'driver' in position_lower or 'conductor' in position_lower:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE ? 
+                ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
+        else:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE ? 
+                AND employee_id NOT LIKE 'PavD%' 
+                AND employee_id NOT LIKE 'PavC%'
+                ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
     
-    # Extract all numeric parts and find the maximum
-    max_number = 0
-    for row in results:
-        try:
-            # Handle both dict-like (PostgreSQL with RealDictCursor) and tuple (SQLite) results
-            if hasattr(row, 'keys'):
-                emp_id = row['employee_id']
-            else:
-                emp_id = row[0] if row else None
-            
-            if emp_id:
-                # Extract numeric part from employee ID
-                numeric_part = ''.join(filter(str.isdigit, emp_id))
-                if numeric_part:
-                    num = int(numeric_part)
-                    if num > max_number:
-                        max_number = num
-        except (IndexError, ValueError, TypeError):
-            continue
+    result = cursor.fetchone()
     
-    # Generate next ID
-    next_number = max_number + 1
+    if result:
+        # Handle both dict-like (PostgreSQL) and tuple (SQLite) results
+        if hasattr(result, 'keys'):
+            last_id = result['employee_id']
+        else:
+            last_id = result[0]
+        numeric_part = ''.join(filter(str.isdigit, last_id))
+        if numeric_part:
+            next_number = int(numeric_part) + 1
+        else:
+            next_number = 1
+    else:
+        next_number = 1
+    
     new_id = f"{prefix}{next_number:03d}"
     return new_id
 
@@ -318,25 +321,17 @@ def generate_hr_pdf(data_df, report_title, filters, username):
         elements.append(Spacer(1, 0.2*inch))
     
     if not data_df.empty:
-        # Helper function to safely convert to float
-        def safe_float(value, default=0):
-            try:
-                return float(value)
-            except (ValueError, TypeError):
-                return default
-        
         # Prepare table data based on report type
         if 'Employee' in report_title or 'employee_id' in data_df.columns:
             table_data = [['ID', 'Name', 'Position', 'Department', 'Status', 'Salary']]
             for _, row in data_df.iterrows():
-                salary_val = safe_float(row.get('salary', 0))
                 table_data.append([
                     str(row.get('employee_id', '')),
                     str(row.get('full_name', ''))[:20],
                     str(row.get('position', ''))[:15],
                     str(row.get('department', ''))[:12],
                     str(row.get('status', '')),
-                    f"${salary_val:,.0f}"
+                    f"${row.get('salary', 0):,.0f}"
                 ])
         elif 'Payroll' in report_title or 'pay_period' in data_df.columns:
             table_data = [['Employee', 'Period', 'Basic', 'Allow.', 'Deduc.', 'Net']]
@@ -344,10 +339,10 @@ def generate_hr_pdf(data_df, report_title, filters, username):
                 table_data.append([
                     str(row.get('full_name', ''))[:18],
                     str(row.get('pay_period', ''))[:10],
-                    f"${safe_float(row.get('basic_salary', 0)):,.0f}",
-                    f"${safe_float(row.get('allowances', 0)):,.0f}",
-                    f"${safe_float(row.get('deductions', 0)):,.0f}",
-                    f"${safe_float(row.get('net_salary', 0)):,.0f}"
+                    f"${row.get('basic_salary', 0):,.0f}",
+                    f"${row.get('allowances', 0):,.0f}",
+                    f"${row.get('deductions', 0):,.0f}",
+                    f"${row.get('net_salary', 0):,.0f}"
                 ])
         elif 'Leave' in report_title or 'leave_type' in data_df.columns:
             table_data = [['Employee', 'Type', 'Start', 'End', 'Status']]
@@ -481,61 +476,23 @@ def employee_management_page():
             with col_stat1:
                 st.metric("👥 Total Employees", len(employees))
             with col_stat2:
-                # Handle both dict-like and tuple results
-                active_count = 0
-                for emp in employees:
-                    status = emp['status'] if hasattr(emp, 'keys') else emp[10]
-                    if status == 'Active':
-                        active_count += 1
+                active_count = sum(1 for emp in employees if emp[10] == 'Active')
                 st.metric("✅ Active", active_count)
             with col_stat3:
-                # Handle both dict-like and tuple results
-                drivers_count = 0
-                for emp in employees:
-                    position = emp['position'] if hasattr(emp, 'keys') else emp[3]
-                    if 'driver' in position.lower():
-                        drivers_count += 1
+                drivers_count = sum(1 for emp in employees if 'driver' in emp[3].lower())
                 st.metric("🚗 Drivers", drivers_count)
             with col_stat4:
-                # Handle both dict-like and tuple results
-                total_salary = 0
-                for emp in employees:
-                    salary = emp['salary'] if hasattr(emp, 'keys') else emp[6]
-                    total_salary += salary
+                total_salary = sum(emp[6] for emp in employees)
                 st.metric("💰 Total Salary", f"${total_salary:,.2f}")
             
             st.markdown("---")
             
             # Display employees
             for emp in employees:
-                # Handle both dict-like (PostgreSQL with RealDictCursor) and tuple (SQLite) results
-                if hasattr(emp, 'keys'):
-                    emp_id = emp['id']
-                    employee_id = emp['employee_id']
-                    full_name = emp['full_name']
-                    position = emp['position']
-                    department = emp['department']
-                    hire_date = emp['hire_date']
-                    salary = emp['salary']
-                    phone = emp['phone']
-                    email = emp['email']
-                    address = emp['address']
-                    status = emp['status']
-                    dob = emp['date_of_birth']
-                    emerg_contact = emp['emergency_contact']
-                    emerg_phone = emp['emergency_phone']
-                    license_num = emp['license_number']
-                    license_exp = emp['license_expiry']
-                    defensive_exp = emp['defensive_driving_expiry']
-                    medical_exp = emp['medical_cert_expiry']
-                    retest = emp['retest_date']
-                    created_by = emp['created_by']
-                    created_at = emp['created_at']
-                else:
-                    (emp_id, employee_id, full_name, position, department, hire_date, 
-                     salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
-                     license_num, license_exp, defensive_exp, medical_exp, retest,
-                     created_by, created_at) = emp
+                (emp_id, employee_id, full_name, position, department, hire_date, 
+                 salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
+                 license_num, license_exp, defensive_exp, medical_exp, retest,
+                 created_by, created_at) = emp
                 
                 status_icon = "✅" if status == "Active" else "⏸️" if status == "On Leave" else "❌"
                 

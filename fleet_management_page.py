@@ -5,7 +5,7 @@ Drivers and Conductors are managed in HR > Employee Management
 
 import streamlit as st
 import pandas as pd
-import sqlite3
+from database import get_connection, USE_POSTGRES
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
 
@@ -13,16 +13,23 @@ def get_bus_display_name(bus_number, conn=None):
     """Get formatted bus display name with registration number"""
     should_close = False
     if conn is None:
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         should_close = True
     
     try:
         cursor = conn.cursor()
-        cursor.execute("""
-            SELECT registration_number, model 
-            FROM buses 
-            WHERE bus_number = ?
-        """, (bus_number,))
+        if USE_POSTGRES:
+            cursor.execute("""
+                SELECT registration_number, model 
+                FROM buses 
+                WHERE bus_number = %s
+            """, (bus_number,))
+        else:
+            cursor.execute("""
+                SELECT registration_number, model 
+                FROM buses 
+                WHERE bus_number = ?
+            """, (bus_number,))
         result = cursor.fetchone()
         
         if result and result[0]:
@@ -38,7 +45,7 @@ def get_bus_display_name(bus_number, conn=None):
 
 def get_expiring_documents(days_threshold=30):
     """Get all bus documents expiring within the threshold"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     
     expiring_items = []
     today = datetime.now().date()
@@ -144,7 +151,7 @@ def manage_buses():
     # Action selector
     action = st.radio("Select Action:", ["View All Buses", "Add New Bus", "Edit Bus", "View Documents Status"], horizontal=True)
     
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     
     if action == "View All Buses":
         try:
@@ -223,7 +230,7 @@ def manage_buses():
                         
                         AuditLogger.log_action("Create", "Fleet Management", f"Added new bus: {bus_number}")
                         st.rerun()
-                    except sqlite3.IntegrityError:
+                    except Exception as e:
                         st.error(f"Bus number {bus_number} already exists!")
                     except Exception as e:
                         st.error(f"Error adding bus: {e}")

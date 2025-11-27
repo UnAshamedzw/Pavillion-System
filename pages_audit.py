@@ -1,6 +1,7 @@
 """
 pages_audit.py - Activity Log and Audit Trail Viewer
 Administrator interface for reviewing all system activities
+CORRECTED VERSION - Handles both PostgreSQL and SQLite row formats
 """
 
 import streamlit as st
@@ -9,6 +10,28 @@ from datetime import datetime, timedelta
 from audit_logger import AuditLogger
 from auth import check_permission
 import json
+
+
+def get_log_value(log, key, default=''):
+    """Helper function to get value from log entry regardless of format"""
+    if hasattr(log, 'keys'):
+        return log.get(key, default)
+    elif hasattr(log, '_fields'):
+        # Named tuple
+        return getattr(log, key, default)
+    else:
+        # Try to access by index using a mapping
+        field_map = {
+            'id': 0, 'username': 1, 'user_id': 2, 'timestamp': 3,
+            'action_type': 4, 'module': 5, 'description': 6,
+            'ip_address': 7, 'session_id': 8, 'affected_table': 9,
+            'affected_record_id': 10, 'old_values': 11, 'new_values': 12
+        }
+        try:
+            return log[field_map.get(key, 0)] if key in field_map else default
+        except (IndexError, TypeError):
+            return default
+
 
 def activity_log_page():
     """
@@ -31,8 +54,11 @@ def activity_log_page():
         
         with col1:
             # Get all unique usernames
-            all_logs = AuditLogger.get_activity_logs(limit=10000)
-            usernames = ["All Users"] + sorted(list(set([log['username'] for log in all_logs])))
+            try:
+                all_logs = AuditLogger.get_activity_logs(limit=10000)
+                usernames = ["All Users"] + sorted(list(set([get_log_value(log, 'username') for log in all_logs if get_log_value(log, 'username')])))
+            except Exception:
+                usernames = ["All Users"]
             selected_user = st.selectbox("👤 User", usernames)
         
         with col2:
@@ -103,14 +129,18 @@ def activity_log_page():
     start_date_str = start_date.strftime("%Y-%m-%d") if start_date else None
     end_date_str = end_date.strftime("%Y-%m-%d") if end_date else None
     
-    logs = AuditLogger.get_activity_logs(
-        username=username_filter,
-        action_type=action_filter,
-        module=module_filter,
-        start_date=start_date_str,
-        end_date=end_date_str,
-        limit=5000
-    )
+    try:
+        logs = AuditLogger.get_activity_logs(
+            username=username_filter,
+            action_type=action_filter,
+            module=module_filter,
+            start_date=start_date_str,
+            end_date=end_date_str,
+            limit=5000
+        )
+    except Exception as e:
+        st.warning(f"Unable to fetch activity logs: {e}")
+        logs = []
     
     # Statistics
     col1, col2, col3, col4 = st.columns(4)
@@ -119,19 +149,19 @@ def activity_log_page():
         st.metric("📊 Total Activities", len(logs))
     
     with col2:
-        unique_users = len(set([log['username'] for log in logs])) if logs else 0
+        unique_users = len(set([get_log_value(log, 'username') for log in logs])) if logs else 0
         st.metric("👥 Unique Users", unique_users)
     
     with col3:
         if logs:
-            add_count = sum(1 for log in logs if log['action_type'] == 'Add')
+            add_count = sum(1 for log in logs if get_log_value(log, 'action_type') == 'Add')
             st.metric("➕ Additions", add_count)
         else:
             st.metric("➕ Additions", 0)
     
     with col4:
         if logs:
-            delete_count = sum(1 for log in logs if log['action_type'] == 'Delete')
+            delete_count = sum(1 for log in logs if get_log_value(log, 'action_type') == 'Delete')
             st.metric("🗑️ Deletions", delete_count)
         else:
             st.metric("🗑️ Deletions", 0)
@@ -146,63 +176,73 @@ def activity_log_page():
         df_data = []
         for log in logs:
             df_data.append({
-                'ID': log['id'],
-                'Timestamp': log['timestamp'],
-                'User': log['username'],
-                'Action': log['action_type'],
-                'Module': log['module'],
-                'Description': log['description']
+                'ID': get_log_value(log, 'id'),
+                'Timestamp': get_log_value(log, 'timestamp'),
+                'User': get_log_value(log, 'username'),
+                'Action': get_log_value(log, 'action_type'),
+                'Module': get_log_value(log, 'module'),
+                'Description': get_log_value(log, 'description')
             })
         
         df = pd.DataFrame(df_data)
         
         # Display with expandable details
         for idx, log in enumerate(logs):
+            timestamp = get_log_value(log, 'timestamp')
+            username = get_log_value(log, 'username')
+            action_type = get_log_value(log, 'action_type')
+            module = get_log_value(log, 'module')
+            
             with st.expander(
-                f"🔹 [{log['timestamp']}] {log['username']} - {log['action_type']} in {log['module']}"
+                f"🔹 [{timestamp}] {username} - {action_type} in {module}"
             ):
                 col_x, col_y = st.columns([2, 3])
                 
                 with col_x:
                     st.write("**Activity Details:**")
-                    st.write(f"**ID:** {log['id']}")
-                    st.write(f"**User:** {log['username']}")
-                    st.write(f"**Action:** {log['action_type']}")
-                    st.write(f"**Module:** {log['module']}")
-                    st.write(f"**Time:** {log['timestamp']}")
+                    st.write(f"**ID:** {get_log_value(log, 'id')}")
+                    st.write(f"**User:** {username}")
+                    st.write(f"**Action:** {action_type}")
+                    st.write(f"**Module:** {module}")
+                    st.write(f"**Time:** {timestamp}")
                 
                 with col_y:
                     st.write("**Description:**")
-                    st.info(log['description'])
+                    st.info(get_log_value(log, 'description'))
                     
-                    if log['affected_table']:
-                        st.write(f"**Affected Table:** {log['affected_table']}")
+                    affected_table = get_log_value(log, 'affected_table')
+                    if affected_table:
+                        st.write(f"**Affected Table:** {affected_table}")
                     
-                    if log['affected_record_id']:
-                        st.write(f"**Record ID:** {log['affected_record_id']}")
+                    affected_record_id = get_log_value(log, 'affected_record_id')
+                    if affected_record_id:
+                        st.write(f"**Record ID:** {affected_record_id}")
                 
                 # Show old and new values if available
-                if log['old_values'] or log['new_values']:
+                old_values = get_log_value(log, 'old_values')
+                new_values = get_log_value(log, 'new_values')
+                
+                if old_values or new_values:
                     st.markdown("---")
                     col_old, col_new = st.columns(2)
                     
                     with col_old:
-                        if log['old_values']:
+                        if old_values:
                             st.write("**Previous Values:**")
                             try:
-                                old_vals = json.loads(log['old_values'])
+                                old_vals = json.loads(old_values)
                                 st.json(old_vals)
-                            except:
-                                st.text(log['old_values'])
+                            except Exception:
+                                st.text(old_values)
                     
                     with col_new:
-                        if log['new_values']:
+                        if new_values:
                             st.write("**New Values:**")
                             try:
-                                new_vals = json.loads(log['new_values'])
+                                new_vals = json.loads(new_values)
                                 st.json(new_vals)
-                            except:
-                                st.text(log['new_values'])
+                            except Exception:
+                                st.text(new_values)
         
         # Export options
         st.markdown("---")
@@ -242,8 +282,8 @@ def activity_log_page():
         # Group by user and action type
         summary_data = {}
         for log in logs:
-            user = log['username']
-            action = log['action_type']
+            user = get_log_value(log, 'username')
+            action = get_log_value(log, 'action_type')
             
             if user not in summary_data:
                 summary_data[user] = {}
@@ -283,11 +323,15 @@ def user_activity_dashboard():
     start_date = (datetime.now() - timedelta(days=days_back)).strftime("%Y-%m-%d")
     
     # Fetch user's activities
-    logs = AuditLogger.get_activity_logs(
-        username=username,
-        start_date=start_date,
-        limit=500
-    )
+    try:
+        logs = AuditLogger.get_activity_logs(
+            username=username,
+            start_date=start_date,
+            limit=500
+        )
+    except Exception as e:
+        st.warning(f"Unable to fetch activity logs: {e}")
+        logs = []
     
     # Statistics
     col1, col2, col3 = st.columns(3)
@@ -296,11 +340,11 @@ def user_activity_dashboard():
         st.metric("📊 Total Actions", len(logs))
     
     with col2:
-        add_count = sum(1 for log in logs if log['action_type'] == 'Add')
+        add_count = sum(1 for log in logs if get_log_value(log, 'action_type') == 'Add')
         st.metric("➕ Records Added", add_count)
     
     with col3:
-        edit_count = sum(1 for log in logs if log['action_type'] == 'Edit')
+        edit_count = sum(1 for log in logs if get_log_value(log, 'action_type') == 'Edit')
         st.metric("✏️ Records Edited", edit_count)
     
     st.markdown("---")
@@ -309,6 +353,9 @@ def user_activity_dashboard():
     if logs:
         st.subheader("Recent Activities")
         for log in logs[:50]:  # Show last 50
-            st.text(f"🔹 [{log['timestamp']}] {log['action_type']} - {log['description']}")
+            timestamp = get_log_value(log, 'timestamp')
+            action_type = get_log_value(log, 'action_type')
+            description = get_log_value(log, 'description')
+            st.text(f"🔹 [{timestamp}] {action_type} - {description}")
     else:
         st.info("No recent activity found.")

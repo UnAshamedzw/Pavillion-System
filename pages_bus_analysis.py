@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-import sqlite3
+from database import get_connection, USE_POSTGRES
 from io import BytesIO
 from audit_logger import AuditLogger
 
@@ -19,7 +19,7 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
     
     Returns: tuple of (income_df, maintenance_df)
     """
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     
     # Build income query
     income_query = "SELECT * FROM income WHERE 1=1"
@@ -77,7 +77,7 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
 
 def get_available_filters():
     """Get all available buses, routes, drivers, and conductors for filtering"""
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     
     # Get buses
     buses_df = pd.read_sql_query("SELECT DISTINCT bus_number FROM income ORDER BY bus_number", conn)

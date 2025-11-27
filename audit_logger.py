@@ -1,13 +1,17 @@
 """
 audit_logger.py - Comprehensive Activity Tracking and Audit Trail System
 Automatically logs all user actions for accountability and compliance
+CORRECTED VERSION - Uses database abstraction for PostgreSQL/SQLite compatibility
 """
 
-import sqlite3
 import streamlit as st
 from datetime import datetime
 import json
 from typing import Optional, Dict, Any
+
+# Import database abstraction layer
+from database import get_connection, USE_POSTGRES
+
 
 class AuditLogger:
     """
@@ -69,33 +73,55 @@ class AuditLogger:
         session_id = st.session_state.get('session_id', None)
         
         try:
-            conn = sqlite3.connect('bus_management.db')
+            conn = get_connection()
             cursor = conn.cursor()
             
             # Convert dictionaries to JSON strings
             old_values_json = json.dumps(old_values) if old_values else None
             new_values_json = json.dumps(new_values) if new_values else None
             
-            cursor.execute('''
-                INSERT INTO activity_log (
-                    username, user_id, timestamp, action_type, module, 
-                    description, session_id, affected_table, 
-                    affected_record_id, old_values, new_values
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                username,
-                user_id,
-                datetime.now(),
-                action_type,
-                module,
-                description,
-                session_id,
-                affected_table,
-                affected_record_id,
-                old_values_json,
-                new_values_json
-            ))
+            if USE_POSTGRES:
+                cursor.execute('''
+                    INSERT INTO activity_log (
+                        username, user_id, timestamp, action_type, module, 
+                        description, session_id, affected_table, 
+                        affected_record_id, old_values, new_values
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ''', (
+                    username,
+                    user_id,
+                    datetime.now(),
+                    action_type,
+                    module,
+                    description,
+                    session_id,
+                    affected_table,
+                    affected_record_id,
+                    old_values_json,
+                    new_values_json
+                ))
+            else:
+                cursor.execute('''
+                    INSERT INTO activity_log (
+                        username, user_id, timestamp, action_type, module, 
+                        description, session_id, affected_table, 
+                        affected_record_id, old_values, new_values
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    username,
+                    user_id,
+                    datetime.now(),
+                    action_type,
+                    module,
+                    description,
+                    session_id,
+                    affected_table,
+                    affected_record_id,
+                    old_values_json,
+                    new_values_json
+                ))
             
             conn.commit()
             conn.close()
@@ -255,34 +281,51 @@ class AuditLogger:
         Returns:
             List of log entries
         """
-        conn = sqlite3.connect('bus_management.db')
-        conn.row_factory = sqlite3.Row
+        conn = get_connection()
         cursor = conn.cursor()
         
         query = "SELECT * FROM activity_log WHERE 1=1"
         params = []
         
         if username:
-            query += " AND username = ?"
+            if USE_POSTGRES:
+                query += " AND username = %s"
+            else:
+                query += " AND username = ?"
             params.append(username)
         
         if action_type:
-            query += " AND action_type = ?"
+            if USE_POSTGRES:
+                query += " AND action_type = %s"
+            else:
+                query += " AND action_type = ?"
             params.append(action_type)
         
         if module:
-            query += " AND module = ?"
+            if USE_POSTGRES:
+                query += " AND module = %s"
+            else:
+                query += " AND module = ?"
             params.append(module)
         
         if start_date:
-            query += " AND DATE(timestamp) >= ?"
+            if USE_POSTGRES:
+                query += " AND DATE(timestamp) >= %s"
+            else:
+                query += " AND DATE(timestamp) >= ?"
             params.append(start_date)
         
         if end_date:
-            query += " AND DATE(timestamp) <= ?"
+            if USE_POSTGRES:
+                query += " AND DATE(timestamp) <= %s"
+            else:
+                query += " AND DATE(timestamp) <= ?"
             params.append(end_date)
         
-        query += " ORDER BY timestamp DESC LIMIT ?"
+        if USE_POSTGRES:
+            query += " ORDER BY timestamp DESC LIMIT %s"
+        else:
+            query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
         
         cursor.execute(query, params)
@@ -294,41 +337,66 @@ class AuditLogger:
     @staticmethod
     def get_user_activity_summary(username: str):
         """Get activity summary for a specific user"""
-        conn = sqlite3.connect('bus_management.db')
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT 
-                action_type,
-                COUNT(*) as count
-            FROM activity_log
-            WHERE username = ?
-            GROUP BY action_type
-            ORDER BY count DESC
-        ''', (username,))
-        
-        summary = cursor.fetchall()
-        conn.close()
-        
-        return summary
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            if USE_POSTGRES:
+                cursor.execute('''
+                    SELECT 
+                        action_type,
+                        COUNT(*) as count
+                    FROM activity_log
+                    WHERE username = %s
+                    GROUP BY action_type
+                    ORDER BY count DESC
+                ''', (username,))
+            else:
+                cursor.execute('''
+                    SELECT 
+                        action_type,
+                        COUNT(*) as count
+                    FROM activity_log
+                    WHERE username = ?
+                    GROUP BY action_type
+                    ORDER BY count DESC
+                ''', (username,))
+            
+            summary = cursor.fetchall()
+            conn.close()
+            
+            return summary
+        except Exception as e:
+            print(f"⚠️ Error getting activity summary: {e}")
+            return []
     
     @staticmethod
     def get_recent_activities(limit: int = 50):
         """Get most recent activities across all users"""
-        conn = sqlite3.connect('bus_management.db')
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT * FROM activity_log
-            ORDER BY timestamp DESC
-            LIMIT ?
-        ''', (limit,))
-        
-        activities = cursor.fetchall()
-        conn.close()
-        
-        return activities
+        try:
+            conn = get_connection()
+            cursor = conn.cursor()
+            
+            if USE_POSTGRES:
+                cursor.execute('''
+                    SELECT * FROM activity_log
+                    ORDER BY timestamp DESC
+                    LIMIT %s
+                ''', (limit,))
+            else:
+                cursor.execute('''
+                    SELECT * FROM activity_log
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                ''', (limit,))
+            
+            activities = cursor.fetchall()
+            conn.close()
+            
+            return activities
+        except Exception as e:
+            print(f"⚠️ Error getting recent activities: {e}")
+            return []
 
 
 # Convenience function for easy imports
