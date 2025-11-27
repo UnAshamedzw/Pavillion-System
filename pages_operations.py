@@ -1613,7 +1613,7 @@ def dashboard_page():
         start_date = end_date - timedelta(days=days_back)
         st.info(f"📅 {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
-    # Fetch data with proper database-specific queries
+# Fetch data with proper database-specific queries
     conn = get_db_connection()
     
     try:
