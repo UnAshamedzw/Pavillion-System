@@ -1,10 +1,11 @@
 """
 app.py - Main Application Entry Point
 Pavillion Coaches Bus Management System
+CORRECTED VERSION - Fixed imports and removed unused code
 """
 
 import streamlit as st
-from database import init_database, USE_POSTGRES
+from database import init_database, migrate_database
 from auth import create_users_table, login_page, logout
 from pages_operations import (
     income_entry_page, 
@@ -12,16 +13,18 @@ from pages_operations import (
     revenue_history_page,
     import_data_page,
     dashboard_page,
-    routes_management_page
+    buses_routes_management_page,
+    bus_assignments_page  # FIXED: Added missing import
 )
 from pages_hr import (
     employee_management_page,
     employee_performance_page,
     payroll_management_page,
     leave_management_page,
-    disciplinary_records_page
+    disciplinary_records_page,
+    get_expiring_documents, 
+    display_document_expiry_alerts
 )
-from pages_hr import get_expiring_documents, display_document_expiry_alerts
 from pages_users import user_management_page, my_profile_page
 from pages_audit import activity_log_page, user_activity_dashboard
 from pages_bus_analysis import bus_analysis_page
@@ -30,14 +33,6 @@ from fleet_management_page import fleet_management_page, show_expiry_alerts
 import base64
 from pathlib import Path
 
-# In your homepage/dashboard function:
-def homepage():
-    st.title("🏠 Dashboard")
-    
-    # Document Expiry Alerts - Shows at the top
-    display_document_expiry_alerts()
-    
-    st.markdown("---")
 
 def get_base64_image(image_path):
     """Convert image to base64 for display"""
@@ -45,8 +40,9 @@ def get_base64_image(image_path):
         with open(image_path, "rb") as f:
             data = f.read()
         return base64.b64encode(data).decode()
-    except:
+    except Exception:
         return None
+
 
 def main():
     """Main application entry point"""
@@ -59,88 +55,18 @@ def main():
         initial_sidebar_state="expanded"
     )
     
-    # CRITICAL: Initialize database FIRST, before anything else
-    # This ensures tables exist before any queries run
-    try:
-        print("=" * 50)
-        print("🔄 Starting database initialization...")
+    # Initialize database only once per session
+    if 'initialized' not in st.session_state:
         init_database()
-        print("✅ init_database() completed")
-        
-        # Verify tables were created
-        from database import get_connection
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        # Check if income table exists
-        if USE_POSTGRES:
-            cursor.execute("""
-                SELECT EXISTS (
-                    SELECT FROM information_schema.tables 
-                    WHERE table_name = 'income'
-                );
-            """)
-            result = cursor.fetchone()
-            table_exists = result['exists'] if result else False
-        else:
-            cursor.execute("""
-                SELECT name FROM sqlite_master 
-                WHERE type='table' AND name='income';
-            """)
-            table_exists = cursor.fetchone() is not None
-        
-        conn.close()
-        
-        if not table_exists:
-            raise Exception("❌ CRITICAL: income table was not created!")
-        
-        print("✅ Database verification passed - income table exists")
-        
+        migrate_database()  # FIXED: Run migrations to add any missing columns
         create_users_table()
-        print("✅ Users table ready")
-        print("=" * 50)
-        
-    except Exception as e:
-        print(f"❌ DATABASE INITIALIZATION FAILED: {e}")
-        import traceback
-        traceback.print_exc()
-        st.error(f"❌ Database initialization failed: {e}")
-        st.error("Please check Railway logs for details")
-        st.stop()
+        st.session_state.initialized = True
     
     # Check authentication
     if not st.session_state.get('authenticated', False):
         login_page()
         return
     
-try:
-    print("=" * 50)
-    print("🔄 Starting database initialization...")
-    
-    # Initialize database
-    init_database()
-    print("✅ Database tables created")
-    
-    # Verify all tables exist
-    from database import verify_database
-    verify_database()
-    
-    # Create users table
-    create_users_table()
-    print("✅ Users table ready")
-    print("=" * 50)
-    
-except Exception as e:
-    print(f"❌ DATABASE INITIALIZATION FAILED: {e}")
-    import traceback
-    traceback.print_exc()
-    st.error(f"❌ Critical Error: {e}")
-    st.error("🔧 Troubleshooting:")
-    st.error("1. Check if database file exists (SQLite)")
-    st.error("2. Check Railway database connection (PostgreSQL)")
-    st.error("3. Check file permissions")
-    st.stop()
-
     # Custom CSS with Pavillion Coaches branding colors
     st.markdown("""
         <style>
@@ -306,7 +232,8 @@ except Exception as e:
                 "📥 Import from Excel",
                 "💰 Revenue History",
                 "🚌 Fleet Management",
-                "🚗 Routes"
+                "🚗 Buses & Routes",
+                "📋 Bus Assignments"  # FIXED: Added Bus Assignments to menu
             ]
         )
     elif menu_section == "👥 HR Management":
@@ -348,7 +275,8 @@ except Exception as e:
         - 📥 Bulk import from Excel
         - 💰 Revenue history
         - 🚌 Fleet management
-        - 🚗 Routes setup
+        - 🚗 Buses & routes setup
+        - 📋 Bus assignments
         - ⚠️ Document tracking
         - ✅ Full audit trail
         """)
@@ -407,8 +335,14 @@ except Exception as e:
         try:
             show_expiry_alerts()
             st.markdown("---")
-        except Exception as e:
+        except Exception:
             # Silently fail if fleet management is not set up yet
+            pass
+        
+        # Also show HR document expiry alerts
+        try:
+            display_document_expiry_alerts()
+        except Exception:
             pass
     
     # Route to appropriate page
@@ -424,8 +358,10 @@ except Exception as e:
         dashboard_page()
     elif page == "🚌 Fleet Management":
         fleet_management_page()
-    elif page == "🚗 Routes":
-        routes_management_page()
+    elif page == "🚗 Buses & Routes":
+        buses_routes_management_page()
+    elif page == "📋 Bus Assignments":  # FIXED: Added route for Bus Assignments
+        bus_assignments_page()
     elif page == "👥 Employee Management":
         employee_management_page()
     elif page == "📊 Employee Performance":
@@ -448,6 +384,7 @@ except Exception as e:
         user_management_page()
     elif page == "📜 Activity Log":
         activity_log_page()
+
 
 if __name__ == "__main__":
     main()
