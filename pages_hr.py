@@ -318,17 +318,25 @@ def generate_hr_pdf(data_df, report_title, filters, username):
         elements.append(Spacer(1, 0.2*inch))
     
     if not data_df.empty:
+        # Helper function to safely convert to float
+        def safe_float(value, default=0):
+            try:
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
         # Prepare table data based on report type
         if 'Employee' in report_title or 'employee_id' in data_df.columns:
             table_data = [['ID', 'Name', 'Position', 'Department', 'Status', 'Salary']]
             for _, row in data_df.iterrows():
+                salary_val = safe_float(row.get('salary', 0))
                 table_data.append([
                     str(row.get('employee_id', '')),
                     str(row.get('full_name', ''))[:20],
                     str(row.get('position', ''))[:15],
                     str(row.get('department', ''))[:12],
                     str(row.get('status', '')),
-                    f"${row.get('salary', 0):,.0f}"
+                    f"${salary_val:,.0f}"
                 ])
         elif 'Payroll' in report_title or 'pay_period' in data_df.columns:
             table_data = [['Employee', 'Period', 'Basic', 'Allow.', 'Deduc.', 'Net']]
@@ -336,10 +344,10 @@ def generate_hr_pdf(data_df, report_title, filters, username):
                 table_data.append([
                     str(row.get('full_name', ''))[:18],
                     str(row.get('pay_period', ''))[:10],
-                    f"${row.get('basic_salary', 0):,.0f}",
-                    f"${row.get('allowances', 0):,.0f}",
-                    f"${row.get('deductions', 0):,.0f}",
-                    f"${row.get('net_salary', 0):,.0f}"
+                    f"${safe_float(row.get('basic_salary', 0)):,.0f}",
+                    f"${safe_float(row.get('allowances', 0)):,.0f}",
+                    f"${safe_float(row.get('deductions', 0)):,.0f}",
+                    f"${safe_float(row.get('net_salary', 0)):,.0f}"
                 ])
         elif 'Leave' in report_title or 'leave_type' in data_df.columns:
             table_data = [['Employee', 'Type', 'Start', 'End', 'Status']]
