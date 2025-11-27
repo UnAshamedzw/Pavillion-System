@@ -59,35 +59,39 @@ def generate_employee_id(position, conn):
     # Use database-agnostic query
     if USE_POSTGRES:
         if 'driver' in position_lower or 'conductor' in position_lower:
+            # For drivers and conductors, get the highest number with their specific prefix
             query = """
                 SELECT employee_id 
                 FROM employees 
                 WHERE employee_id LIKE %s 
-                ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
+                ORDER BY CAST(SUBSTRING(employee_id FROM %s) AS INTEGER) DESC
                 LIMIT 1
             """
-            cursor.execute(query, (pattern, prefix))
+            # SUBSTRING needs the starting position (length of prefix + 1)
+            cursor.execute(query, (pattern, len(prefix) + 1))
         else:
+            # For other staff, exclude driver and conductor IDs
             query = """
                 SELECT employee_id 
                 FROM employees 
                 WHERE employee_id LIKE %s 
                 AND employee_id NOT LIKE 'PavD%' 
                 AND employee_id NOT LIKE 'PavC%'
-                ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
+                ORDER BY CAST(SUBSTRING(employee_id FROM %s) AS INTEGER) DESC
                 LIMIT 1
             """
-            cursor.execute(query, (pattern, prefix))
+            cursor.execute(query, (pattern, len(prefix) + 1))
     else:
+        # SQLite version
         if 'driver' in position_lower or 'conductor' in position_lower:
             query = """
                 SELECT employee_id 
                 FROM employees 
                 WHERE employee_id LIKE ? 
-                ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+                ORDER BY CAST(SUBSTR(employee_id, ?, LENGTH(employee_id) - ? + 1) AS INTEGER) DESC
                 LIMIT 1
             """
-            cursor.execute(query, (pattern, prefix))
+            cursor.execute(query, (pattern, len(prefix) + 1, len(prefix)))
         else:
             query = """
                 SELECT employee_id 
@@ -95,10 +99,10 @@ def generate_employee_id(position, conn):
                 WHERE employee_id LIKE ? 
                 AND employee_id NOT LIKE 'PavD%' 
                 AND employee_id NOT LIKE 'PavC%'
-                ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+                ORDER BY CAST(SUBSTR(employee_id, ?, LENGTH(employee_id) - ? + 1) AS INTEGER) DESC
                 LIMIT 1
             """
-            cursor.execute(query, (pattern, prefix))
+            cursor.execute(query, (pattern, len(prefix) + 1, len(prefix)))
     
     result = cursor.fetchone()
     
