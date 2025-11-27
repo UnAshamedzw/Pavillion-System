@@ -56,53 +56,60 @@ def generate_employee_id(position, conn):
         prefix = 'Pav'
         pattern = 'Pav%'
     
-    # Simpler approach: fetch all matching IDs and process in Python
-    if USE_POSTGRES:
-        if 'driver' in position_lower or 'conductor' in position_lower:
-            query = "SELECT employee_id FROM employees WHERE employee_id LIKE %s"
-            cursor.execute(query, (pattern,))
+    # Fetch all matching IDs - use correct placeholder for database type
+    try:
+        if USE_POSTGRES:
+            # PostgreSQL uses %s
+            if 'driver' in position_lower or 'conductor' in position_lower:
+                query = "SELECT employee_id FROM employees WHERE employee_id LIKE %s"
+                cursor.execute(query, (pattern,))
+            else:
+                query = """
+                    SELECT employee_id FROM employees 
+                    WHERE employee_id LIKE %s 
+                    AND employee_id NOT LIKE %s 
+                    AND employee_id NOT LIKE %s
+                """
+                cursor.execute(query, (pattern, 'PavD%', 'PavC%'))
         else:
-            query = """
-                SELECT employee_id FROM employees 
-                WHERE employee_id LIKE %s 
-                AND employee_id NOT LIKE 'PavD%' 
-                AND employee_id NOT LIKE 'PavC%'
-            """
-            cursor.execute(query, (pattern,))
-    else:
-        # SQLite version
-        if 'driver' in position_lower or 'conductor' in position_lower:
-            query = "SELECT employee_id FROM employees WHERE employee_id LIKE ?"
-            cursor.execute(query, (pattern,))
-        else:
-            query = """
-                SELECT employee_id FROM employees 
-                WHERE employee_id LIKE ? 
-                AND employee_id NOT LIKE 'PavD%' 
-                AND employee_id NOT LIKE 'PavC%'
-            """
-            cursor.execute(query, (pattern,))
-    
-    results = cursor.fetchall()
+            # SQLite uses ?
+            if 'driver' in position_lower or 'conductor' in position_lower:
+                query = "SELECT employee_id FROM employees WHERE employee_id LIKE ?"
+                cursor.execute(query, (pattern,))
+            else:
+                query = """
+                    SELECT employee_id FROM employees 
+                    WHERE employee_id LIKE ? 
+                    AND employee_id NOT LIKE ? 
+                    AND employee_id NOT LIKE ?
+                """
+                cursor.execute(query, (pattern, 'PavD%', 'PavC%'))
+        
+        results = cursor.fetchall()
+    except Exception as e:
+        # If table doesn't exist yet or any error, start from 1
+        print(f"Note: Could not fetch existing IDs: {e}")
+        results = []
     
     # Extract all numeric parts and find the maximum
     max_number = 0
     for row in results:
-        # Handle both dict-like (PostgreSQL) and tuple (SQLite) results
-        if hasattr(row, 'keys'):
-            emp_id = row['employee_id']
-        else:
-            emp_id = row[0]
-        
-        # Extract numeric part from employee ID
-        numeric_part = ''.join(filter(str.isdigit, emp_id))
-        if numeric_part:
-            try:
-                num = int(numeric_part)
-                if num > max_number:
-                    max_number = num
-            except ValueError:
-                continue
+        try:
+            # Handle both dict-like (PostgreSQL with RealDictCursor) and tuple (SQLite) results
+            if hasattr(row, 'keys'):
+                emp_id = row['employee_id']
+            else:
+                emp_id = row[0] if row else None
+            
+            if emp_id:
+                # Extract numeric part from employee ID
+                numeric_part = ''.join(filter(str.isdigit, emp_id))
+                if numeric_part:
+                    num = int(numeric_part)
+                    if num > max_number:
+                        max_number = num
+        except (IndexError, ValueError, TypeError):
+            continue
     
     # Generate next ID
     next_number = max_number + 1
