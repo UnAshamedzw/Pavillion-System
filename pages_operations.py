@@ -675,7 +675,7 @@ def income_entry_page():
             SELECT id, bus_number, route, hire_destination, driver_name, conductor_name, 
                    date, amount, notes, created_by
             FROM income
-            WHERE date >= (CURRENT_DATE - INTERVAL '%s days')
+            WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')
         ''' % days_back
         params = []
     else:
@@ -1040,7 +1040,7 @@ def maintenance_entry_page():
             SELECT id, bus_number, maintenance_type, mechanic_name, date, cost, 
                    status, description, parts_used, created_by
             FROM maintenance
-            WHERE date >= (CURRENT_DATE - INTERVAL '%s days')
+            WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')
         ''' % days_back
         params = []
     else:
@@ -1591,8 +1591,8 @@ def dashboard_page():
     conn = get_connection()
     
     if USE_POSTGRES:
-        income_query = "SELECT * FROM income WHERE date >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
-        maint_query = "SELECT * FROM maintenance WHERE date >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
+        income_query = "SELECT * FROM income WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
+        maint_query = "SELECT * FROM maintenance WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
         income_df = pd.read_sql_query(income_query, conn)
         maint_df = pd.read_sql_query(maint_query, conn)
     else:
