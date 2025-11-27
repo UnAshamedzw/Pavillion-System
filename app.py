@@ -113,6 +113,34 @@ def main():
         login_page()
         return
     
+try:
+    print("=" * 50)
+    print("🔄 Starting database initialization...")
+    
+    # Initialize database
+    init_database()
+    print("✅ Database tables created")
+    
+    # Verify all tables exist
+    from database import verify_database
+    verify_database()
+    
+    # Create users table
+    create_users_table()
+    print("✅ Users table ready")
+    print("=" * 50)
+    
+except Exception as e:
+    print(f"❌ DATABASE INITIALIZATION FAILED: {e}")
+    import traceback
+    traceback.print_exc()
+    st.error(f"❌ Critical Error: {e}")
+    st.error("🔧 Troubleshooting:")
+    st.error("1. Check if database file exists (SQLite)")
+    st.error("2. Check Railway database connection (PostgreSQL)")
+    st.error("3. Check file permissions")
+    st.stop()
+
     # Custom CSS with Pavillion Coaches branding colors
     st.markdown("""
         <style>

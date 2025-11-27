@@ -468,6 +468,50 @@ def init_database():
     conn.close()
     print("✅ Database initialized successfully")
 
+def verify_database():
+    """Verify all required tables exist"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    required_tables = [
+        'buses', 'routes', 'employees', 'income', 'maintenance',
+        'bus_assignments', 'leave_records', 'payroll', 
+        'performance_records', 'disciplinary_records', 'activity_log'
+    ]
+    
+    missing_tables = []
+    
+    for table_name in required_tables:
+        try:
+            if USE_POSTGRES:
+                cursor.execute("""
+                    SELECT EXISTS (
+                        SELECT FROM information_schema.tables 
+                        WHERE table_name = %s
+                    );
+                """, (table_name,))
+                exists = cursor.fetchone()[0] if USE_POSTGRES else cursor.fetchone()['exists']
+                if not exists:
+                    missing_tables.append(table_name)
+            else:
+                cursor.execute("""
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name=?;
+                """, (table_name,))
+                if cursor.fetchone() is None:
+                    missing_tables.append(table_name)
+        except Exception as e:
+            print(f"❌ Error checking table {table_name}: {e}")
+            missing_tables.append(table_name)
+    
+    conn.close()
+    
+    if missing_tables:
+        raise Exception(f"Missing tables: {', '.join(missing_tables)}")
+    
+    print(f"✅ All {len(required_tables)} tables verified")
+    return True
+
 # ============================================================================
 # EMPLOYEE HELPER FUNCTIONS
 # ============================================================================
