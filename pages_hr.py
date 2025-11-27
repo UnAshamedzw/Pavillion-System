@@ -1,10 +1,10 @@
 """
 pages_hr.py - Complete HR Management Module with Audit Logging and PDF/EXCEL EXPORT
 Includes: Employee Management, Performance, Payroll, Leave, Disciplinary
+CORRECTED VERSION - Uses database abstraction for PostgreSQL/SQLite compatibility
 """
 
 import streamlit as st
-import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
@@ -15,6 +15,23 @@ from reportlab.lib.units import inch
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
 import io
+
+# Import database abstraction layer
+from database import get_connection, USE_POSTGRES
+
+
+def get_placeholder():
+    """Return the correct placeholder for the current database"""
+    return '%s' if USE_POSTGRES else '?'
+
+
+def execute_hr_query(cursor, query, params=None):
+    """Execute a query with automatic placeholder conversion for PostgreSQL"""
+    if USE_POSTGRES and params:
+        # Convert ? to %s for PostgreSQL
+        query = query.replace('?', '%s')
+    cursor.execute(query, params or ())
+
 
 def generate_employee_id(position, conn):
     """
@@ -39,31 +56,58 @@ def generate_employee_id(position, conn):
         prefix = 'Pav'
         pattern = 'Pav%'
     
-    if 'driver' in position_lower or 'conductor' in position_lower:
-        query = """
-            SELECT employee_id 
-            FROM employees 
-            WHERE employee_id LIKE ? 
-            ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
-            LIMIT 1
-        """
-        cursor.execute(query, (pattern, prefix))
+    # Use database-agnostic query
+    if USE_POSTGRES:
+        if 'driver' in position_lower or 'conductor' in position_lower:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE %s 
+                ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
+        else:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE %s 
+                AND employee_id NOT LIKE 'PavD%' 
+                AND employee_id NOT LIKE 'PavC%'
+                ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
     else:
-        query = """
-            SELECT employee_id 
-            FROM employees 
-            WHERE employee_id LIKE ? 
-            AND employee_id NOT LIKE 'PavD%' 
-            AND employee_id NOT LIKE 'PavC%'
-            ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
-            LIMIT 1
-        """
-        cursor.execute(query, (pattern, prefix))
+        if 'driver' in position_lower or 'conductor' in position_lower:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE ? 
+                ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
+        else:
+            query = """
+                SELECT employee_id 
+                FROM employees 
+                WHERE employee_id LIKE ? 
+                AND employee_id NOT LIKE 'PavD%' 
+                AND employee_id NOT LIKE 'PavC%'
+                ORDER BY CAST(SUBSTR(employee_id, LENGTH(?)+1) AS INTEGER) DESC
+                LIMIT 1
+            """
+            cursor.execute(query, (pattern, prefix))
     
     result = cursor.fetchone()
     
     if result:
-        last_id = result[0]
+        # Handle both dict-like (PostgreSQL) and tuple (SQLite) results
+        if hasattr(result, 'keys'):
+            last_id = result['employee_id']
+        else:
+            last_id = result[0]
         numeric_part = ''.join(filter(str.isdigit, last_id))
         if numeric_part:
             next_number = int(numeric_part) + 1
@@ -75,12 +119,13 @@ def generate_employee_id(position, conn):
     new_id = f"{prefix}{next_number:03d}"
     return new_id
 
+
 def get_expiring_documents(days_threshold=30):
     """
     Check for documents expiring within the specified days
     Returns: List of alerts with employee info and expiring document type
     """
-    conn = sqlite3.connect('bus_management.db')
+    conn = get_connection()
     cursor = conn.cursor()
     
     alerts = []
@@ -96,38 +141,64 @@ def get_expiring_documents(days_threshold=30):
     ]
     
     for date_column, doc_name in document_checks:
-        query = f"""
-            SELECT employee_id, full_name, position, {date_column}
-            FROM employees
-            WHERE {date_column} IS NOT NULL
-            AND {date_column} != ''
-            AND date({date_column}) <= date(?)
-            AND status = 'Active'
-            ORDER BY {date_column}
-        """
-        
-        cursor.execute(query, (threshold_date.strftime('%Y-%m-%d'),))
-        results = cursor.fetchall()
-        
-        for emp_id, name, position, expiry_date in results:
-            try:
-                expiry = datetime.strptime(expiry_date, '%Y-%m-%d').date()
-                days_until = (expiry - current_date).days
+        try:
+            if USE_POSTGRES:
+                query = f"""
+                    SELECT employee_id, full_name, position, {date_column}
+                    FROM employees
+                    WHERE {date_column} IS NOT NULL
+                    AND {date_column} != ''
+                    AND {date_column}::DATE <= %s::DATE
+                    AND status = 'Active'
+                    ORDER BY {date_column}
+                """
+                cursor.execute(query, (threshold_date.strftime('%Y-%m-%d'),))
+            else:
+                query = f"""
+                    SELECT employee_id, full_name, position, {date_column}
+                    FROM employees
+                    WHERE {date_column} IS NOT NULL
+                    AND {date_column} != ''
+                    AND date({date_column}) <= date(?)
+                    AND status = 'Active'
+                    ORDER BY {date_column}
+                """
+                cursor.execute(query, (threshold_date.strftime('%Y-%m-%d'),))
+            
+            results = cursor.fetchall()
+            
+            for row in results:
+                # Handle both dict and tuple formats
+                if hasattr(row, 'keys'):
+                    emp_id = row['employee_id']
+                    name = row['full_name']
+                    position = row['position']
+                    expiry_date = row[date_column]
+                else:
+                    emp_id, name, position, expiry_date = row
                 
-                urgency = 'critical' if days_until <= 7 else 'warning' if days_until <= 14 else 'info'
-                
-                alerts.append({
-                    'employee_id': emp_id,
-                    'name': name,
-                    'position': position,
-                    'document': doc_name,
-                    'expiry_date': expiry_date,
-                    'days_until': days_until,
-                    'urgency': urgency,
-                    'expired': days_until < 0
-                })
-            except ValueError:
-                continue
+                try:
+                    expiry = datetime.strptime(str(expiry_date), '%Y-%m-%d').date()
+                    days_until = (expiry - current_date).days
+                    
+                    urgency = 'critical' if days_until <= 7 else 'warning' if days_until <= 14 else 'info'
+                    
+                    alerts.append({
+                        'employee_id': emp_id,
+                        'name': name,
+                        'position': position,
+                        'document': doc_name,
+                        'expiry_date': str(expiry_date),
+                        'days_until': days_until,
+                        'urgency': urgency,
+                        'expired': days_until < 0
+                    })
+                except ValueError:
+                    continue
+        except Exception as e:
+            # Column might not exist in database yet
+            print(f"Note: Could not check {date_column}: {e}")
+            continue
     
     conn.close()
     
@@ -136,12 +207,17 @@ def get_expiring_documents(days_threshold=30):
     
     return alerts
 
+
 def display_document_expiry_alerts():
     """Display document expiry alerts on the homepage"""
     
     st.markdown("### 📋 Document Expiry Alerts")
     
-    alerts = get_expiring_documents(days_threshold=30)
+    try:
+        alerts = get_expiring_documents(days_threshold=30)
+    except Exception as e:
+        st.info("Document expiry tracking not available yet.")
+        return
     
     if not alerts:
         st.success("✅ All documents are up to date!")
@@ -183,26 +259,20 @@ def display_document_expiry_alerts():
     for alert in alerts:
         if alert['expired']:
             icon = "🔴"
-            message_type = st.error
             status_text = f"**EXPIRED** {abs(alert['days_until'])} days ago"
+            st.error(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
         elif alert['urgency'] == 'critical':
             icon = "🟠"
-            message_type = st.warning
             status_text = f"Expires in **{alert['days_until']} days**"
+            st.warning(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
         elif alert['urgency'] == 'warning':
             icon = "🟡"
-            message_type = st.warning
             status_text = f"Expires in {alert['days_until']} days"
+            st.warning(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
         else:
             icon = "ℹ️"
-            message_type = st.info
             status_text = f"Expires in {alert['days_until']} days"
-        
-        with message_type(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}", icon=None):
-            st.write(f"Employee ID: {alert['employee_id']}")
-            st.write(f"Expiry Date: {alert['expiry_date']}")
-            st.write(status_text)
-
+            st.info(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
 # ============================================================================
 # PDF GENERATION HELPER FOR HR REPORTS
 # ============================================================================
@@ -362,7 +432,7 @@ def employee_management_page():
         st.markdown("---")
         
         # Fetch employees
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         cursor = conn.cursor()
         
         query = """
@@ -396,7 +466,7 @@ def employee_management_page():
         
         query += " ORDER BY full_name"
         
-        cursor.execute(query, params)
+        execute_hr_query(cursor, query, params)
         employees = cursor.fetchall()
         conn.close()
         
@@ -558,9 +628,9 @@ def employee_management_page():
                     with col_btn2:
                         if status == "Active":
                             if st.button("⏸️ Deactivate", key=f"deact_emp_{emp_id}"):
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_connection()
                                 cursor = conn.cursor()
-                                cursor.execute("UPDATE employees SET status = 'Terminated' WHERE id = ?", (emp_id,))
+                                execute_hr_query(cursor, "UPDATE employees SET status = 'Terminated' WHERE id = ?", (emp_id,))
                                 conn.commit()
                                 conn.close()
                                 
@@ -578,9 +648,9 @@ def employee_management_page():
                     with col_btn3:
                         if st.button("🗑️ Delete", key=f"del_emp_{emp_id}"):
                             if st.session_state.get(f'confirm_del_emp_{emp_id}', False):
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_connection()
                                 cursor = conn.cursor()
-                                cursor.execute("DELETE FROM employees WHERE id = ?", (emp_id,))
+                                execute_hr_query(cursor, "DELETE FROM employees WHERE id = ?", (emp_id,))
                                 conn.commit()
                                 conn.close()
                                 
@@ -678,9 +748,9 @@ def employee_management_page():
                             
                             with col_save:
                                 if st.form_submit_button("💾 Save", use_container_width=True):
-                                    conn = sqlite3.connect('bus_management.db')
+                                    conn = get_connection()
                                     cursor = conn.cursor()
-                                    cursor.execute('''
+                                    execute_hr_query(cursor, '''
                                         UPDATE employees
                                         SET full_name = ?, position = ?, department = ?, salary = ?,
                                             phone = ?, email = ?, address = ?, status = ?, date_of_birth = ?,
@@ -731,7 +801,7 @@ def employee_management_page():
         )
         
         # Generate and display auto ID
-        conn_preview = sqlite3.connect('bus_management.db')
+        conn_preview = get_connection()
         auto_employee_id = generate_employee_id(position_preview, conn_preview)
         conn_preview.close()
         
@@ -834,14 +904,14 @@ def employee_management_page():
                 if not all(required_fields):
                     st.error("⚠️ Please fill in all required fields")
                 else:
-                    conn = sqlite3.connect('bus_management.db')
+                    conn = get_connection()
                     cursor = conn.cursor()
                     
                     # Generate final employee ID
                     final_employee_id = generate_employee_id(position, conn)
                     
                     try:
-                        cursor.execute('''
+                        execute_hr_query(cursor, '''
                             INSERT INTO employees 
                             (employee_id, full_name, position, department, hire_date, salary, 
                              phone, email, address, status, date_of_birth, emergency_contact, 
@@ -910,7 +980,7 @@ def employee_management_page():
         st.markdown("---")
         
         # Fetch data for export
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         
         query = "SELECT * FROM employees WHERE 1=1"
         params = []
@@ -990,7 +1060,7 @@ def employee_performance_page():
     with tab1:
         st.subheader("Performance Evaluations")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         
         # Get all performance records with employee info
         try:
@@ -1050,7 +1120,7 @@ def employee_performance_page():
     with tab2:
         st.subheader("Add Performance Evaluation")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", conn)
         except:
@@ -1084,10 +1154,10 @@ def employee_performance_page():
                     if not all([employee_id, evaluation_period, rating, evaluator]):
                         st.error("⚠️ Please fill in all required fields")
                     else:
-                        conn = sqlite3.connect('bus_management.db')
+                        conn = get_connection()
                         cursor = conn.cursor()
                         
-                        cursor.execute('''
+                        execute_hr_query(cursor, '''
                             INSERT INTO performance_records
                             (employee_id, evaluation_period, rating, strengths, weaknesses, 
                              goals, evaluator, evaluation_date, notes, created_by)
@@ -1115,7 +1185,7 @@ def employee_performance_page():
     with tab3:
         st.subheader("📥 Export Performance Reports")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             perf_export_df = pd.read_sql_query('''
                 SELECT p.*, e.full_name, e.position, e.department
@@ -1191,7 +1261,7 @@ def payroll_management_page():
         with col_f2:
             filter_status = st.selectbox("Status", ["All", "Pending", "Paid", "Cancelled"])
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         
         query = '''
             SELECT p.*, e.full_name, e.position
@@ -1260,9 +1330,9 @@ def payroll_management_page():
                     # Action buttons
                     if row['status'] == 'Pending':
                         if st.button("✅ Mark as Paid", key=f"pay_{row['id']}"):
-                            conn = sqlite3.connect('bus_management.db')
+                            conn = get_connection()
                             cursor = conn.cursor()
-                            cursor.execute('''
+                            execute_hr_query(cursor, '''
                                 UPDATE payroll 
                                 SET status = 'Paid', payment_date = ?
                                 WHERE id = ?
@@ -1287,7 +1357,7 @@ def payroll_management_page():
         st.subheader("Process Payroll")
         
         # Get employees
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name, position, salary FROM employees WHERE status = 'Active'", conn)
         except:
@@ -1327,10 +1397,10 @@ def payroll_management_page():
                     if not all([employee_id, pay_period, basic_salary >= 0]):
                         st.error("⚠️ Please fill in all required fields")
                     else:
-                        conn = sqlite3.connect('bus_management.db')
+                        conn = get_connection()
                         cursor = conn.cursor()
                         
-                        cursor.execute('''
+                        execute_hr_query(cursor, '''
                             INSERT INTO payroll
                             (employee_id, pay_period, basic_salary, allowances, deductions, 
                              commission, net_salary, payment_method, status, notes, created_by)
@@ -1358,7 +1428,7 @@ def payroll_management_page():
     with tab3:
         st.subheader("📥 Export Payroll Reports")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             payroll_export_df = pd.read_sql_query('''
                 SELECT p.*, e.full_name, e.position, e.department
@@ -1434,7 +1504,7 @@ def leave_management_page():
         with col_f2:
             filter_type = st.selectbox("Leave Type", ["All", "Annual Leave", "Sick Leave", "Emergency Leave", "Unpaid Leave"])
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         
         query = '''
             SELECT l.*, e.full_name, e.position
@@ -1508,9 +1578,9 @@ def leave_management_page():
                         
                         with col_app:
                             if st.button("✅ Approve", key=f"approve_leave_{row['id']}"):
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_connection()
                                 cursor = conn.cursor()
-                                cursor.execute('''
+                                execute_hr_query(cursor, '''
                                     UPDATE leave_records 
                                     SET status = 'Approved', approved_by = ?, approved_date = ?
                                     WHERE id = ?
@@ -1531,9 +1601,9 @@ def leave_management_page():
                         
                         with col_rej:
                             if st.button("❌ Reject", key=f"reject_leave_{row['id']}"):
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_connection()
                                 cursor = conn.cursor()
-                                cursor.execute('''
+                                execute_hr_query(cursor, '''
                                     UPDATE leave_records 
                                     SET status = 'Rejected', approved_by = ?, approved_date = ?
                                     WHERE id = ?
@@ -1558,7 +1628,7 @@ def leave_management_page():
         st.subheader("Submit New Leave Request")
         
         # Get employees
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name FROM employees WHERE status = 'Active'", conn)
         except:
@@ -1590,10 +1660,10 @@ def leave_management_page():
                     if not all([employee_id, leave_type, reason]) or start_date > end_date:
                         st.error("⚠️ Please fill in all required fields and ensure start date is before end date")
                     else:
-                        conn = sqlite3.connect('bus_management.db')
+                        conn = get_connection()
                         cursor = conn.cursor()
                         
-                        cursor.execute('''
+                        execute_hr_query(cursor, '''
                             INSERT INTO leave_records
                             (employee_id, leave_type, start_date, end_date, reason, status, created_by)
                             VALUES (?, ?, ?, ?, ?, 'Pending', ?)
@@ -1620,7 +1690,7 @@ def leave_management_page():
     with tab3:
         st.subheader("📥 Export Leave Reports")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             leave_export_df = pd.read_sql_query('''
                 SELECT l.*, e.full_name, e.position, e.department
@@ -1698,7 +1768,7 @@ def disciplinary_records_page():
         with col_f3:
             search_emp = st.text_input("🔍 Search employee", placeholder="Employee name")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         
         query = '''
             SELECT d.*, e.full_name, e.position
@@ -1779,9 +1849,9 @@ def disciplinary_records_page():
                         
                         with col_res:
                             if st.button("✅ Mark Resolved", key=f"resolve_disc_{row['id']}"):
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_connection()
                                 cursor = conn.cursor()
-                                cursor.execute('''
+                                execute_hr_query(cursor, '''
                                     UPDATE disciplinary_records 
                                     SET status = 'Resolved', resolution_date = ?
                                     WHERE id = ?
@@ -1802,9 +1872,9 @@ def disciplinary_records_page():
                         
                         with col_app:
                             if st.button("🔵 Appeal", key=f"appeal_disc_{row['id']}"):
-                                conn = sqlite3.connect('bus_management.db')
+                                conn = get_connection()
                                 cursor = conn.cursor()
-                                cursor.execute('''
+                                execute_hr_query(cursor, '''
                                     UPDATE disciplinary_records 
                                     SET status = 'Appealed'
                                     WHERE id = ?
@@ -1829,7 +1899,7 @@ def disciplinary_records_page():
         st.subheader("Issue Disciplinary Action")
         
         # Get employees
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", conn)
         except:
@@ -1865,10 +1935,10 @@ def disciplinary_records_page():
                     if not all([employee_id, action_type, violation_description, action_details, issued_by]):
                         st.error("⚠️ Please fill in all required fields")
                     else:
-                        conn = sqlite3.connect('bus_management.db')
+                        conn = get_connection()
                         cursor = conn.cursor()
                         
-                        cursor.execute('''
+                        execute_hr_query(cursor, '''
                             INSERT INTO disciplinary_records
                             (employee_id, action_type, violation_description, action_details, 
                              record_date, due_date, issued_by, status, notes, created_by)
@@ -1895,7 +1965,7 @@ def disciplinary_records_page():
     with tab3:
         st.subheader("📥 Export Disciplinary Reports")
         
-        conn = sqlite3.connect('bus_management.db')
+        conn = get_connection()
         try:
             disc_export_df = pd.read_sql_query('''
                 SELECT d.*, e.full_name, e.position, e.department
