@@ -6,6 +6,8 @@ CORRECTED VERSION - Uses database abstraction layer for PostgreSQL/SQLite compat
 
 import streamlit as st
 import pandas as pd
+# Opt-in to future pandas behavior to avoid FutureWarnings
+pd.set_option('future.no_silent_downcasting', True)
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
 import plotly.express as px
@@ -1660,7 +1662,11 @@ def dashboard_page():
             maint_daily = pd.DataFrame(columns=['date', 'expenses'])
         
         if not income_daily.empty or not maint_daily.empty:
-            combined = pd.merge(income_daily, maint_daily, on='date', how='outer').fillna(0).infer_objects(copy=False)
+            combined = pd.merge(income_daily, maint_daily, on='date', how='outer')
+            combined = combined.fillna(0)
+            # Ensure numeric columns are proper types
+            combined['revenue'] = pd.to_numeric(combined['revenue'], errors='coerce').fillna(0)
+            combined['expenses'] = pd.to_numeric(combined['expenses'], errors='coerce').fillna(0)
             combined['profit'] = combined['revenue'] - combined['expenses']
             combined = combined.sort_values('date')
             
