@@ -33,6 +33,91 @@ def execute_hr_query(cursor, query, params=None):
     cursor.execute(query, params or ())
 
 
+
+
+def get_emp_value(emp, key_or_index, default=None):
+    """
+    Get value from employee row - works with both dict (PostgreSQL) and tuple (SQLite)
+    
+    Args:
+        emp: The row from database (either dict-like or tuple)
+        key_or_index: Either a string key (for dict) or int index (for tuple)
+        default: Default value if not found
+    
+    For PostgreSQL, use string keys: get_emp_value(emp, 'status')
+    For SQLite compatibility, this function handles both formats
+    """
+    if hasattr(emp, 'keys'):
+        # Dict-like (PostgreSQL RealDictRow)
+        if isinstance(key_or_index, str):
+            return emp.get(key_or_index, default)
+        else:
+            # If index given, map to column names
+            columns = ['id', 'employee_id', 'full_name', 'position', 'department', 
+                      'hire_date', 'salary', 'phone', 'email', 'address', 'status',
+                      'date_of_birth', 'emergency_contact', 'emergency_phone',
+                      'license_number', 'license_expiry', 'defensive_driving_expiry',
+                      'medical_cert_expiry', 'retest_date', 'created_by', 'created_at']
+            if key_or_index < len(columns):
+                return emp.get(columns[key_or_index], default)
+            return default
+    else:
+        # Tuple (SQLite)
+        if isinstance(key_or_index, int):
+            try:
+                return emp[key_or_index]
+            except (IndexError, TypeError):
+                return default
+        else:
+            # String key given but we have tuple - need to map
+            columns = ['id', 'employee_id', 'full_name', 'position', 'department', 
+                      'hire_date', 'salary', 'phone', 'email', 'address', 'status',
+                      'date_of_birth', 'emergency_contact', 'emergency_phone',
+                      'license_number', 'license_expiry', 'defensive_driving_expiry',
+                      'medical_cert_expiry', 'retest_date', 'created_by', 'created_at']
+            try:
+                idx = columns.index(key_or_index)
+                return emp[idx]
+            except (ValueError, IndexError):
+                return default
+
+
+def unpack_employee(emp):
+    """
+    Unpack employee row into individual variables regardless of format
+    Returns tuple of all employee fields
+    """
+    if hasattr(emp, 'keys'):
+        # PostgreSQL dict-like row
+        return (
+            emp.get('id'),
+            emp.get('employee_id'),
+            emp.get('full_name'),
+            emp.get('position'),
+            emp.get('department'),
+            emp.get('hire_date'),
+            emp.get('salary', 0),
+            emp.get('phone'),
+            emp.get('email'),
+            emp.get('address'),
+            emp.get('status'),
+            emp.get('date_of_birth'),
+            emp.get('emergency_contact'),
+            emp.get('emergency_phone'),
+            emp.get('license_number'),
+            emp.get('license_expiry'),
+            emp.get('defensive_driving_expiry'),
+            emp.get('medical_cert_expiry'),
+            emp.get('retest_date'),
+            emp.get('created_by'),
+            emp.get('created_at')
+        )
+    else:
+        # SQLite tuple - pad with None if needed
+        result = list(emp) + [None] * (21 - len(emp))
+        return tuple(result[:21])
+
+
 def generate_employee_id(position, conn):
     """
     Automatically generate the next employee ID based on position/role
@@ -476,13 +561,13 @@ def employee_management_page():
             with col_stat1:
                 st.metric("👥 Total Employees", len(employees))
             with col_stat2:
-                active_count = sum(1 for emp in employees if emp[10] == 'Active')
+                active_count = sum(1 for emp in employees if get_emp_value(emp, 'status') == 'Active')
                 st.metric("✅ Active", active_count)
             with col_stat3:
-                drivers_count = sum(1 for emp in employees if 'driver' in emp[3].lower())
+                drivers_count = sum(1 for emp in employees if 'driver' in (get_emp_value(emp, 'position') or '').lower())
                 st.metric("🚗 Drivers", drivers_count)
             with col_stat4:
-                total_salary = sum(emp[6] for emp in employees)
+                total_salary = sum(get_emp_value(emp, 'salary', 0) or 0 for emp in employees)
                 st.metric("💰 Total Salary", f"${total_salary:,.2f}")
             
             st.markdown("---")
@@ -492,13 +577,13 @@ def employee_management_page():
                 (emp_id, employee_id, full_name, position, department, hire_date, 
                  salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
                  license_num, license_exp, defensive_exp, medical_exp, retest,
-                 created_by, created_at) = emp
+                 created_by, created_at) = unpack_employee(emp)
                 
                 status_icon = "✅" if status == "Active" else "⏸️" if status == "On Leave" else "❌"
                 
                 # Check for expiring documents
                 doc_warnings = []
-                if 'driver' in position.lower():
+                if position and 'driver' in position.lower():
                     current_date = datetime.now().date()
                     threshold = current_date + timedelta(days=30)
                     
