@@ -13,8 +13,7 @@ from pages_operations import (
     revenue_history_page,
     import_data_page,
     dashboard_page,
-    buses_routes_management_page,
-    bus_assignments_page  # FIXED: Added missing import
+    routes_assignments_page  # Combined Routes & Assignments
 )
 from pages_hr import (
     employee_management_page,
@@ -232,8 +231,7 @@ def main():
                 "📥 Import from Excel",
                 "💰 Revenue History",
                 "🚌 Fleet Management",
-                "🚗 Buses & Routes",
-                "📋 Bus Assignments"  # FIXED: Added Bus Assignments to menu
+                "🛣️ Routes & Assignments"
             ]
         )
     elif menu_section == "👥 HR Management":
@@ -275,8 +273,7 @@ def main():
         - 📥 Bulk import from Excel
         - 💰 Revenue history
         - 🚌 Fleet management
-        - 🚗 Buses & routes setup
-        - 📋 Bus assignments
+        - 🛣️ Routes & assignments
         - ⚠️ Document tracking
         - ✅ Full audit trail
         """)
@@ -358,10 +355,8 @@ def main():
         dashboard_page()
     elif page == "🚌 Fleet Management":
         fleet_management_page()
-    elif page == "🚗 Buses & Routes":
-        buses_routes_management_page()
-    elif page == "📋 Bus Assignments":  # FIXED: Added route for Bus Assignments
-        bus_assignments_page()
+    elif page == "🛣️ Routes & Assignments":
+        routes_assignments_page()
     elif page == "👥 Employee Management":
         employee_management_page()
     elif page == "📊 Employee Performance":

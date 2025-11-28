@@ -148,144 +148,17 @@ def generate_income_pdf(records_df, filters, generated_by):
 # BUSES AND ROUTES MANAGEMENT PAGE
 # ============================================================================
 
-def buses_routes_management_page():
-    """Manage buses and routes"""
+def routes_assignments_page():
+    """Manage routes and daily bus assignments - Combined page"""
     
-    st.header("🚌 Buses & Routes Management")
-    st.markdown("Manage your fleet and route information")
+    st.header("🛣️ Routes & Assignments")
+    st.markdown("Manage routes and assign drivers/conductors to buses")
     st.markdown("---")
     
-    tab1, tab2 = st.tabs(["🚌 Buses", "🛣️ Routes"])
-    
-    # ========== BUSES TAB ==========
-    with tab1:
-        st.subheader("🚌 Fleet Management")
-        
-        # Add Bus Form
-        with st.expander("➕ Add New Bus", expanded=False):
-            with st.form("add_bus_form"):
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    bus_number = st.text_input("Bus Number*", placeholder="e.g., Bus 1, Bus 2")
-                    registration_number = st.text_input("Registration Number", placeholder="e.g., ABC-1234")
-                    model = st.text_input("Model*", placeholder="e.g., Mercedes Sprinter")
-                    capacity = st.number_input("Capacity (seats)*", min_value=1, step=1, value=50)
-                
-                with col2:
-                    year = st.number_input("Year", min_value=1900, max_value=2030, value=2020, step=1)
-                    status = st.selectbox("Status", ["Active", "Maintenance", "Inactive"])
-                
-                notes = st.text_area("Notes", placeholder="Additional information...")
-                
-                submit_bus = st.form_submit_button("➕ Add Bus", width="stretch", type="primary")
-                
-                if submit_bus:
-                    if not all([bus_number, model, capacity]):
-                        st.error("⚠️ Please fill in all required fields")
-                    else:
-                        bus_id = add_bus(
-                            bus_number=bus_number,
-                            model=model,
-                            capacity=capacity,
-                            year=year,
-                            status=status,
-                            notes=notes,
-                            created_by=st.session_state['user']['username'],
-                            registration_number=registration_number
-                        )
-                        
-                        if bus_id:
-                            st.success(f"✅ Bus {bus_number} added successfully!")
-                            st.rerun()
-                        else:
-                            st.error("❌ Bus with this number already exists")
-        
-        st.markdown("---")
-        
-        # Display Buses
-        buses = get_all_buses()
-        
-        if buses:
-            st.subheader(f"📋 Fleet List ({len(buses)} buses)")
-            
-            for bus in buses:
-                display_title = f"🚌 {bus['bus_number']}"
-                if bus.get('registration_number'):
-                    display_title += f" ({bus['registration_number']})"
-                display_title += f" - {bus['model']} ({bus['status']})"
-                
-                with st.expander(display_title):
-                    col_info, col_actions = st.columns([3, 1])
-                    
-                    with col_info:
-                        st.write(f"**Bus Number:** {bus['bus_number']}")
-                        if bus.get('registration_number'):
-                            st.write(f"**Registration Number:** {bus['registration_number']}")
-                        st.write(f"**Model:** {bus['model']}")
-                        st.write(f"**Capacity:** {bus['capacity']} seats")
-                        st.write(f"**Year:** {bus['year'] or 'N/A'}")
-                        st.write(f"**Status:** {bus['status']}")
-                        if bus.get('notes'):
-                            st.write(f"**Notes:** {bus['notes']}")
-                        st.caption(f"Added: {bus['created_at']} by {bus.get('created_by', 'N/A')}")
-                    
-                    with col_actions:
-                        if st.button("✏️ Edit", key=f"edit_bus_{bus['id']}"):
-                            st.session_state[f'edit_bus_{bus["id"]}'] = True
-                            st.rerun()
-                        
-                        if st.button("🗑️ Delete", key=f"delete_bus_{bus['id']}"):
-                            if st.session_state.get(f'confirm_delete_bus_{bus["id"]}', False):
-                                delete_bus(bus['id'])
-                                st.success(f"Bus {bus['bus_number']} deleted")
-                                st.rerun()
-                            else:
-                                st.session_state[f'confirm_delete_bus_{bus["id"]}'] = True
-                                st.warning("Click again to confirm")
-                    
-                    # Edit Form
-                    if st.session_state.get(f'edit_bus_{bus["id"]}', False):
-                        st.markdown("---")
-                        with st.form(f"edit_bus_form_{bus['id']}"):
-                            edit_col1, edit_col2 = st.columns(2)
-                            
-                            with edit_col1:
-                                edit_bus_number = st.text_input("Bus Number", value=bus['bus_number'])
-                                edit_registration = st.text_input("Registration Number", 
-                                    value=bus.get('registration_number') or '')
-                                edit_model = st.text_input("Model", value=bus['model'])
-                                edit_capacity = st.number_input("Capacity", value=bus['capacity'], min_value=1)
-                            
-                            with edit_col2:
-                                edit_year = st.number_input("Year", value=bus['year'] or 2020, min_value=1900, max_value=2030)
-                                edit_status = st.selectbox("Status", ["Active", "Maintenance", "Inactive"], 
-                                                          index=["Active", "Maintenance", "Inactive"].index(bus['status']))
-                            
-                            edit_notes = st.text_area("Notes", value=bus.get('notes') or "")
-                            
-                            col_save, col_cancel = st.columns(2)
-                            
-                            with col_save:
-                                save_btn = st.form_submit_button("💾 Save", width="stretch")
-                            with col_cancel:
-                                cancel_btn = st.form_submit_button("❌ Cancel", width="stretch")
-                            
-                            if save_btn:
-                                update_bus(bus['id'], edit_bus_number, edit_model, edit_capacity, 
-                                         edit_year, edit_status, edit_notes, registration_number=edit_registration)
-                                st.success("✅ Bus updated successfully!")
-                                st.session_state[f'edit_bus_{bus["id"]}'] = False
-                                st.rerun()
-                            
-                            if cancel_btn:
-                                st.session_state[f'edit_bus_{bus["id"]}'] = False
-                                st.rerun()
-        else:
-            st.info("🔭 No buses added yet. Add your first bus above!")
+    tab1, tab2 = st.tabs(["🛣️ Routes", "📋 Daily Assignments"])
     
     # ========== ROUTES TAB ==========
-    with tab2:
+    with tab1:
         st.subheader("🛣️ Routes Management")
         
         # Add Route Form
@@ -327,7 +200,7 @@ def buses_routes_management_page():
         
         if routes:
             st.subheader(f"📋 Routes List ({len(routes)} routes)")
-            st.info("💡 **Note:** The 'Hire' route is automatically available for hire jobs. You don't need to add it here.")
+            st.info("💡 **Note:** The 'Hire' route is automatically available for hire jobs.")
             
             for route in routes:
                 with st.expander(f"🛣️ {route['name']}"):
@@ -380,163 +253,155 @@ def buses_routes_management_page():
                                 st.rerun()
         else:
             st.info("🔭 No routes added yet. Add your first route above!")
-
-
-# ============================================================================
-# BUS ASSIGNMENTS PAGE - FIXED with database abstraction
-# ============================================================================
-
-def bus_assignments_page():
-    """Assign drivers and conductors to buses - REFERENCES HR employees only"""
     
-    st.header("📋 Bus Assignments")
-    st.markdown("Assign drivers and conductors to buses (employees managed in HR)")
-    st.markdown("---")
-    
-    # Check if we have employees - using database abstraction
-    drivers = get_active_drivers()
-    conductors = get_active_conductors()
-    buses = get_active_buses()
-    
-    if not drivers:
-        st.warning("⚠️ No active drivers found. Please add drivers in **HR > Employee Management** first.")
-        return
-    
-    if not conductors:
-        st.warning("⚠️ No active conductors found. Please add conductors in **HR > Employee Management** first.")
-        return
-    
-    if not buses:
-        st.warning("⚠️ No active buses found. Please add buses in **Fleet Management** first.")
-        return
-    
-    # Date selector
-    assignment_date = st.date_input("📅 Assignment Date", datetime.now())
-    
-    st.markdown("---")
-    
-    # Add Assignment Form
-    with st.expander("➕ Create New Assignment", expanded=True):
-        with st.form("assignment_form"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # Bus dropdown
-                bus_options = [get_bus_display_option(bus) for bus in buses]
-                selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
-                bus_number = extract_bus_number_from_option(selected_bus)
-                
-                # Driver dropdown
-                driver_options = [format_employee_option(d) for d in drivers]
-                selected_driver = st.selectbox("👨‍✈️ Select Driver*", driver_options)
-                driver_employee_id = extract_employee_id_from_option(selected_driver)
-                
-                # Route
-                routes = get_all_routes()
-                route_options = ["Hire"] + [r['name'] for r in routes]
-                selected_route = st.selectbox("🛣️ Route", route_options)
-            
-            with col2:
-                # Conductor dropdown
-                conductor_options = [format_employee_option(c) for c in conductors]
-                selected_conductor = st.selectbox("👨‍💼 Select Conductor*", conductor_options)
-                conductor_employee_id = extract_employee_id_from_option(selected_conductor)
-                
-                # Shift
-                shift = st.selectbox("⏰ Shift", ["Full Day", "Morning", "Afternoon", "Night"])
-            
-            notes = st.text_area("📝 Notes", placeholder="Any special instructions...")
-            
-            submit_assignment = st.form_submit_button("➕ Create Assignment", width="stretch", type="primary")
-            
-            if submit_assignment:
-                # Check if assignment already exists
-                existing = get_assignments_by_date(assignment_date.strftime("%Y-%m-%d"))
-                bus_already_assigned = any(a['bus_number'] == bus_number for a in existing) if existing else False
-                
-                if bus_already_assigned:
-                    st.error(f"❌ Assignment already exists for {bus_number} on {assignment_date}")
-                else:
-                    assignment_id = add_bus_assignment(
-                        bus_number=bus_number,
-                        driver_employee_id=driver_employee_id,
-                        conductor_employee_id=conductor_employee_id,
-                        assignment_date=assignment_date.strftime("%Y-%m-%d"),
-                        shift=shift,
-                        route=selected_route,
-                        notes=notes,
-                        created_by=st.session_state['user']['username']
-                    )
-                    
-                    if assignment_id:
-                        AuditLogger.log_action(
-                            action_type="Add",
-                            module="Assignment",
-                            description=f"Assignment created: {bus_number} - Driver: {driver_employee_id}, Conductor: {conductor_employee_id}",
-                            affected_table="bus_assignments"
-                        )
-                        st.success("✅ Assignment created successfully!")
-                        st.rerun()
-                    else:
-                        st.error("❌ Error creating assignment")
-    
-    st.markdown("---")
-    
-    # Display Assignments for selected date
-    st.subheader(f"📋 Assignments for {assignment_date.strftime('%B %d, %Y')}")
-    
-    assignments = get_assignments_by_date(assignment_date.strftime("%Y-%m-%d"))
-    
-    if assignments:
-        st.success(f"✅ {len(assignments)} assignment(s) found")
+    # ========== ASSIGNMENTS TAB ==========
+    with tab2:
+        st.subheader("📋 Daily Bus Assignments")
         
-        for assignment in assignments:
-            # Handle both dict and tuple formats
-            if isinstance(assignment, dict):
-                assign_id = assignment['id']
-                bus_num = assignment['bus_number']
-                driver_name = assignment.get('driver_name', 'N/A')
-                conductor_name = assignment.get('conductor_name', 'N/A')
-                shift = assignment.get('shift', 'N/A')
-                route = assignment.get('route', 'N/A')
-                notes_text = assignment.get('notes', '')
-                driver_emp_id = assignment.get('driver_employee_id', 'N/A')
-                conductor_emp_id = assignment.get('conductor_employee_id', 'N/A')
-            else:
-                assign_id, bus_num, driver_name, conductor_name, date, shift, route, notes_text, driver_emp_id, conductor_emp_id = assignment
-            
-            with st.expander(f"🚌 {bus_num} - {driver_name} & {conductor_name}"):
-                col_a, col_b = st.columns([3, 1])
+        # Check if we have employees - using database abstraction
+        drivers = get_active_drivers()
+        conductors = get_active_conductors()
+        buses = get_active_buses()
+        
+        if not drivers:
+            st.warning("⚠️ No active drivers found. Please add drivers in **HR > Employee Management** first.")
+            return
+        
+        if not conductors:
+            st.warning("⚠️ No active conductors found. Please add conductors in **HR > Employee Management** first.")
+            return
+        
+        if not buses:
+            st.warning("⚠️ No active buses found. Please add buses in **Fleet Management** first.")
+            return
+        
+        # Date selector
+        assignment_date = st.date_input("📅 Assignment Date", datetime.now())
+        
+        st.markdown("---")
+        
+        # Add Assignment Form
+        with st.expander("➕ Create New Assignment", expanded=True):
+            with st.form("assignment_form"):
+                col1, col2 = st.columns(2)
                 
-                with col_a:
-                    st.write(f"**Bus:** {bus_num}")
-                    st.write(f"**Driver:** {driver_name} ({driver_emp_id})")
-                    st.write(f"**Conductor:** {conductor_name} ({conductor_emp_id})")
-                    st.write(f"**Shift:** {shift}")
-                    st.write(f"**Route:** {route}")
-                    if notes_text:
-                        st.write(f"**Notes:** {notes_text}")
+                with col1:
+                    # Bus dropdown
+                    bus_options = [get_bus_display_option(bus) for bus in buses]
+                    selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
+                    bus_number = extract_bus_number_from_option(selected_bus)
+                    
+                    # Driver dropdown
+                    driver_options = [format_employee_option(d) for d in drivers]
+                    selected_driver = st.selectbox("👨‍✈️ Select Driver*", driver_options)
+                    driver_employee_id = extract_employee_id_from_option(selected_driver)
+                    
+                    # Route
+                    routes_list = get_all_routes()
+                    route_options = ["Hire"] + [r['name'] for r in routes_list]
+                    selected_route = st.selectbox("🛣️ Route", route_options)
                 
-                with col_b:
-                    if st.button("🗑️ Delete", key=f"del_assign_{assign_id}"):
-                        if st.session_state.get(f'confirm_del_assign_{assign_id}', False):
-                            delete_bus_assignment(assign_id)
-                            
+                with col2:
+                    # Conductor dropdown
+                    conductor_options = [format_employee_option(c) for c in conductors]
+                    selected_conductor = st.selectbox("👨‍💼 Select Conductor*", conductor_options)
+                    conductor_employee_id = extract_employee_id_from_option(selected_conductor)
+                    
+                    # Shift
+                    shift = st.selectbox("⏰ Shift", ["Full Day", "Morning", "Afternoon", "Night"])
+                
+                notes = st.text_area("📝 Notes", placeholder="Any special instructions...")
+                
+                submit_assignment = st.form_submit_button("➕ Create Assignment", width="stretch", type="primary")
+                
+                if submit_assignment:
+                    # Check if assignment already exists
+                    existing = get_assignments_by_date(assignment_date.strftime("%Y-%m-%d"))
+                    bus_already_assigned = any(a['bus_number'] == bus_number for a in existing) if existing else False
+                    
+                    if bus_already_assigned:
+                        st.error(f"❌ Assignment already exists for {bus_number} on {assignment_date}")
+                    else:
+                        assignment_id = add_bus_assignment(
+                            bus_number=bus_number,
+                            driver_employee_id=driver_employee_id,
+                            conductor_employee_id=conductor_employee_id,
+                            assignment_date=assignment_date.strftime("%Y-%m-%d"),
+                            shift=shift,
+                            route=selected_route,
+                            notes=notes,
+                            created_by=st.session_state['user']['username']
+                        )
+                        
+                        if assignment_id:
                             AuditLogger.log_action(
-                                action_type="Delete",
+                                action_type="Add",
                                 module="Assignment",
-                                description=f"Assignment deleted: {bus_num}",
-                                affected_table="bus_assignments",
-                                affected_record_id=assign_id
+                                description=f"Assignment created: {bus_number} - Driver: {driver_employee_id}, Conductor: {conductor_employee_id}",
+                                affected_table="bus_assignments"
                             )
-                            
-                            st.success("Assignment deleted")
+                            st.success("✅ Assignment created successfully!")
                             st.rerun()
                         else:
-                            st.session_state[f'confirm_del_assign_{assign_id}'] = True
-                            st.warning("Click again to confirm")
-    else:
-        st.info(f"ℹ️ No assignments for {assignment_date.strftime('%B %d, %Y')}. Create one above!")
+                            st.error("❌ Error creating assignment")
+        
+        st.markdown("---")
+        
+        # Display Assignments for selected date
+        st.subheader(f"📋 Assignments for {assignment_date.strftime('%B %d, %Y')}")
+        
+        assignments = get_assignments_by_date(assignment_date.strftime("%Y-%m-%d"))
+        
+        if assignments:
+            st.success(f"✅ {len(assignments)} assignment(s) found")
+            
+            for assignment in assignments:
+                # Handle both dict and tuple formats
+                if isinstance(assignment, dict):
+                    assign_id = assignment['id']
+                    bus_num = assignment['bus_number']
+                    driver_name = assignment.get('driver_name', 'N/A')
+                    conductor_name = assignment.get('conductor_name', 'N/A')
+                    shift = assignment.get('shift', 'N/A')
+                    route = assignment.get('route', 'N/A')
+                    notes_text = assignment.get('notes', '')
+                    driver_emp_id = assignment.get('driver_employee_id', 'N/A')
+                    conductor_emp_id = assignment.get('conductor_employee_id', 'N/A')
+                else:
+                    assign_id, bus_num, driver_name, conductor_name, date, shift, route, notes_text, driver_emp_id, conductor_emp_id = assignment
+                
+                with st.expander(f"🚌 {bus_num} - {driver_name} & {conductor_name}"):
+                    col_a, col_b = st.columns([3, 1])
+                    
+                    with col_a:
+                        st.write(f"**Bus:** {bus_num}")
+                        st.write(f"**Driver:** {driver_name} ({driver_emp_id})")
+                        st.write(f"**Conductor:** {conductor_name} ({conductor_emp_id})")
+                        st.write(f"**Shift:** {shift}")
+                        st.write(f"**Route:** {route}")
+                        if notes_text:
+                            st.write(f"**Notes:** {notes_text}")
+                    
+                    with col_b:
+                        if st.button("🗑️ Delete", key=f"del_assign_{assign_id}"):
+                            if st.session_state.get(f'confirm_del_assign_{assign_id}', False):
+                                delete_bus_assignment(assign_id)
+                                
+                                AuditLogger.log_action(
+                                    action_type="Delete",
+                                    module="Assignment",
+                                    description=f"Assignment deleted: {bus_num}",
+                                    affected_table="bus_assignments",
+                                    affected_record_id=assign_id
+                                )
+                                
+                                st.success("Assignment deleted")
+                                st.rerun()
+                            else:
+                                st.session_state[f'confirm_del_assign_{assign_id}'] = True
+                                st.warning("Click again to confirm")
+        else:
+            st.info(f"ℹ️ No assignments for {assignment_date.strftime('%B %d, %Y')}. Create one above!")
 
 
 # ============================================================================

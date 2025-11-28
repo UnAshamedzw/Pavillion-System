@@ -181,12 +181,34 @@ def manage_buses():
     elif action == "Add New Bus":
         st.markdown("### Add New Bus")
         
+        # Auto-generate bus number
+        cursor = conn.cursor()
+        if USE_POSTGRES:
+            cursor.execute("SELECT bus_number FROM buses WHERE bus_number LIKE 'BUS%' ORDER BY bus_number DESC LIMIT 1")
+        else:
+            cursor.execute("SELECT bus_number FROM buses WHERE bus_number LIKE 'BUS%' ORDER BY bus_number DESC LIMIT 1")
+        
+        result = cursor.fetchone()
+        if result:
+            last_num = result['bus_number'] if hasattr(result, 'keys') else result[0]
+            try:
+                # Extract number from BUS001, BUS002, etc.
+                num = int(last_num.replace('BUS', ''))
+                next_bus_number = f"BUS{num + 1:03d}"
+            except:
+                next_bus_number = "BUS001"
+        else:
+            next_bus_number = "BUS001"
+        
+        st.info(f"🔢 Next Bus Number: **{next_bus_number}** (auto-generated)")
+        
         with st.form("add_bus_form"):
             col1, col2 = st.columns(2)
             
             with col1:
-                bus_number = st.text_input("Bus Number *", placeholder="e.g., BUS001")
-                registration = st.text_input("Registration Number", placeholder="e.g., ABC-1234")
+                # Show auto-generated bus number (read-only display)
+                st.text_input("Bus Number (Auto-generated)", value=next_bus_number, disabled=True)
+                registration = st.text_input("Registration Number *", placeholder="e.g., ABC-1234")
                 make = st.text_input("Make", placeholder="e.g., Mercedes")
                 model = st.text_input("Model", placeholder="e.g., Sprinter")
                 year = st.number_input("Year", min_value=1990, max_value=datetime.now().year + 1, value=2020)
@@ -207,8 +229,8 @@ def manage_buses():
             submitted = st.form_submit_button("➕ Add Bus", width="stretch")
             
             if submitted:
-                if not bus_number:
-                    st.error("Bus number is required!")
+                if not registration:
+                    st.error("Registration number is required!")
                 else:
                     try:
                         cursor = conn.cursor()
@@ -221,7 +243,7 @@ def manage_buses():
                                     passenger_insurance_expiry, fitness_expiry, route_permit_expiry
                                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """, (
-                                bus_number, registration, make, model, year, capacity,
+                                next_bus_number, registration, make, model, year, capacity,
                                 status, purchase_date, purchase_cost,
                                 zinara_expiry, vehicle_insurance, passenger_insurance,
                                 fitness_expiry, route_permit
@@ -235,19 +257,19 @@ def manage_buses():
                                     passenger_insurance_expiry, fitness_expiry, route_permit_expiry
                                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                             """, (
-                                bus_number, registration, make, model, year, capacity,
+                                next_bus_number, registration, make, model, year, capacity,
                                 status, purchase_date, purchase_cost,
                                 zinara_expiry, vehicle_insurance, passenger_insurance,
                                 fitness_expiry, route_permit
                             ))
                         conn.commit()
-                        st.success(f"✅ Bus {bus_number} added successfully!")
+                        st.success(f"✅ Bus {next_bus_number} added successfully!")
                         
-                        AuditLogger.log_action("Create", "Fleet Management", f"Added new bus: {bus_number}")
+                        AuditLogger.log_action("Create", "Fleet Management", f"Added new bus: {next_bus_number}")
                         st.rerun()
                     except Exception as e:
                         if "unique" in str(e).lower() or "duplicate" in str(e).lower():
-                            st.error(f"Bus number {bus_number} already exists!")
+                            st.error(f"Bus number {next_bus_number} already exists!")
                         else:
                             st.error(f"Error adding bus: {e}")
     
