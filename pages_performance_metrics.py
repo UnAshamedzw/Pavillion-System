@@ -87,7 +87,7 @@ def get_performance_data(start_date, end_date):
     # Driver data - handle if table doesn't exist
     try:
         if table_exists(conn, 'drivers'):
-            drivers_df = pd.read_sql_query("SELECT * FROM drivers", conn)
+            drivers_df = pd.read_sql_query("SELECT * FROM drivers", get_engine())
         else:
             # Create drivers_df from income data
             if not income_df.empty and 'driver_name' in income_df.columns:
@@ -105,7 +105,7 @@ def get_performance_data(start_date, end_date):
     # Conductor data - handle if table doesn't exist
     try:
         if table_exists(conn, 'conductors'):
-            conductors_df = pd.read_sql_query("SELECT * FROM conductors", conn)
+            conductors_df = pd.read_sql_query("SELECT * FROM conductors", get_engine())
         else:
             # Create conductors_df from income data
             if not income_df.empty and 'conductor_name' in income_df.columns:

@@ -10,6 +10,45 @@ from auth import (
 )
 from audit_logger import AuditLogger
 from datetime import datetime
+from database import USE_POSTGRES
+
+
+def get_user_value(user, key_or_index, default=None):
+    """Get value from user row - works with both dict (PostgreSQL) and tuple (SQLite)"""
+    if hasattr(user, 'keys'):
+        # Dict-like (PostgreSQL)
+        if isinstance(key_or_index, str):
+            return user.get(key_or_index, default)
+        else:
+            # Map index to column name
+            columns = ['id', 'username', 'full_name', 'role', 'email', 'created_at', 'last_login', 'is_active']
+            if key_or_index < len(columns):
+                return user.get(columns[key_or_index], default)
+            return default
+    else:
+        # Tuple (SQLite)
+        try:
+            return user[key_or_index] if isinstance(key_or_index, int) else default
+        except (IndexError, TypeError):
+            return default
+
+
+def unpack_user(user):
+    """Unpack user row into tuple regardless of format"""
+    if hasattr(user, 'keys'):
+        return (
+            user.get('id'),
+            user.get('username'),
+            user.get('full_name'),
+            user.get('role'),
+            user.get('email'),
+            user.get('created_at'),
+            user.get('last_login'),
+            user.get('is_active')
+        )
+    else:
+        return tuple(list(user) + [None] * (8 - len(user)))[:8]
+
 
 def user_management_page():
     """
@@ -40,16 +79,16 @@ def user_management_page():
             with col1:
                 st.metric("📊 Total Users", len(users))
             with col2:
-                active_count = sum(1 for u in users if u[7] == 1)
+                active_count = sum(1 for u in users if get_user_value(u, 'is_active') == 1 or get_user_value(u, 7) == 1)
                 st.metric("✅ Active Users", active_count)
             with col3:
-                admin_count = sum(1 for u in users if u[3] == 'Admin')
+                admin_count = sum(1 for u in users if get_user_value(u, 'role') == 'Admin' or get_user_value(u, 3) == 'Admin')
                 st.metric("👑 Administrators", admin_count)
             
             st.markdown("---")
             
             for user in users:
-                user_id, username, full_name, role, email, created_at, last_login, is_active = user
+                user_id, username, full_name, role, email, created_at, last_login, is_active = unpack_user(user)
                 
                 # Status indicator
                 status_icon = "✅" if is_active else "❌"
@@ -477,11 +516,17 @@ def my_profile_page():
     
     with col_stat1:
         if account_info:
-            st.metric("📅 Member Since", account_info[0][:10])
+            created = account_info.get('created_at') if hasattr(account_info, 'keys') else account_info[0]
+            if created:
+                st.metric("📅 Member Since", str(created)[:10])
     
     with col_stat2:
-        if account_info and account_info[1]:
-            st.metric("🕐 Last Login", account_info[1][:16])
+        if account_info:
+            last_login = account_info.get('last_login') if hasattr(account_info, 'keys') else account_info[1]
+            if last_login:
+                st.metric("🕐 Last Login", str(last_login)[:16])
+            else:
+                st.metric("🕐 Last Login", "Current session")
         else:
             st.metric("🕐 Last Login", "Current session")
     

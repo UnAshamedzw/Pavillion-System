@@ -1207,7 +1207,7 @@ def employee_performance_page():
         
         conn = get_connection()
         try:
-            employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", conn)
+            employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", get_engine())
         except:
             employees_df = pd.DataFrame()
         conn.close()
@@ -1444,7 +1444,7 @@ def payroll_management_page():
         # Get employees
         conn = get_connection()
         try:
-            employees_df = pd.read_sql_query("SELECT employee_id, full_name, position, salary FROM employees WHERE status = 'Active'", conn)
+            employees_df = pd.read_sql_query("SELECT employee_id, full_name, position, salary FROM employees WHERE status = 'Active'", get_engine())
         except:
             employees_df = pd.DataFrame()
         conn.close()
@@ -1715,7 +1715,7 @@ def leave_management_page():
         # Get employees
         conn = get_connection()
         try:
-            employees_df = pd.read_sql_query("SELECT employee_id, full_name FROM employees WHERE status = 'Active'", conn)
+            employees_df = pd.read_sql_query("SELECT employee_id, full_name FROM employees WHERE status = 'Active'", get_engine())
         except:
             employees_df = pd.DataFrame()
         conn.close()
@@ -1986,7 +1986,7 @@ def disciplinary_records_page():
         # Get employees
         conn = get_connection()
         try:
-            employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", conn)
+            employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", get_engine())
         except:
             employees_df = pd.DataFrame()
         conn.close()

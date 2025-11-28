@@ -1434,7 +1434,7 @@ def revenue_history_page():
         
         maint_df = pd.read_sql_query(
             maint_query,
-            conn,
+            get_engine(),
             params=(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
         )
         # Convert cost to numeric
