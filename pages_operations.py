@@ -20,7 +20,7 @@ import io
 
 # FIXED: Import all needed functions from database.py (no direct sqlite3 usage!)
 from database import (
-    get_connection, USE_POSTGRES,
+    get_connection, get_engine, USE_POSTGRES,
     get_all_buses, get_active_buses, add_bus, update_bus, delete_bus,
     get_all_routes, add_route, update_route, delete_route,
     get_active_drivers, get_active_conductors, get_active_mechanics,
