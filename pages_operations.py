@@ -1419,7 +1419,7 @@ def revenue_history_page():
         
         query += " ORDER BY date DESC"
         
-        income_df = pd.read_sql_query(query, get_engine(), params=params)
+        income_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
         # Convert amount to numeric
         if 'amount' in income_df.columns:
             income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
@@ -1660,7 +1660,7 @@ def dashboard_page():
             maint_daily = pd.DataFrame(columns=['date', 'expenses'])
         
         if not income_daily.empty or not maint_daily.empty:
-            combined = pd.merge(income_daily, maint_daily, on='date', how='outer').fillna(0)
+            combined = pd.merge(income_daily, maint_daily, on='date', how='outer').fillna(0).infer_objects(copy=False)
             combined['profit'] = combined['revenue'] - combined['expenses']
             combined = combined.sort_values('date')
             

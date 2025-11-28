@@ -53,7 +53,7 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
         income_query += f" AND conductor_name = {ph}"
         income_params.append(conductor)
     
-    income_df = pd.read_sql_query(income_query, get_engine(), params=income_params)
+    income_df = pd.read_sql_query(income_query, get_engine(), params=tuple(income_params) if income_params else None)
     
     # Convert amount to numeric if needed
     if 'amount' in income_df.columns:
@@ -75,7 +75,7 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
         maint_query += f" AND date <= {ph}"
         maint_params.append(end_date)
     
-    maintenance_df = pd.read_sql_query(maint_query, get_engine(), params=maint_params)
+    maintenance_df = pd.read_sql_query(maint_query, get_engine(), params=tuple(maint_params) if maint_params else None)
     
     # Convert cost to numeric if needed
     if 'cost' in maintenance_df.columns:

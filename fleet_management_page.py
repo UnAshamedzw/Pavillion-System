@@ -212,32 +212,48 @@ def manage_buses():
                 else:
                     try:
                         cursor = conn.cursor()
-                        cursor.execute("""
-                            INSERT INTO buses (
-                                bus_number, registration_number, make, model, year, capacity,
+                        if USE_POSTGRES:
+                            cursor.execute("""
+                                INSERT INTO buses (
+                                    bus_number, registration_number, make, model, year, capacity,
+                                    status, purchase_date, purchase_cost,
+                                    zinara_licence_expiry, vehicle_insurance_expiry,
+                                    passenger_insurance_expiry, fitness_expiry, route_permit_expiry
+                                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            """, (
+                                bus_number, registration, make, model, year, capacity,
                                 status, purchase_date, purchase_cost,
-                                zinara_licence_expiry, vehicle_insurance_expiry,
-                                passenger_insurance_expiry, fitness_expiry, route_permit_expiry
-                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (
-                            bus_number, registration, make, model, year, capacity,
-                            status, purchase_date, purchase_cost,
-                            zinara_expiry, vehicle_insurance, passenger_insurance,
-                            fitness_expiry, route_permit
-                        ))
+                                zinara_expiry, vehicle_insurance, passenger_insurance,
+                                fitness_expiry, route_permit
+                            ))
+                        else:
+                            cursor.execute("""
+                                INSERT INTO buses (
+                                    bus_number, registration_number, make, model, year, capacity,
+                                    status, purchase_date, purchase_cost,
+                                    zinara_licence_expiry, vehicle_insurance_expiry,
+                                    passenger_insurance_expiry, fitness_expiry, route_permit_expiry
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                bus_number, registration, make, model, year, capacity,
+                                status, purchase_date, purchase_cost,
+                                zinara_expiry, vehicle_insurance, passenger_insurance,
+                                fitness_expiry, route_permit
+                            ))
                         conn.commit()
                         st.success(f"✅ Bus {bus_number} added successfully!")
                         
                         AuditLogger.log_action("Create", "Fleet Management", f"Added new bus: {bus_number}")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Bus number {bus_number} already exists!")
-                    except Exception as e:
-                        st.error(f"Error adding bus: {e}")
+                        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+                            st.error(f"Bus number {bus_number} already exists!")
+                        else:
+                            st.error(f"Error adding bus: {e}")
     
     elif action == "Edit Bus":
         try:
-            buses_df = pd.read_sql_query("SELECT bus_number FROM buses ORDER BY bus_number", conn)
+            buses_df = pd.read_sql_query("SELECT bus_number FROM buses ORDER BY bus_number", get_engine())
             
             if buses_df.empty:
                 st.info("No buses to edit. Add a bus first!")
@@ -245,7 +261,8 @@ def manage_buses():
                 selected_bus = st.selectbox("Select Bus to Edit", buses_df['bus_number'].tolist())
                 
                 if selected_bus:
-                    bus_data = pd.read_sql_query(f"SELECT * FROM buses WHERE bus_number = ?", conn, params=[selected_bus])
+                    ph = '%s' if USE_POSTGRES else '?'
+                    bus_data = pd.read_sql_query(f"SELECT * FROM buses WHERE bus_number = {ph}", get_engine(), params=(selected_bus,))
                     bus = bus_data.iloc[0]
                     
                     with st.form("edit_bus_form"):
@@ -253,12 +270,12 @@ def manage_buses():
                         
                         with col1:
                             new_bus_number = st.text_input("Bus Number", value=bus['bus_number'])
-                            registration = st.text_input("Registration Number", value=bus.get('registration_number', ''))
-                            make = st.text_input("Make", value=bus.get('make', ''))
-                            model = st.text_input("Model", value=bus.get('model', ''))
-                            year = st.number_input("Year", min_value=1990, max_value=datetime.now().year + 1, value=int(bus.get('year', 2020)))
-                            capacity = st.number_input("Passenger Capacity", min_value=1, max_value=100, value=int(bus.get('capacity', 50)))
-                            status = st.selectbox("Status", ["Active", "Maintenance", "Inactive"], index=["Active", "Maintenance", "Inactive"].index(bus.get('status', 'Active')))
+                            registration = st.text_input("Registration Number", value=bus.get('registration_number', '') or '')
+                            make = st.text_input("Make", value=bus.get('make', '') or '')
+                            model = st.text_input("Model", value=bus.get('model', '') or '')
+                            year = st.number_input("Year", min_value=1990, max_value=datetime.now().year + 1, value=int(bus.get('year', 2020) or 2020))
+                            capacity = st.number_input("Passenger Capacity", min_value=1, max_value=100, value=int(bus.get('capacity', 50) or 50))
+                            status = st.selectbox("Status", ["Active", "Maintenance", "Inactive"], index=["Active", "Maintenance", "Inactive"].index(bus.get('status', 'Active') or 'Active'))
                         
                         with col2:
                             st.markdown("**📋 Document Expiry Dates**")
@@ -282,19 +299,34 @@ def manage_buses():
                         if submitted:
                             try:
                                 cursor = conn.cursor()
-                                cursor.execute("""
-                                    UPDATE buses SET
-                                        bus_number = ?, registration_number = ?, make = ?, model = ?,
-                                        year = ?, capacity = ?, status = ?,
-                                        zinara_licence_expiry = ?, vehicle_insurance_expiry = ?,
-                                        passenger_insurance_expiry = ?, fitness_expiry = ?, route_permit_expiry = ?,
-                                        updated_at = CURRENT_TIMESTAMP
-                                    WHERE bus_number = ?
-                                """, (
-                                    new_bus_number, registration, make, model, year, capacity, status,
-                                    zinara_expiry, vehicle_insurance, passenger_insurance,
-                                    fitness_expiry, route_permit, selected_bus
-                                ))
+                                if USE_POSTGRES:
+                                    cursor.execute("""
+                                        UPDATE buses SET
+                                            bus_number = %s, registration_number = %s, make = %s, model = %s,
+                                            year = %s, capacity = %s, status = %s,
+                                            zinara_licence_expiry = %s, vehicle_insurance_expiry = %s,
+                                            passenger_insurance_expiry = %s, fitness_expiry = %s, route_permit_expiry = %s,
+                                            updated_at = CURRENT_TIMESTAMP
+                                        WHERE bus_number = %s
+                                    """, (
+                                        new_bus_number, registration, make, model, year, capacity, status,
+                                        zinara_expiry, vehicle_insurance, passenger_insurance,
+                                        fitness_expiry, route_permit, selected_bus
+                                    ))
+                                else:
+                                    cursor.execute("""
+                                        UPDATE buses SET
+                                            bus_number = ?, registration_number = ?, make = ?, model = ?,
+                                            year = ?, capacity = ?, status = ?,
+                                            zinara_licence_expiry = ?, vehicle_insurance_expiry = ?,
+                                            passenger_insurance_expiry = ?, fitness_expiry = ?, route_permit_expiry = ?,
+                                            updated_at = CURRENT_TIMESTAMP
+                                        WHERE bus_number = ?
+                                    """, (
+                                        new_bus_number, registration, make, model, year, capacity, status,
+                                        zinara_expiry, vehicle_insurance, passenger_insurance,
+                                        fitness_expiry, route_permit, selected_bus
+                                    ))
                                 conn.commit()
                                 st.success(f"✅ Bus {selected_bus} updated successfully!")
                                 

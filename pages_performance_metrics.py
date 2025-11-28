@@ -42,7 +42,7 @@ def get_performance_data(start_date, end_date):
             SELECT * FROM income 
             WHERE date >= {ph} AND date <= {ph}
         """
-        income_df = pd.read_sql_query(income_query, get_engine(), params=[start_date, end_date])
+        income_df = pd.read_sql_query(income_query, get_engine(), params=(start_date, end_date))
         # Convert amount to numeric
         if 'amount' in income_df.columns:
             income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
@@ -56,7 +56,7 @@ def get_performance_data(start_date, end_date):
             SELECT * FROM maintenance 
             WHERE date >= {ph} AND date <= {ph}
         """
-        maintenance_df = pd.read_sql_query(maint_query, get_engine(), params=[start_date, end_date])
+        maintenance_df = pd.read_sql_query(maint_query, get_engine(), params=(start_date, end_date))
         # Convert cost to numeric
         if 'cost' in maintenance_df.columns:
             maintenance_df['cost'] = pd.to_numeric(maintenance_df['cost'], errors='coerce')

@@ -1078,7 +1078,7 @@ def employee_management_page():
             query += " AND status = ?"
             params.append(exp_status)
         
-        export_df = pd.read_sql_query(query, get_engine(), params=params)
+        export_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
         conn.close()
         
         if not export_df.empty:
@@ -1367,7 +1367,7 @@ def payroll_management_page():
         query += " ORDER BY p.created_at DESC"
         
         try:
-            payroll_df = pd.read_sql_query(query, get_engine(), params=params)
+            payroll_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
         except:
             payroll_df = pd.DataFrame()
             
@@ -1610,7 +1610,7 @@ def leave_management_page():
         query += " ORDER BY l.created_at DESC"
         
         try:
-            leave_df = pd.read_sql_query(query, get_engine(), params=params)
+            leave_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
         except:
             leave_df = pd.DataFrame()
             
@@ -1878,7 +1878,7 @@ def disciplinary_records_page():
         query += " ORDER BY d.created_at DESC"
         
         try:
-            disc_df = pd.read_sql_query(query, get_engine(), params=params)
+            disc_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
         except:
             disc_df = pd.DataFrame()
             
