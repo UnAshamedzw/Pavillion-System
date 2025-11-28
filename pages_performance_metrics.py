@@ -33,24 +33,33 @@ def get_performance_data(start_date, end_date):
     """Fetch all performance-related data with error handling for missing tables"""
     conn = get_connection()
     
+    # Use correct placeholder for database type
+    ph = '%s' if USE_POSTGRES else '?'
+    
     try:
         # Income data
-        income_query = """
+        income_query = f"""
             SELECT * FROM income 
-            WHERE date >= ? AND date <= ?
+            WHERE date >= {ph} AND date <= {ph}
         """
         income_df = pd.read_sql_query(income_query, conn, params=[start_date, end_date])
+        # Convert amount to numeric
+        if 'amount' in income_df.columns:
+            income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
     except Exception as e:
         st.error(f"Error loading income data: {e}")
         income_df = pd.DataFrame()
     
     try:
         # Maintenance data
-        maint_query = """
+        maint_query = f"""
             SELECT * FROM maintenance 
-            WHERE date >= ? AND date <= ?
+            WHERE date >= {ph} AND date <= {ph}
         """
         maintenance_df = pd.read_sql_query(maint_query, conn, params=[start_date, end_date])
+        # Convert cost to numeric
+        if 'cost' in maintenance_df.columns:
+            maintenance_df['cost'] = pd.to_numeric(maintenance_df['cost'], errors='coerce')
     except Exception as e:
         st.warning(f"Maintenance table not found or empty: {e}")
         maintenance_df = pd.DataFrame()

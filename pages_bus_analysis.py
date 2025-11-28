@@ -21,54 +21,65 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
     """
     conn = get_connection()
     
+    # Use correct placeholder for database type
+    ph = '%s' if USE_POSTGRES else '?'
+    
     # Build income query
     income_query = "SELECT * FROM income WHERE 1=1"
     income_params = []
     
     if bus_number and bus_number != "All Buses":
-        income_query += " AND bus_number = ?"
+        income_query += f" AND bus_number = {ph}"
         income_params.append(bus_number)
     
     if start_date:
-        income_query += " AND date >= ?"
+        income_query += f" AND date >= {ph}"
         income_params.append(start_date)
     
     if end_date:
-        income_query += " AND date <= ?"
+        income_query += f" AND date <= {ph}"
         income_params.append(end_date)
     
     if route and route != "All Routes":
-        income_query += " AND route = ?"
+        income_query += f" AND route = {ph}"
         income_params.append(route)
     
     if driver and driver != "All Drivers":
-        income_query += " AND driver_name = ?"
+        income_query += f" AND driver_name = {ph}"
         income_params.append(driver)
     
     # NEW: Conductor filter
     if conductor and conductor != "All Conductors":
-        income_query += " AND conductor_name = ?"
+        income_query += f" AND conductor_name = {ph}"
         income_params.append(conductor)
     
     income_df = pd.read_sql_query(income_query, conn, params=income_params)
+    
+    # Convert amount to numeric if needed
+    if 'amount' in income_df.columns:
+        income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
     
     # Build maintenance query
     maint_query = "SELECT * FROM maintenance WHERE 1=1"
     maint_params = []
     
     if bus_number and bus_number != "All Buses":
-        maint_query += " AND bus_number = ?"
+        maint_query += f" AND bus_number = {ph}"
         maint_params.append(bus_number)
     
     if start_date:
-        maint_query += " AND date >= ?"
+        maint_query += f" AND date >= {ph}"
         maint_params.append(start_date)
     
     if end_date:
-        maint_query += " AND date <= ?"
+        maint_query += f" AND date <= {ph}"
         maint_params.append(end_date)
     
     maintenance_df = pd.read_sql_query(maint_query, conn, params=maint_params)
+    
+    # Convert cost to numeric if needed
+    if 'cost' in maintenance_df.columns:
+        maintenance_df['cost'] = pd.to_numeric(maintenance_df['cost'], errors='coerce')
     
     conn.close()
     

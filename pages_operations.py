@@ -1420,6 +1420,9 @@ def revenue_history_page():
         query += " ORDER BY date DESC"
         
         income_df = pd.read_sql_query(query, conn, params=params)
+        # Convert amount to numeric
+        if 'amount' in income_df.columns:
+            income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
     else:
         income_df = pd.DataFrame()
     
@@ -1434,6 +1437,9 @@ def revenue_history_page():
             conn,
             params=(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
         )
+        # Convert cost to numeric
+        if 'cost' in maint_df.columns:
+            maint_df['cost'] = pd.to_numeric(maint_df['cost'], errors='coerce')
     else:
         maint_df = pd.DataFrame()
     
@@ -1604,6 +1610,12 @@ def dashboard_page():
             "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
             conn, params=(days_back,)
         )
+    
+    # Convert amount and cost to numeric
+    if 'amount' in income_df.columns:
+        income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
+    if 'cost' in maint_df.columns:
+        maint_df['cost'] = pd.to_numeric(maint_df['cost'], errors='coerce')
     
     conn.close()
     
