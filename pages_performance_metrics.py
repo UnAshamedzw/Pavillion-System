@@ -396,7 +396,11 @@ def create_efficiency_metrics_chart(income_df, maintenance_df):
         'maintenance': bus_maintenance
     }).fillna(0)
     
-    efficiency_df['efficiency_ratio'] = (efficiency_df['revenue'] / efficiency_df['maintenance']).replace([np.inf, -np.inf], 0)
+    # Safe division - avoid division by zero
+    efficiency_df['efficiency_ratio'] = efficiency_df.apply(
+        lambda row: row['revenue'] / row['maintenance'] if row['maintenance'] > 0 else 0,
+        axis=1
+    )
     efficiency_df = efficiency_df.sort_values('efficiency_ratio', ascending=False).head(15)
     efficiency_df = efficiency_df.reset_index()
     
