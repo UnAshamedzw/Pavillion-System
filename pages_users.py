@@ -224,7 +224,7 @@ def user_management_page():
             with col_perm3:
                 st.info("**Admin:**\n- All permissions\n- User management\n- System settings")
             
-            submitted = st.form_submit_button("➕ Create User", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("➕ Create User", width="stretch", type="primary")
             
             if submitted:
                 # Validation
@@ -282,7 +282,7 @@ def user_management_page():
             st.markdown("**Password Requirements:**")
             st.markdown("- ✅ Minimum 6 characters\n- ✅ Must not match current password")
             
-            submitted = st.form_submit_button("🔑 Change Password", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("🔑 Change Password", width="stretch", type="primary")
             
             if submitted:
                 if not all([old_password, new_password, confirm_new_password]):
@@ -439,7 +439,7 @@ def my_profile_page():
             import pandas as pd
             
             df = pd.DataFrame(summary, columns=['Action Type', 'Count'])
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width="stretch")
             
             # Link to full activity page
             st.info("💡 View your complete activity history in **System → My Activity**")

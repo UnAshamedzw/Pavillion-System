@@ -5,7 +5,7 @@ Drivers and Conductors are managed in HR > Employee Management
 
 import streamlit as st
 import pandas as pd
-from database import get_connection, USE_POSTGRES
+from database import get_connection, get_engine, USE_POSTGRES
 from datetime import datetime, timedelta
 from audit_logger import AuditLogger
 
@@ -60,7 +60,7 @@ def get_expiring_documents(days_threshold=30):
             FROM buses
             WHERE status = 'Active'
         """
-        buses_df = pd.read_sql_query(buses_query, conn)
+        buses_df = pd.read_sql_query(buses_query, get_engine())
         
         for _, bus in buses_df.iterrows():
             documents = {
@@ -155,12 +155,12 @@ def manage_buses():
     
     if action == "View All Buses":
         try:
-            buses_df = pd.read_sql_query("SELECT * FROM buses ORDER BY bus_number", conn)
+            buses_df = pd.read_sql_query("SELECT * FROM buses ORDER BY bus_number", get_engine())
             
             if buses_df.empty:
                 st.info("No buses found. Add your first bus!")
             else:
-                st.dataframe(buses_df, use_container_width=True, height=400)
+                st.dataframe(buses_df, width="stretch", height=400)
                 
                 # Summary metrics
                 col1, col2, col3, col4 = st.columns(4)
@@ -204,7 +204,7 @@ def manage_buses():
                 purchase_date = st.date_input("Purchase Date", value=datetime.now())
                 purchase_cost = st.number_input("Purchase Cost ($)", min_value=0.0, value=0.0, step=1000.0)
             
-            submitted = st.form_submit_button("➕ Add Bus", use_container_width=True)
+            submitted = st.form_submit_button("➕ Add Bus", width="stretch")
             
             if submitted:
                 if not bus_number:
@@ -277,7 +277,7 @@ def manage_buses():
                             fitness_expiry = st.date_input("Bus Fitness Expiry", value=parse_date(bus.get('fitness_expiry')))
                             route_permit = st.date_input("Route Authority Permit Expiry", value=parse_date(bus.get('route_permit_expiry')))
                         
-                        submitted = st.form_submit_button("💾 Update Bus", use_container_width=True)
+                        submitted = st.form_submit_button("💾 Update Bus", width="stretch")
                         
                         if submitted:
                             try:
@@ -330,7 +330,7 @@ def manage_buses():
             
             df['Status'] = df.apply(status_color, axis=1)
             
-            st.dataframe(df[['Status', 'item', 'document', 'expiry_date', 'days_remaining']], use_container_width=True, height=400)
+            st.dataframe(df[['Status', 'item', 'document', 'expiry_date', 'days_remaining']], width="stretch", height=400)
             
             # Statistics
             col1, col2, col3, col4 = st.columns(4)

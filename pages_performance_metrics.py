@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-from database import get_connection, USE_POSTGRES
+from database import get_connection, get_engine, USE_POSTGRES
 import numpy as np
 from audit_logger import AuditLogger
 
@@ -42,7 +42,7 @@ def get_performance_data(start_date, end_date):
             SELECT * FROM income 
             WHERE date >= {ph} AND date <= {ph}
         """
-        income_df = pd.read_sql_query(income_query, conn, params=[start_date, end_date])
+        income_df = pd.read_sql_query(income_query, get_engine(), params=[start_date, end_date])
         # Convert amount to numeric
         if 'amount' in income_df.columns:
             income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
@@ -56,7 +56,7 @@ def get_performance_data(start_date, end_date):
             SELECT * FROM maintenance 
             WHERE date >= {ph} AND date <= {ph}
         """
-        maintenance_df = pd.read_sql_query(maint_query, conn, params=[start_date, end_date])
+        maintenance_df = pd.read_sql_query(maint_query, get_engine(), params=[start_date, end_date])
         # Convert cost to numeric
         if 'cost' in maintenance_df.columns:
             maintenance_df['cost'] = pd.to_numeric(maintenance_df['cost'], errors='coerce')
@@ -67,7 +67,7 @@ def get_performance_data(start_date, end_date):
     # Bus fleet data - handle if table doesn't exist
     try:
         if table_exists(conn, 'buses'):
-            buses_df = pd.read_sql_query("SELECT * FROM buses", conn)
+            buses_df = pd.read_sql_query("SELECT * FROM buses", get_engine())
         else:
             # Create buses_df from income data
             if not income_df.empty and 'bus_number' in income_df.columns:
@@ -462,7 +462,7 @@ def performance_metrics_page():
             start_date = datetime(datetime.now().year, 1, 1).date()
     
     # Refresh button
-    if st.button("🔄 Refresh Metrics", type="primary", use_container_width=True):
+    if st.button("🔄 Refresh Metrics", type="primary", width="stretch"):
         st.rerun()
     
     st.markdown("---")
@@ -602,7 +602,7 @@ def performance_metrics_page():
         # Revenue trend
         fig_revenue_trend = create_revenue_trend_chart(income_df)
         if fig_revenue_trend:
-            st.plotly_chart(fig_revenue_trend, use_container_width=True)
+            st.plotly_chart(fig_revenue_trend, width="stretch")
         else:
             st.info("No revenue data available for trend analysis")
         
@@ -625,7 +625,7 @@ def performance_metrics_page():
         # Bus performance
         fig_bus_perf = create_bus_performance_chart(income_df)
         if fig_bus_perf:
-            st.plotly_chart(fig_bus_perf, use_container_width=True)
+            st.plotly_chart(fig_bus_perf, width="stretch")
         
         # Detailed bus metrics table
         if not income_df.empty:
@@ -645,13 +645,13 @@ def performance_metrics_page():
                 bus_metrics['Efficiency Ratio'] = (bus_metrics['Total Revenue'] / bus_metrics['Maintenance Cost']).replace([np.inf, -np.inf], 0)
             
             bus_metrics = bus_metrics.sort_values('Total Revenue', ascending=False)
-            st.dataframe(bus_metrics, use_container_width=True, height=400)
+            st.dataframe(bus_metrics, width="stretch", height=400)
     
     with tab3:
         # Route performance
         fig_route = create_route_performance_chart(income_df)
         if fig_route:
-            st.plotly_chart(fig_route, use_container_width=True)
+            st.plotly_chart(fig_route, width="stretch")
         else:
             st.info("Route data not available")
         
@@ -666,7 +666,7 @@ def performance_metrics_page():
             route_details.columns = ['Route', 'Total Revenue', 'Trips', 'Avg Revenue/Trip', 'Buses Used']
             route_details = route_details.sort_values('Total Revenue', ascending=False)
             
-            st.dataframe(route_details, use_container_width=True)
+            st.dataframe(route_details, width="stretch")
     
     with tab4:
         # Staff performance
@@ -676,13 +676,13 @@ def performance_metrics_page():
         
         with col_staff1:
             if driver_fig:
-                st.plotly_chart(driver_fig, use_container_width=True)
+                st.plotly_chart(driver_fig, width="stretch")
             else:
                 st.info("No driver data available")
         
         with col_staff2:
             if conductor_fig:
-                st.plotly_chart(conductor_fig, use_container_width=True)
+                st.plotly_chart(conductor_fig, width="stretch")
             else:
                 st.info("No conductor data available")
         
@@ -694,20 +694,20 @@ def performance_metrics_page():
             team_perf.columns = ['Driver', 'Conductor', 'Total Revenue', 'Trips', 'Avg Revenue']
             team_perf = team_perf.sort_values('Total Revenue', ascending=False).head(20)
             
-            st.dataframe(team_perf, use_container_width=True)
+            st.dataframe(team_perf, width="stretch")
     
     with tab5:
         # Maintenance analysis
         fig_maint = create_maintenance_analysis_chart(maintenance_df)
         if fig_maint:
-            st.plotly_chart(fig_maint, use_container_width=True)
+            st.plotly_chart(fig_maint, width="stretch")
         else:
             st.info("No maintenance data available")
         
         # Efficiency scatter plot
         fig_efficiency = create_efficiency_metrics_chart(income_df, maintenance_df)
         if fig_efficiency:
-            st.plotly_chart(fig_efficiency, use_container_width=True)
+            st.plotly_chart(fig_efficiency, width="stretch")
         
         # Efficiency metrics table
         if not income_df.empty and not maintenance_df.empty:
@@ -728,7 +728,7 @@ def performance_metrics_page():
             
             efficiency_table = efficiency_table.sort_values('Efficiency Ratio', ascending=False)
             
-            st.dataframe(efficiency_table, use_container_width=True, height=400)
+            st.dataframe(efficiency_table, width="stretch", height=400)
     
     st.markdown("---")
     

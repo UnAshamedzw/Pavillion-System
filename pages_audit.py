@@ -117,7 +117,7 @@ def activity_log_page():
                 start_date = None
         
         # Apply filters button
-        if st.button("🔍 Apply Filters", use_container_width=True):
+        if st.button("🔍 Apply Filters", width="stretch"):
             st.session_state['apply_log_filters'] = True
     
     st.markdown("---")
@@ -258,7 +258,7 @@ def activity_log_page():
                 data=csv_data,
                 file_name=f"activity_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                 mime="text/csv",
-                use_container_width=True
+                width="stretch"
             )
         
         with col_exp2:
@@ -268,7 +268,7 @@ def activity_log_page():
                 data=df.to_csv(index=False),  # You can use openpyxl for true Excel format
                 file_name=f"activity_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.ms-excel",
-                use_container_width=True
+                width="stretch"
             )
     
     else:
@@ -300,7 +300,7 @@ def activity_log_page():
                     {"Action Type": action, "Count": count}
                     for action, count in actions.items()
                 ])
-                st.dataframe(summary_df, use_container_width=True)
+                st.dataframe(summary_df, width="stretch")
 
 
 def user_activity_dashboard():

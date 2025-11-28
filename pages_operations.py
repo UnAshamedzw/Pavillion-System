@@ -176,7 +176,7 @@ def buses_routes_management_page():
                 
                 notes = st.text_area("Notes", placeholder="Additional information...")
                 
-                submit_bus = st.form_submit_button("➕ Add Bus", use_container_width=True, type="primary")
+                submit_bus = st.form_submit_button("➕ Add Bus", width="stretch", type="primary")
                 
                 if submit_bus:
                     if not all([bus_number, model, capacity]):
@@ -265,9 +265,9 @@ def buses_routes_management_page():
                             col_save, col_cancel = st.columns(2)
                             
                             with col_save:
-                                save_btn = st.form_submit_button("💾 Save", use_container_width=True)
+                                save_btn = st.form_submit_button("💾 Save", width="stretch")
                             with col_cancel:
-                                cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
+                                cancel_btn = st.form_submit_button("❌ Cancel", width="stretch")
                             
                             if save_btn:
                                 update_bus(bus['id'], edit_bus_number, edit_model, edit_capacity, 
@@ -299,7 +299,7 @@ def buses_routes_management_page():
                 
                 description = st.text_area("Description", placeholder="Additional route information...")
                 
-                submit_route = st.form_submit_button("➕ Add Route", use_container_width=True, type="primary")
+                submit_route = st.form_submit_button("➕ Add Route", width="stretch", type="primary")
                 
                 if submit_route:
                     if not route_name:
@@ -363,9 +363,9 @@ def buses_routes_management_page():
                             col_save, col_cancel = st.columns(2)
                             
                             with col_save:
-                                save_btn = st.form_submit_button("💾 Save", use_container_width=True)
+                                save_btn = st.form_submit_button("💾 Save", width="stretch")
                             with col_cancel:
-                                cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
+                                cancel_btn = st.form_submit_button("❌ Cancel", width="stretch")
                             
                             if save_btn:
                                 update_route(route['id'], edit_name, edit_distance if edit_distance > 0 else None, edit_desc)
@@ -445,7 +445,7 @@ def bus_assignments_page():
             
             notes = st.text_area("📝 Notes", placeholder="Any special instructions...")
             
-            submit_assignment = st.form_submit_button("➕ Create Assignment", use_container_width=True, type="primary")
+            submit_assignment = st.form_submit_button("➕ Create Assignment", width="stretch", type="primary")
             
             if submit_assignment:
                 # Check if assignment already exists
@@ -609,7 +609,7 @@ def income_entry_page():
         
         notes = st.text_area("📝 Notes", placeholder="Optional notes...")
         
-        submitted = st.form_submit_button("➕ Add Income Record", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("➕ Add Income Record", width="stretch", type="primary")
         
         if submitted:
             # Validation
@@ -744,7 +744,7 @@ def income_entry_page():
                                                         'notes', 'created_by'])
         
         with col_exp1:
-            if st.button("📄 Download PDF Report", use_container_width=True):
+            if st.button("📄 Download PDF Report", width="stretch"):
                 filters_dict = {}
                 if filter_bus:
                     filters_dict['Bus'] = filter_bus
@@ -759,7 +759,7 @@ def income_entry_page():
                     data=pdf_buffer,
                     file_name=f"income_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
         
         with col_exp2:
@@ -771,7 +771,7 @@ def income_entry_page():
                 data=excel_buffer,
                 file_name=f"income_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                width="stretch"
             )
         
         with col_exp3:
@@ -878,10 +878,10 @@ def income_entry_page():
                         col_save, col_cancel = st.columns(2)
                         
                         with col_save:
-                            save_btn = st.form_submit_button("💾 Save Changes", use_container_width=True)
+                            save_btn = st.form_submit_button("💾 Save Changes", width="stretch")
                         
                         with col_cancel:
-                            cancel_btn = st.form_submit_button("❌ Cancel", use_container_width=True)
+                            cancel_btn = st.form_submit_button("❌ Cancel", width="stretch")
                         
                         if save_btn:
                             # Validate hire destination
@@ -982,7 +982,7 @@ def maintenance_entry_page():
         description = st.text_area("📝 Description", placeholder="Details of maintenance work...")
         parts_used = st.text_area("📦 Parts Used", placeholder="List of parts and quantities...")
         
-        submitted = st.form_submit_button("➕ Add Maintenance Record", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("➕ Add Maintenance Record", width="stretch", type="primary")
         
         if submitted:
             if not all([bus_number, maintenance_type, cost >= 0]):
@@ -1203,7 +1203,7 @@ def import_data_page():
             data=csv_income,
             file_name="income_template.csv",
             mime="text/csv",
-            use_container_width=True
+            width="stretch"
         )
     
     with col_temp2:
@@ -1224,7 +1224,7 @@ def import_data_page():
             data=csv_maint,
             file_name="maintenance_template.csv",
             mime="text/csv",
-            use_container_width=True
+            width="stretch"
         )
     
     st.markdown("---")
@@ -1252,7 +1252,7 @@ def import_data_page():
             
             # Preview data
             st.subheader("👀 Data Preview")
-            st.dataframe(df.head(10), use_container_width=True)
+            st.dataframe(df.head(10), width="stretch")
             
             # Validation
             st.subheader("✓ Validation")
@@ -1280,7 +1280,7 @@ def import_data_page():
                             df[col] = ''
                 
                 # Import button
-                if st.button("🚀 Import Data", type="primary", use_container_width=True):
+                if st.button("🚀 Import Data", type="primary", width="stretch"):
                     success_count = 0
                     error_count = 0
                     errors = []
@@ -1419,7 +1419,7 @@ def revenue_history_page():
         
         query += " ORDER BY date DESC"
         
-        income_df = pd.read_sql_query(query, conn, params=params)
+        income_df = pd.read_sql_query(query, get_engine(), params=params)
         # Convert amount to numeric
         if 'amount' in income_df.columns:
             income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
@@ -1480,7 +1480,7 @@ def revenue_history_page():
                     data=pdf_buffer,
                     file_name=f"income_history_{start_date}_{end_date}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_exp2:
@@ -1492,7 +1492,7 @@ def revenue_history_page():
                     data=excel_buffer,
                     file_name=f"income_history_{start_date}_{end_date}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_exp3:
@@ -1502,11 +1502,11 @@ def revenue_history_page():
                     data=csv,
                     file_name=f"income_history_{start_date}_{end_date}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             st.markdown("---")
-            st.dataframe(income_df, use_container_width=True)
+            st.dataframe(income_df, width="stretch")
         else:
             st.info("No income records found for this period")
     
@@ -1525,7 +1525,7 @@ def revenue_history_page():
                 st.metric("📈 Average Cost", f"${avg:,.2f}")
             
             st.markdown("---")
-            st.dataframe(maint_df, use_container_width=True)
+            st.dataframe(maint_df, width="stretch")
             
             # Export button
             csv = maint_df.to_csv(index=False)
@@ -1562,13 +1562,13 @@ def revenue_history_page():
         
         with tab1:
             if not income_df.empty:
-                st.dataframe(income_df, use_container_width=True)
+                st.dataframe(income_df, width="stretch")
             else:
                 st.info("No income records")
         
         with tab2:
             if not maint_df.empty:
-                st.dataframe(maint_df, use_container_width=True)
+                st.dataframe(maint_df, width="stretch")
             else:
                 st.info("No maintenance records")
 
@@ -1599,16 +1599,16 @@ def dashboard_page():
     if USE_POSTGRES:
         income_query = "SELECT * FROM income WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
         maint_query = "SELECT * FROM maintenance WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
-        income_df = pd.read_sql_query(income_query, conn)
-        maint_df = pd.read_sql_query(maint_query, conn)
+        income_df = pd.read_sql_query(income_query, get_engine())
+        maint_df = pd.read_sql_query(maint_query, get_engine())
     else:
         income_df = pd.read_sql_query(
             "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
-            conn, params=(days_back,)
+            get_engine(), params=(days_back,)
         )
         maint_df = pd.read_sql_query(
             "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
-            conn, params=(days_back,)
+            get_engine(), params=(days_back,)
         )
     
     # Convert amount and cost to numeric
@@ -1689,7 +1689,7 @@ def dashboard_page():
                 height=400
             )
             
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
         
         st.markdown("---")
         
@@ -1709,7 +1709,7 @@ def dashboard_page():
                     labels={'x': 'Revenue ($)', 'y': 'Bus Number'}
                 )
                 fig_buses.update_layout(height=400, showlegend=False)
-                st.plotly_chart(fig_buses, use_container_width=True)
+                st.plotly_chart(fig_buses, width="stretch")
         
         with col_chart2:
             # Maintenance by type
@@ -1723,7 +1723,7 @@ def dashboard_page():
                     hole=0.4
                 )
                 fig_maint.update_layout(height=400)
-                st.plotly_chart(fig_maint, use_container_width=True)
+                st.plotly_chart(fig_maint, width="stretch")
         
         st.markdown("---")
         
@@ -1735,13 +1735,13 @@ def dashboard_page():
                 if 'driver_name' in income_df.columns:
                     st.subheader("👨‍✈️ Top Drivers by Revenue")
                     driver_perf = income_df.groupby('driver_name')['amount'].sum().sort_values(ascending=False).head(5)
-                    st.dataframe(driver_perf, use_container_width=True)
+                    st.dataframe(driver_perf, width="stretch")
             
             with col_perf2:
                 if 'conductor_name' in income_df.columns:
                     st.subheader("👨‍💼 Top Conductors by Revenue")
                     conductor_perf = income_df.groupby('conductor_name')['amount'].sum().sort_values(ascending=False).head(5)
-                    st.dataframe(conductor_perf, use_container_width=True)
+                    st.dataframe(conductor_perf, width="stretch")
         
         st.markdown("---")
         
@@ -1757,7 +1757,7 @@ def dashboard_page():
             route_analysis.columns = ['Total Revenue', 'Number of Trips', 'Avg per Trip']
             route_analysis = route_analysis.sort_values('Total Revenue', ascending=False)
             
-            st.dataframe(route_analysis, use_container_width=True)
+            st.dataframe(route_analysis, width="stretch")
             
             # Show hire destinations breakdown if there are hire records
             hire_records = income_df[income_df['route'] == 'Hire']
@@ -1765,7 +1765,7 @@ def dashboard_page():
                 with st.expander("🚐 View Hire Destinations Details"):
                     st.markdown("**Individual Hire Jobs:**")
                     hire_details = hire_records[['date', 'bus_number', 'hire_destination', 'amount']].sort_values('date', ascending=False)
-                    st.dataframe(hire_details, use_container_width=True)
+                    st.dataframe(hire_details, width="stretch")
     
     else:
         st.info("🔭 No data available for the selected period. Start adding records to see your dashboard!")

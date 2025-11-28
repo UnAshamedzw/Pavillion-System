@@ -17,7 +17,7 @@ from reportlab.lib.enums import TA_CENTER
 import io
 
 # Import database abstraction layer
-from database import get_connection, USE_POSTGRES
+from database import get_connection, get_engine, USE_POSTGRES
 
 
 def get_placeholder():
@@ -832,7 +832,7 @@ def employee_management_page():
                             col_save, col_cancel = st.columns(2)
                             
                             with col_save:
-                                if st.form_submit_button("💾 Save", use_container_width=True):
+                                if st.form_submit_button("💾 Save", width="stretch"):
                                     conn = get_connection()
                                     cursor = conn.cursor()
                                     execute_hr_query(cursor, '''
@@ -868,7 +868,7 @@ def employee_management_page():
                                     st.rerun()
                             
                             with col_cancel:
-                                if st.form_submit_button("❌ Cancel", use_container_width=True):
+                                if st.form_submit_button("❌ Cancel", width="stretch"):
                                     st.session_state[f'edit_emp_mode_{emp_id}'] = False
                                     st.rerun()
         else:
@@ -977,7 +977,7 @@ def employee_management_page():
                 The system automatically assigns the next available ID based on your selected position.
                 """)
             
-            submitted = st.form_submit_button("➕ Add Employee", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("➕ Add Employee", width="stretch", type="primary")
             
             if submitted:
                 # Validation
@@ -1078,7 +1078,7 @@ def employee_management_page():
             query += " AND status = ?"
             params.append(exp_status)
         
-        export_df = pd.read_sql_query(query, conn, params=params)
+        export_df = pd.read_sql_query(query, get_engine(), params=params)
         conn.close()
         
         if not export_df.empty:
@@ -1106,7 +1106,7 @@ def employee_management_page():
                     data=pdf_buffer,
                     file_name=f"employee_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_excel:
@@ -1119,12 +1119,12 @@ def employee_management_page():
                     data=excel_buffer,
                     file_name=f"employee_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             st.markdown("---")
             st.write("### Preview of Export Data")
-            st.dataframe(export_df, use_container_width=True, height=300)
+            st.dataframe(export_df, width="stretch", height=300)
         else:
             st.warning("No employees match the selected filters.")
 
@@ -1233,7 +1233,7 @@ def employee_performance_page():
                 goals = st.text_area("Goals", placeholder="Goals for next period...")
                 notes = st.text_area("Additional Notes")
                 
-                submitted = st.form_submit_button("➕ Submit Evaluation", use_container_width=True, type="primary")
+                submitted = st.form_submit_button("➕ Submit Evaluation", width="stretch", type="primary")
                 
                 if submitted:
                     if not all([employee_id, evaluation_period, rating, evaluator]):
@@ -1301,7 +1301,7 @@ def employee_performance_page():
                     data=pdf_buffer,
                     file_name=f"performance_report_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_exp3:
@@ -1314,11 +1314,11 @@ def employee_performance_page():
                     data=excel_buffer,
                     file_name=f"performance_report_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             st.markdown("---")
-            st.dataframe(perf_export_df, use_container_width=True, height=300)
+            st.dataframe(perf_export_df, width="stretch", height=300)
         else:
             st.warning("No performance records found.")
 
@@ -1367,7 +1367,7 @@ def payroll_management_page():
         query += " ORDER BY p.created_at DESC"
         
         try:
-            payroll_df = pd.read_sql_query(query, conn, params=params)
+            payroll_df = pd.read_sql_query(query, get_engine(), params=params)
         except:
             payroll_df = pd.DataFrame()
             
@@ -1476,7 +1476,7 @@ def payroll_management_page():
                 
                 notes = st.text_area("Notes")
                 
-                submitted = st.form_submit_button("💰 Process Payroll", use_container_width=True, type="primary")
+                submitted = st.form_submit_button("💰 Process Payroll", width="stretch", type="primary")
                 
                 if submitted:
                     if not all([employee_id, pay_period, basic_salary >= 0]):
@@ -1544,7 +1544,7 @@ def payroll_management_page():
                     data=pdf_buffer,
                     file_name=f"payroll_report_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_exp3:
@@ -1557,11 +1557,11 @@ def payroll_management_page():
                     data=excel_buffer,
                     file_name=f"payroll_report_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             st.markdown("---")
-            st.dataframe(payroll_export_df, use_container_width=True, height=300)
+            st.dataframe(payroll_export_df, width="stretch", height=300)
         else:
             st.warning("No payroll records found.")
 
@@ -1610,7 +1610,7 @@ def leave_management_page():
         query += " ORDER BY l.created_at DESC"
         
         try:
-            leave_df = pd.read_sql_query(query, conn, params=params)
+            leave_df = pd.read_sql_query(query, get_engine(), params=params)
         except:
             leave_df = pd.DataFrame()
             
@@ -1739,7 +1739,7 @@ def leave_management_page():
                     end_date = st.date_input("End Date*", datetime.now() + timedelta(days=1))
                     reason = st.text_area("Reason*", placeholder="Why are you taking leave?")
                 
-                submitted = st.form_submit_button("➕ Submit Request", use_container_width=True, type="primary")
+                submitted = st.form_submit_button("➕ Submit Request", width="stretch", type="primary")
                 
                 if submitted:
                     if not all([employee_id, leave_type, reason]) or start_date > end_date:
@@ -1806,7 +1806,7 @@ def leave_management_page():
                     data=pdf_buffer,
                     file_name=f"leave_report_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_exp3:
@@ -1819,11 +1819,11 @@ def leave_management_page():
                     data=excel_buffer,
                     file_name=f"leave_report_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             st.markdown("---")
-            st.dataframe(leave_export_df, use_container_width=True, height=300)
+            st.dataframe(leave_export_df, width="stretch", height=300)
         else:
             st.warning("No leave records found.")
 
@@ -1878,7 +1878,7 @@ def disciplinary_records_page():
         query += " ORDER BY d.created_at DESC"
         
         try:
-            disc_df = pd.read_sql_query(query, conn, params=params)
+            disc_df = pd.read_sql_query(query, get_engine(), params=params)
         except:
             disc_df = pd.DataFrame()
             
@@ -2014,7 +2014,7 @@ def disciplinary_records_page():
                 action_details = st.text_area("Action Details*", placeholder="What action is being taken?")
                 notes = st.text_area("Additional Notes")
                 
-                submitted = st.form_submit_button("⚠️ Issue Disciplinary Action", use_container_width=True, type="primary")
+                submitted = st.form_submit_button("⚠️ Issue Disciplinary Action", width="stretch", type="primary")
                 
                 if submitted:
                     if not all([employee_id, action_type, violation_description, action_details, issued_by]):
@@ -2081,7 +2081,7 @@ def disciplinary_records_page():
                     data=pdf_buffer,
                     file_name=f"disciplinary_report_{datetime.now().strftime('%Y%m%d')}.pdf",
                     mime="application/pdf",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             with col_exp3:
@@ -2094,10 +2094,10 @@ def disciplinary_records_page():
                     data=excel_buffer,
                     file_name=f"disciplinary_report_{datetime.now().strftime('%Y%m%d')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    use_container_width=True
+                    width="stretch"
                 )
             
             st.markdown("---")
-            st.dataframe(disc_export_df, use_container_width=True, height=300)
+            st.dataframe(disc_export_df, width="stretch", height=300)
         else:
             st.warning("No disciplinary records found.")

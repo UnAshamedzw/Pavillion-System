@@ -289,7 +289,7 @@ def login_page():
         col_a, col_b = st.columns(2)
         
         with col_a:
-            if st.button("🔓 Login", use_container_width=True):
+            if st.button("🔓 Login", width="stretch"):
                 if username and password:
                     user = authenticate_user(username, password)
                     if user:
@@ -303,7 +303,7 @@ def login_page():
                     st.warning("Please enter both username and password")
         
         with col_b:
-            if st.button("ℹ️ Help", use_container_width=True):
+            if st.button("ℹ️ Help", width="stretch"):
                 st.info("""
                 **Default Admin Account:**
                 - Username: `admin`

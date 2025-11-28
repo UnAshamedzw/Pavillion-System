@@ -314,7 +314,7 @@ def main():
     
     # Logout button
     st.sidebar.markdown("---")
-    if st.sidebar.button("🚪 Logout", use_container_width=True):
+    if st.sidebar.button("🚪 Logout", width="stretch"):
         logout()
     
     st.sidebar.markdown("---")

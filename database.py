@@ -1,7 +1,7 @@
 """
 database.py - Database initialization and management
 Enhanced with buses, routes, and hire support - POSTGRES + SQLITE SUPPORT
-CORRECTED VERSION - Proper PostgreSQL table creation
+CORRECTED VERSION - Proper PostgreSQL table creation with SQLAlchemy support
 """
 
 import os
@@ -14,15 +14,21 @@ USE_POSTGRES = DATABASE_URL is not None
 if USE_POSTGRES:
     import psycopg2
     from psycopg2.extras import RealDictCursor
+    from sqlalchemy import create_engine
+    # Convert postgres:// to postgresql:// for SQLAlchemy
+    SQLALCHEMY_URL = DATABASE_URL.replace('postgres://', 'postgresql://') if DATABASE_URL.startswith('postgres://') else DATABASE_URL
+    _engine = create_engine(SQLALCHEMY_URL)
     print("🐘 Using PostgreSQL database (Railway)")
 else:
     import sqlite3
-    print("🗄️ Using SQLite database (local development)")
+    from sqlalchemy import create_engine
     DATABASE_PATH = "bus_management.db"
+    _engine = create_engine(f'sqlite:///{DATABASE_PATH}')
+    print("🗄️ Using SQLite database (local development)")
 
 
 def get_connection():
-    """Create database connection"""
+    """Create database connection for direct queries"""
     if USE_POSTGRES:
         conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
         return conn
@@ -30,6 +36,11 @@ def get_connection():
         conn = sqlite3.connect(DATABASE_PATH)
         conn.row_factory = sqlite3.Row
         return conn
+
+
+def get_engine():
+    """Get SQLAlchemy engine for pandas operations"""
+    return _engine
 
 
 def get_placeholder():

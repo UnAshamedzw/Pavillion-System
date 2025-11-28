@@ -9,7 +9,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from datetime import datetime, timedelta
-from database import get_connection, USE_POSTGRES
+from database import get_connection, get_engine, USE_POSTGRES
 from io import BytesIO
 from audit_logger import AuditLogger
 
@@ -53,7 +53,7 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
         income_query += f" AND conductor_name = {ph}"
         income_params.append(conductor)
     
-    income_df = pd.read_sql_query(income_query, conn, params=income_params)
+    income_df = pd.read_sql_query(income_query, get_engine(), params=income_params)
     
     # Convert amount to numeric if needed
     if 'amount' in income_df.columns:
@@ -75,7 +75,7 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
         maint_query += f" AND date <= {ph}"
         maint_params.append(end_date)
     
-    maintenance_df = pd.read_sql_query(maint_query, conn, params=maint_params)
+    maintenance_df = pd.read_sql_query(maint_query, get_engine(), params=maint_params)
     
     # Convert cost to numeric if needed
     if 'cost' in maintenance_df.columns:
@@ -91,19 +91,19 @@ def get_available_filters():
     conn = get_connection()
     
     # Get buses
-    buses_df = pd.read_sql_query("SELECT DISTINCT bus_number FROM income ORDER BY bus_number", conn)
+    buses_df = pd.read_sql_query("SELECT DISTINCT bus_number FROM income ORDER BY bus_number", get_engine())
     buses = ["All Buses"] + buses_df['bus_number'].tolist()
     
     # Get routes
-    routes_df = pd.read_sql_query("SELECT DISTINCT route FROM income ORDER BY route", conn)
+    routes_df = pd.read_sql_query("SELECT DISTINCT route FROM income ORDER BY route", get_engine())
     routes = ["All Routes"] + routes_df['route'].tolist()
     
     # Get drivers
-    drivers_df = pd.read_sql_query("SELECT DISTINCT driver_name FROM income WHERE driver_name IS NOT NULL ORDER BY driver_name", conn)
+    drivers_df = pd.read_sql_query("SELECT DISTINCT driver_name FROM income WHERE driver_name IS NOT NULL ORDER BY driver_name", get_engine())
     drivers = ["All Drivers"] + drivers_df['driver_name'].tolist()
     
     # NEW: Get conductors
-    conductors_df = pd.read_sql_query("SELECT DISTINCT conductor_name FROM income WHERE conductor_name IS NOT NULL ORDER BY conductor_name", conn)
+    conductors_df = pd.read_sql_query("SELECT DISTINCT conductor_name FROM income WHERE conductor_name IS NOT NULL ORDER BY conductor_name", get_engine())
     conductors = ["All Conductors"] + conductors_df['conductor_name'].tolist()
     
     conn.close()
@@ -325,7 +325,7 @@ def bus_analysis_page():
             else:  # This Year
                 start_date = datetime(datetime.now().year, 1, 1).date()
         
-        if st.button("📊 Generate Analysis", use_container_width=True, type="primary"):
+        if st.button("📊 Generate Analysis", width="stretch", type="primary"):
             st.session_state['run_analysis'] = True
     
     st.markdown("---")
@@ -434,14 +434,14 @@ def bus_analysis_page():
         with tab1:
             fig_revenue = create_revenue_vs_expenses_chart(income_df, maintenance_df)
             if fig_revenue:
-                st.plotly_chart(fig_revenue, use_container_width=True)
+                st.plotly_chart(fig_revenue, width="stretch")
             else:
                 st.info("No data available for chart")
         
         with tab2:
             fig_profit = create_profit_chart(income_df, maintenance_df)
             if fig_profit:
-                st.plotly_chart(fig_profit, use_container_width=True)
+                st.plotly_chart(fig_profit, width="stretch")
             else:
                 st.info("No data available for chart")
         
@@ -449,7 +449,7 @@ def bus_analysis_page():
             if not income_df.empty:
                 st.dataframe(
                     income_df.sort_values('date', ascending=False),
-                    use_container_width=True,
+                    width="stretch",
                     height=400
                 )
                 
@@ -458,7 +458,7 @@ def bus_analysis_page():
                 route_summary = income_df.groupby('route')['amount'].agg(['sum', 'count', 'mean']).reset_index()
                 route_summary.columns = ['Route', 'Total Revenue', 'Number of Records', 'Avg per Record']
                 route_summary = route_summary.sort_values('Total Revenue', ascending=False)
-                st.dataframe(route_summary, use_container_width=True)
+                st.dataframe(route_summary, width="stretch")
             else:
                 st.info("No income records found for the selected filters")
         
@@ -466,7 +466,7 @@ def bus_analysis_page():
             if not maintenance_df.empty:
                 st.dataframe(
                     maintenance_df.sort_values('date', ascending=False),
-                    use_container_width=True,
+                    width="stretch",
                     height=400
                 )
                 
@@ -476,7 +476,7 @@ def bus_analysis_page():
                     maint_summary = maintenance_df.groupby('maintenance_type')['cost'].agg(['sum', 'count', 'mean']).reset_index()
                     maint_summary.columns = ['Maintenance Type', 'Total Cost', 'Number of Events', 'Avg Cost']
                     maint_summary = maint_summary.sort_values('Total Cost', ascending=False)
-                    st.dataframe(maint_summary, use_container_width=True)
+                    st.dataframe(maint_summary, width="stretch")
                     
                     # Pie chart of maintenance costs
                     fig_maint_pie = px.pie(
@@ -485,7 +485,7 @@ def bus_analysis_page():
                         names='Maintenance Type',
                         title='Maintenance Cost Distribution'
                     )
-                    st.plotly_chart(fig_maint_pie, use_container_width=True)
+                    st.plotly_chart(fig_maint_pie, width="stretch")
             else:
                 st.info("No maintenance records found for the selected filters")
         
@@ -501,7 +501,7 @@ def bus_analysis_page():
                         driver_summary = income_df.groupby('driver_name')['amount'].agg(['sum', 'count', 'mean']).reset_index()
                         driver_summary.columns = ['Driver', 'Total Revenue', 'Records', 'Avg per Record']
                         driver_summary = driver_summary.sort_values('Total Revenue', ascending=False)
-                        st.dataframe(driver_summary, use_container_width=True)
+                        st.dataframe(driver_summary, width="stretch")
                         
                         # Driver chart
                         top_drivers = driver_summary.head(10)
@@ -512,7 +512,7 @@ def bus_analysis_page():
                             orientation='h',
                             title='Top 10 Drivers by Revenue'
                         )
-                        st.plotly_chart(fig_drivers, use_container_width=True)
+                        st.plotly_chart(fig_drivers, width="stretch")
                 
                 with col_staff2:
                     # NEW: Conductor breakdown
@@ -521,7 +521,7 @@ def bus_analysis_page():
                         conductor_summary = income_df.groupby('conductor_name')['amount'].agg(['sum', 'count', 'mean']).reset_index()
                         conductor_summary.columns = ['Conductor', 'Total Revenue', 'Records', 'Avg per Record']
                         conductor_summary = conductor_summary.sort_values('Total Revenue', ascending=False)
-                        st.dataframe(conductor_summary, use_container_width=True)
+                        st.dataframe(conductor_summary, width="stretch")
                         
                         # Conductor chart
                         top_conductors = conductor_summary.head(10)
@@ -532,7 +532,7 @@ def bus_analysis_page():
                             orientation='h',
                             title='Top 10 Conductors by Revenue'
                         )
-                        st.plotly_chart(fig_conductors, use_container_width=True)
+                        st.plotly_chart(fig_conductors, width="stretch")
                 
                 # NEW: Driver-Conductor Team Analysis
                 st.markdown("---")
@@ -542,7 +542,7 @@ def bus_analysis_page():
                     team_summary = income_df.groupby(['driver_name', 'conductor_name'])['amount'].agg(['sum', 'count', 'mean']).reset_index()
                     team_summary.columns = ['Driver', 'Conductor', 'Total Revenue', 'Records', 'Avg per Record']
                     team_summary = team_summary.sort_values('Total Revenue', ascending=False).head(20)
-                    st.dataframe(team_summary, use_container_width=True)
+                    st.dataframe(team_summary, width="stretch")
             else:
                 st.info("No income data available for staff performance analysis")
         
@@ -578,7 +578,7 @@ def bus_analysis_page():
                 data=excel_data,
                 file_name=f"bus_analysis_{selected_bus}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                width="stretch"
             )
         
         with col_exp2:
@@ -590,7 +590,7 @@ def bus_analysis_page():
                     data=csv_data,
                     file_name=f"income_{selected_bus}_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
         
         with col_exp3:
@@ -602,7 +602,7 @@ def bus_analysis_page():
                     data=csv_maint,
                     file_name=f"maintenance_{selected_bus}_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
         
         with col_exp4:
@@ -614,7 +614,7 @@ def bus_analysis_page():
                     data=staff_data,
                     file_name=f"staff_performance_{datetime.now().strftime('%Y%m%d')}.csv",
                     mime="text/csv",
-                    use_container_width=True
+                    width="stretch"
                 )
         
         # Log this analysis view
