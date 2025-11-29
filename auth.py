@@ -2,15 +2,19 @@
 auth.py - User Authentication Module
 Handles user login, registration, and session management
 CORRECTED VERSION - Uses database abstraction for PostgreSQL/SQLite compatibility
+WITH PERSISTENT SESSIONS - Sessions persist across page refreshes
 """
 
 import streamlit as st
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Import database abstraction layer
 from database import get_connection, USE_POSTGRES
+
+# Session duration in days
+SESSION_DURATION_DAYS = 1
 
 
 def hash_password(password: str, salt: str = None) -> tuple:
@@ -32,6 +36,158 @@ def verify_password(password: str, hashed_password: str, salt: str) -> bool:
     """Verify if password matches the hashed password"""
     test_hash, _ = hash_password(password, salt)
     return test_hash == hashed_password
+
+
+def create_sessions_table():
+    """Create sessions table for persistent login"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                session_token TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                is_valid INTEGER DEFAULT 1
+            )
+        ''')
+    else:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_token TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL,
+                is_valid INTEGER DEFAULT 1
+            )
+        ''')
+    
+    conn.commit()
+    conn.close()
+
+
+def create_session(user_id: int) -> str:
+    """Create a new session token for a user"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Generate unique session token
+    session_token = secrets.token_urlsafe(32)
+    expires_at = datetime.now() + timedelta(days=SESSION_DURATION_DAYS)
+    
+    # Invalidate old sessions for this user (optional - allows only one active session)
+    # Uncomment the following if you want single-session per user:
+    # if USE_POSTGRES:
+    #     cursor.execute('UPDATE user_sessions SET is_valid = 0 WHERE user_id = %s', (user_id,))
+    # else:
+    #     cursor.execute('UPDATE user_sessions SET is_valid = 0 WHERE user_id = ?', (user_id,))
+    
+    # Insert new session
+    if USE_POSTGRES:
+        cursor.execute('''
+            INSERT INTO user_sessions (user_id, session_token, expires_at)
+            VALUES (%s, %s, %s)
+        ''', (user_id, session_token, expires_at))
+    else:
+        cursor.execute('''
+            INSERT INTO user_sessions (user_id, session_token, expires_at)
+            VALUES (?, ?, ?)
+        ''', (user_id, session_token, expires_at))
+    
+    conn.commit()
+    conn.close()
+    
+    return session_token
+
+
+def validate_session(session_token: str) -> dict:
+    """
+    Validate a session token and return user info if valid
+    Returns: user dict or None
+    """
+    if not session_token:
+        return None
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Get session and user info
+    if USE_POSTGRES:
+        cursor.execute('''
+            SELECT s.user_id, s.expires_at, s.is_valid,
+                   u.id, u.username, u.full_name, u.role, u.email, u.is_active
+            FROM user_sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.session_token = %s
+        ''', (session_token,))
+    else:
+        cursor.execute('''
+            SELECT s.user_id, s.expires_at, s.is_valid,
+                   u.id, u.username, u.full_name, u.role, u.email, u.is_active
+            FROM user_sessions s
+            JOIN users u ON s.user_id = u.id
+            WHERE s.session_token = ?
+        ''', (session_token,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if not result:
+        return None
+    
+    # Handle both dict-like and tuple results
+    if hasattr(result, 'keys'):
+        expires_at = result['expires_at']
+        is_valid = result['is_valid']
+        is_active = result['is_active']
+        user_id = result['id']
+        username = result['username']
+        full_name = result['full_name']
+        role = result['role']
+        email = result['email']
+    else:
+        _, expires_at, is_valid, user_id, username, full_name, role, email, is_active = result
+    
+    # Check if session is still valid
+    if not is_valid or not is_active:
+        return None
+    
+    # Check expiration
+    if isinstance(expires_at, str):
+        expires_at = datetime.strptime(expires_at, '%Y-%m-%d %H:%M:%S')
+    
+    if datetime.now() > expires_at:
+        return None
+    
+    return {
+        'id': user_id,
+        'username': username,
+        'full_name': full_name,
+        'role': role,
+        'email': email,
+        'session_token': session_token
+    }
+
+
+def invalidate_session(session_token: str):
+    """Invalidate a session token (logout)"""
+    if not session_token:
+        return
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    if USE_POSTGRES:
+        cursor.execute('UPDATE user_sessions SET is_valid = 0 WHERE session_token = %s', (session_token,))
+    else:
+        cursor.execute('UPDATE user_sessions SET is_valid = 0 WHERE session_token = ?', (session_token,))
+    
+    conn.commit()
+    conn.close()
 
 
 def create_users_table():
@@ -286,6 +442,9 @@ def login_page():
         username = st.text_input("Username", key="login_username")
         password = st.text_input("Password", type="password", key="login_password")
         
+        # Remember me checkbox
+        remember_me = st.checkbox("Remember me for 7 days", value=True)
+        
         col_a, col_b = st.columns(2)
         
         with col_a:
@@ -295,6 +454,13 @@ def login_page():
                     if user:
                         st.session_state['authenticated'] = True
                         st.session_state['user'] = user
+                        
+                        # Create persistent session if remember me is checked
+                        if remember_me:
+                            session_token = create_session(user['id'])
+                            st.query_params['session'] = session_token
+                            st.session_state['session_token'] = session_token
+                        
                         st.success(f"Welcome back, {user['full_name']}!")
                         st.rerun()
                     else:
@@ -314,10 +480,48 @@ def login_page():
 
 
 def logout():
-    """Logout current user"""
+    """Logout current user and invalidate session"""
+    # Invalidate the session token in the database
+    session_token = st.session_state.get('session_token') or st.query_params.get('session')
+    if session_token:
+        invalidate_session(session_token)
+    
+    # Clear session state
     st.session_state['authenticated'] = False
     st.session_state['user'] = None
+    st.session_state['session_token'] = None
+    
+    # Clear query params
+    if 'session' in st.query_params:
+        del st.query_params['session']
+    
     st.rerun()
+
+
+def restore_session():
+    """
+    Try to restore session from query params on page load
+    Call this at the start of your app before checking authentication
+    Returns: True if session was restored, False otherwise
+    """
+    # Already authenticated in current session
+    if st.session_state.get('authenticated', False):
+        return True
+    
+    # Try to restore from query params
+    session_token = st.query_params.get('session')
+    if session_token:
+        user = validate_session(session_token)
+        if user:
+            st.session_state['authenticated'] = True
+            st.session_state['user'] = user
+            st.session_state['session_token'] = session_token
+            return True
+        else:
+            # Invalid or expired session - clear it
+            del st.query_params['session']
+    
+    return False
 
 
 def require_auth(func):

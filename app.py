@@ -2,11 +2,12 @@
 app.py - Main Application Entry Point
 Pavillion Coaches Bus Management System
 CORRECTED VERSION - Fixed imports and removed unused code
+WITH PERSISTENT SESSIONS - Login persists across page refreshes
 """
 
 import streamlit as st
 from database import init_database, migrate_database
-from auth import create_users_table, login_page, logout
+from auth import create_users_table, create_sessions_table, login_page, logout, restore_session
 from pages_operations import (
     income_entry_page, 
     maintenance_entry_page, 
@@ -59,7 +60,11 @@ def main():
         init_database()
         migrate_database()  # FIXED: Run migrations to add any missing columns
         create_users_table()
+        create_sessions_table()  # Create sessions table for persistent login
         st.session_state.initialized = True
+    
+    # Try to restore session from query params (persistent login)
+    restore_session()
     
     # Check authentication
     if not st.session_state.get('authenticated', False):
