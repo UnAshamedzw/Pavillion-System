@@ -157,8 +157,8 @@ def generate_employee_id(position, conn):
                 SELECT employee_id 
                 FROM employees 
                 WHERE employee_id LIKE %s 
-                AND employee_id NOT LIKE 'PavD%' 
-                AND employee_id NOT LIKE 'PavC%'
+                AND employee_id NOT LIKE 'PavD%%' 
+                AND employee_id NOT LIKE 'PavC%%'
                 ORDER BY CAST(SUBSTRING(employee_id FROM LENGTH(%s)+1) AS INTEGER) DESC
                 LIMIT 1
             """
