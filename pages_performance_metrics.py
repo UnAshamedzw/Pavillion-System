@@ -403,8 +403,16 @@ def create_efficiency_metrics_chart(income_df, maintenance_df):
     )
     efficiency_df = efficiency_df.sort_values('efficiency_ratio', ascending=False).head(15)
     efficiency_df = efficiency_df.reset_index()
-    # After reset_index, the bus_number becomes 'index' column, rename it
-    efficiency_df = efficiency_df.rename(columns={'index': 'registration'})
+    # After reset_index on groupby result, the column keeps its name 'bus_number'
+    # Rename to 'registration' for display clarity
+    if 'bus_number' in efficiency_df.columns:
+        efficiency_df = efficiency_df.rename(columns={'bus_number': 'registration'})
+    elif 'index' in efficiency_df.columns:
+        efficiency_df = efficiency_df.rename(columns={'index': 'registration'})
+    
+    # Safety check - if registration column doesn't exist, create it
+    if 'registration' not in efficiency_df.columns:
+        efficiency_df['registration'] = efficiency_df.index.astype(str)
     
     fig = go.Figure(data=[
         go.Scatter(
