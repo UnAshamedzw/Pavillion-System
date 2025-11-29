@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from database import get_connection, USE_POSTGRES
 
 # Session duration in days
-SESSION_DURATION_DAYS = 1
+SESSION_DURATION_DAYS = 7
 
 
 def hash_password(password: str, salt: str = None) -> tuple:

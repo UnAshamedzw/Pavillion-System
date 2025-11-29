@@ -2,6 +2,7 @@
 pages_bus_analysis.py - Comprehensive Bus-by-Bus Analysis Dashboard
 WITH CONDUCTOR SUPPORT and Enhanced Filtering
 Detailed financial and operational analysis for individual buses
+NOTE: Uses registration_number as bus identifier throughout
 """
 
 import streamlit as st
@@ -13,9 +14,10 @@ from database import get_connection, get_engine, USE_POSTGRES
 from io import BytesIO
 from audit_logger import AuditLogger
 
-def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, driver=None, conductor=None):
+def get_bus_data(registration_number=None, start_date=None, end_date=None, route=None, driver=None, conductor=None):
     """
     Fetch income and maintenance data for bus analysis WITH CONDUCTOR FILTER
+    Uses registration_number as the bus identifier (stored in bus_number field)
     
     Returns: tuple of (income_df, maintenance_df)
     """
@@ -28,9 +30,9 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
     income_query = "SELECT * FROM income WHERE 1=1"
     income_params = []
     
-    if bus_number and bus_number != "All Buses":
+    if registration_number and registration_number != "All Buses":
         income_query += f" AND bus_number = {ph}"
-        income_params.append(bus_number)
+        income_params.append(registration_number)
     
     if start_date:
         income_query += f" AND date >= {ph}"
@@ -63,9 +65,9 @@ def get_bus_data(bus_number=None, start_date=None, end_date=None, route=None, dr
     maint_query = "SELECT * FROM maintenance WHERE 1=1"
     maint_params = []
     
-    if bus_number and bus_number != "All Buses":
+    if registration_number and registration_number != "All Buses":
         maint_query += f" AND bus_number = {ph}"
-        maint_params.append(bus_number)
+        maint_params.append(registration_number)
     
     if start_date:
         maint_query += f" AND date >= {ph}"
@@ -289,7 +291,7 @@ def bus_analysis_page():
         col1, col2, col3, col4, col5 = st.columns(5)
         
         with col1:
-            selected_bus = st.selectbox("🚌 Bus Number", buses, key="bus_filter")
+            selected_bus = st.selectbox("🚌 Registration", buses, key="bus_filter")
         
         with col2:
             selected_route = st.selectbox("🛣️ Route", routes, key="route_filter")
@@ -336,7 +338,7 @@ def bus_analysis_page():
         # Fetch data WITH CONDUCTOR FILTER
         with st.spinner("Fetching data..."):
             income_df, maintenance_df = get_bus_data(
-                bus_number=selected_bus if selected_bus != "All Buses" else None,
+                registration_number=selected_bus if selected_bus != "All Buses" else None,
                 start_date=start_date.strftime("%Y-%m-%d"),
                 end_date=end_date.strftime("%Y-%m-%d"),
                 route=selected_route if selected_route != "All Routes" else None,

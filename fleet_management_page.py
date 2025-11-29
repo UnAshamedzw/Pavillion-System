@@ -71,6 +71,9 @@ def get_expiring_documents(days_threshold=30):
                 'Route Authority Permit': bus.get('route_permit_expiry')
             }
             
+            # Use registration_number as primary identifier
+            display_name = bus.get('registration_number') or bus['bus_number']
+            
             for doc_name, expiry_date in documents.items():
                 if expiry_date and expiry_date != '':
                     try:
@@ -81,7 +84,7 @@ def get_expiring_documents(days_threshold=30):
                             status = 'EXPIRED' if days_remaining < 0 else 'EXPIRING SOON' if days_remaining <= 7 else 'WARNING'
                             expiring_items.append({
                                 'type': 'Bus Document',
-                                'item': f"Bus {bus['bus_number']}",
+                                'item': display_name,  # Registration number shown
                                 'document': doc_name,
                                 'expiry_date': expiry,
                                 'days_remaining': days_remaining,

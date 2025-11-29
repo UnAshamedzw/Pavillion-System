@@ -235,7 +235,7 @@ def create_bus_performance_chart(income_df):
     fig.update_layout(
         title='Top 15 Buses by Revenue',
         xaxis_title='Total Revenue ($)',
-        yaxis_title='Bus Number',
+        yaxis_title='Registration',
         template='plotly_white',
         height=500
     )
@@ -638,13 +638,13 @@ def performance_metrics_page():
             bus_metrics = income_df.groupby('bus_number').agg({
                 'amount': ['sum', 'count', 'mean', 'std']
             }).reset_index()
-            bus_metrics.columns = ['Bus Number', 'Total Revenue', 'Trips', 'Avg Revenue', 'Std Dev']
+            bus_metrics.columns = ['Registration', 'Total Revenue', 'Trips', 'Avg Revenue', 'Std Dev']
             
             # Add maintenance data
             if not maintenance_df.empty:
                 bus_maint = maintenance_df.groupby('bus_number')['cost'].sum().reset_index()
-                bus_maint.columns = ['Bus Number', 'Maintenance Cost']
-                bus_metrics = bus_metrics.merge(bus_maint, on='Bus Number', how='left').fillna(0)
+                bus_maint.columns = ['Registration', 'Maintenance Cost']
+                bus_metrics = bus_metrics.merge(bus_maint, on='Registration', how='left').fillna(0)
                 bus_metrics['Net Profit'] = bus_metrics['Total Revenue'] - bus_metrics['Maintenance Cost']
                 bus_metrics['Efficiency Ratio'] = (bus_metrics['Total Revenue'] / bus_metrics['Maintenance Cost']).replace([np.inf, -np.inf], 0)
             
@@ -721,7 +721,7 @@ def performance_metrics_page():
             bus_maint = maintenance_df.groupby('bus_number')['cost'].sum()
             
             efficiency_table = pd.DataFrame({
-                'Bus Number': bus_revenue.index,
+                'Registration': bus_revenue.index,
                 'Revenue': bus_revenue.values,
                 'Maintenance Cost': [bus_maint.get(bus, 0) for bus in bus_revenue.index],
             })

@@ -38,18 +38,24 @@ from database import (
 # ============================================================================
 
 def get_bus_display_option(bus):
-    """Format bus for dropdown display"""
+    """Format bus for dropdown display - Registration Number is primary identifier"""
     reg_num = bus['registration_number'] if bus.get('registration_number') else 'No Reg'
-    return f"{reg_num} - {bus['bus_number']} ({bus['model']})"
+    model = bus.get('model', '')
+    return f"{reg_num} ({model})" if model else reg_num
 
 
-def extract_bus_number_from_option(option):
-    """Extract bus_number from dropdown option string"""
-    # Format: "REG - BUS_NUMBER (MODEL)"
-    parts = option.split(" - ")
-    if len(parts) >= 2:
-        return parts[1].split(" (")[0]
+def extract_registration_from_option(option):
+    """Extract registration_number from dropdown option string"""
+    # Format: "REG_NUMBER (MODEL)" or just "REG_NUMBER"
+    if " (" in option:
+        return option.split(" (")[0]
     return option
+
+
+# Keep for backward compatibility but mark as deprecated
+def extract_bus_number_from_option(option):
+    """DEPRECATED: Use extract_registration_from_option instead"""
+    return extract_registration_from_option(option)
 
 
 def format_employee_option(emp):
@@ -286,10 +292,10 @@ def routes_assignments_page():
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    # Bus dropdown
+                    # Bus dropdown - using registration number as identifier
                     bus_options = [get_bus_display_option(bus) for bus in buses]
-                    selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
-                    bus_number = extract_bus_number_from_option(selected_bus)
+                    selected_bus = st.selectbox("🚌 Select Bus (Registration)*", bus_options)
+                    registration_number = extract_registration_from_option(selected_bus)
                     
                     # Driver dropdown
                     driver_options = [format_employee_option(d) for d in drivers]
@@ -317,13 +323,13 @@ def routes_assignments_page():
                 if submit_assignment:
                     # Check if assignment already exists
                     existing = get_assignments_by_date(assignment_date.strftime("%Y-%m-%d"))
-                    bus_already_assigned = any(a['bus_number'] == bus_number for a in existing) if existing else False
+                    bus_already_assigned = any(a['bus_number'] == registration_number for a in existing) if existing else False
                     
                     if bus_already_assigned:
-                        st.error(f"❌ Assignment already exists for {bus_number} on {assignment_date}")
+                        st.error(f"❌ Assignment already exists for {registration_number} on {assignment_date}")
                     else:
                         assignment_id = add_bus_assignment(
-                            bus_number=bus_number,
+                            bus_number=registration_number,  # Using registration as identifier
                             driver_employee_id=driver_employee_id,
                             conductor_employee_id=conductor_employee_id,
                             assignment_date=assignment_date.strftime("%Y-%m-%d"),
@@ -337,7 +343,7 @@ def routes_assignments_page():
                             AuditLogger.log_action(
                                 action_type="Add",
                                 module="Assignment",
-                                description=f"Assignment created: {bus_number} - Driver: {driver_employee_id}, Conductor: {conductor_employee_id}",
+                                description=f"Assignment created: {registration_number} - Driver: {driver_employee_id}, Conductor: {conductor_employee_id}",
                                 affected_table="bus_assignments"
                             )
                             st.success("✅ Assignment created successfully!")
@@ -359,7 +365,7 @@ def routes_assignments_page():
                 # Handle both dict and tuple formats
                 if isinstance(assignment, dict):
                     assign_id = assignment['id']
-                    bus_num = assignment['bus_number']
+                    reg_num = assignment['bus_number']  # This now contains registration number
                     driver_name = assignment.get('driver_name', 'N/A')
                     conductor_name = assignment.get('conductor_name', 'N/A')
                     shift = assignment.get('shift', 'N/A')
@@ -368,13 +374,13 @@ def routes_assignments_page():
                     driver_emp_id = assignment.get('driver_employee_id', 'N/A')
                     conductor_emp_id = assignment.get('conductor_employee_id', 'N/A')
                 else:
-                    assign_id, bus_num, driver_name, conductor_name, date, shift, route, notes_text, driver_emp_id, conductor_emp_id = assignment
+                    assign_id, reg_num, driver_name, conductor_name, date, shift, route, notes_text, driver_emp_id, conductor_emp_id = assignment
                 
-                with st.expander(f"🚌 {bus_num} - {driver_name} & {conductor_name}"):
+                with st.expander(f"🚌 {reg_num} - {driver_name} & {conductor_name}"):
                     col_a, col_b = st.columns([3, 1])
                     
                     with col_a:
-                        st.write(f"**Bus:** {bus_num}")
+                        st.write(f"**Registration:** {reg_num}")
                         st.write(f"**Driver:** {driver_name} ({driver_emp_id})")
                         st.write(f"**Conductor:** {conductor_name} ({conductor_emp_id})")
                         st.write(f"**Shift:** {shift}")
@@ -390,7 +396,7 @@ def routes_assignments_page():
                                 AuditLogger.log_action(
                                     action_type="Delete",
                                     module="Assignment",
-                                    description=f"Assignment deleted: {bus_num}",
+                                    description=f"Assignment deleted: {reg_num}",
                                     affected_table="bus_assignments",
                                     affected_record_id=assign_id
                                 )
@@ -441,10 +447,10 @@ def income_entry_page():
         col1, col2 = st.columns(2)
         
         with col1:
-            # Bus dropdown
+            # Bus dropdown - using registration number as identifier
             bus_options = [get_bus_display_option(bus) for bus in buses]
-            selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
-            bus_number = extract_bus_number_from_option(selected_bus)
+            selected_bus = st.selectbox("🚌 Select Bus (Registration)*", bus_options)
+            registration_number = extract_registration_from_option(selected_bus)
             
             # Route dropdown
             route_options = ["Hire"] + [route['name'] for route in routes]
@@ -480,14 +486,14 @@ def income_entry_page():
         
         if submitted:
             # Validation
-            if not all([bus_number, selected_route, amount > 0, driver_name, conductor_name]):
+            if not all([registration_number, selected_route, amount > 0, driver_name, conductor_name]):
                 st.error("⚠️ Please fill in all required fields")
             elif selected_route == "Hire" and not hire_destination.strip():
                 st.error("⚠️ Please describe the hire destination")
             else:
-                # Insert using database abstraction
+                # Insert using database abstraction - store registration_number in bus_number field
                 record_id = add_income_record(
-                    bus_number=bus_number,
+                    bus_number=registration_number,  # Using registration as identifier
                     route=selected_route,
                     hire_destination=hire_destination if selected_route == "Hire" else None,
                     driver_name=driver_name,
@@ -502,7 +508,7 @@ def income_entry_page():
                 
                 if record_id:
                     AuditLogger.log_income_add(
-                        bus_number=bus_number,
+                        bus_number=registration_number,
                         route=selected_route,
                         amount=amount,
                         date=date.strftime("%Y-%m-%d")
@@ -827,12 +833,12 @@ def maintenance_entry_page():
         
         with col1:
             if buses:
-                # Bus dropdown
+                # Bus dropdown - using registration number as identifier
                 bus_options = [get_bus_display_option(bus) for bus in buses]
-                selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
-                bus_number = extract_bus_number_from_option(selected_bus)
+                selected_bus = st.selectbox("🚌 Select Bus (Registration)*", bus_options)
+                registration_number = extract_registration_from_option(selected_bus)
             else:
-                bus_number = st.text_input("🚌 Bus Number*", placeholder="e.g., Bus 1")
+                registration_number = st.text_input("🚌 Registration Number*", placeholder="e.g., ABC-1234")
             
             maintenance_type = st.selectbox(
                 "🔧 Maintenance Type*",
@@ -852,11 +858,11 @@ def maintenance_entry_page():
         submitted = st.form_submit_button("➕ Add Maintenance Record", width="stretch", type="primary")
         
         if submitted:
-            if not all([bus_number, maintenance_type, cost >= 0]):
+            if not all([registration_number, maintenance_type, cost >= 0]):
                 st.error("⚠️ Please fill in all required fields")
             else:
                 record_id = add_maintenance_record(
-                    bus_number=bus_number,
+                    bus_number=registration_number,  # Using registration as identifier
                     maintenance_type=maintenance_type,
                     mechanic_name=mechanic_name,
                     date=date.strftime("%Y-%m-%d"),
@@ -869,7 +875,7 @@ def maintenance_entry_page():
                 
                 if record_id:
                     AuditLogger.log_maintenance_add(
-                        bus_number=bus_number,
+                        bus_number=registration_number,
                         maintenance_type=maintenance_type,
                         cost=cost,
                         date=date.strftime("%Y-%m-%d")
