@@ -387,7 +387,7 @@ def create_efficiency_metrics_chart(income_df, maintenance_df):
     if income_df.empty:
         return None
     
-    # Calculate efficiency by bus
+    # Calculate efficiency by bus (bus_number column contains registration number)
     bus_revenue = income_df.groupby('bus_number')['amount'].sum()
     bus_maintenance = maintenance_df.groupby('bus_number')['cost'].sum() if not maintenance_df.empty else pd.Series()
     
@@ -403,6 +403,8 @@ def create_efficiency_metrics_chart(income_df, maintenance_df):
     )
     efficiency_df = efficiency_df.sort_values('efficiency_ratio', ascending=False).head(15)
     efficiency_df = efficiency_df.reset_index()
+    # After reset_index, the bus_number becomes 'index' column, rename it
+    efficiency_df = efficiency_df.rename(columns={'index': 'registration'})
     
     fig = go.Figure(data=[
         go.Scatter(
@@ -416,7 +418,7 @@ def create_efficiency_metrics_chart(income_df, maintenance_df):
                 showscale=True,
                 colorbar=dict(title="Efficiency Ratio")
             ),
-            text=efficiency_df['bus_number'],
+            text=efficiency_df['registration'],
             textposition='top center'
         )
     ])
