@@ -208,19 +208,19 @@ def create_revenue_trend_chart(income_df):
 
 
 def create_bus_performance_chart(income_df):
-    """Create top performing buses chart"""
+    """Create top performing buses chart - shows registration numbers"""
     if income_df.empty:
         return None
     
     bus_performance = income_df.groupby('bus_number')['amount'].agg(['sum', 'count']).reset_index()
-    bus_performance.columns = ['bus_number', 'total_revenue', 'trips']
+    bus_performance.columns = ['registration', 'total_revenue', 'trips']
     bus_performance['avg_revenue'] = bus_performance['total_revenue'] / bus_performance['trips']
     bus_performance = bus_performance.sort_values('total_revenue', ascending=True).tail(15)
     
     fig = go.Figure(data=[
         go.Bar(
             x=bus_performance['total_revenue'],
-            y=bus_performance['bus_number'],
+            y=bus_performance['registration'],
             orientation='h',
             marker=dict(
                 color=bus_performance['total_revenue'],
@@ -304,11 +304,12 @@ def create_maintenance_analysis_chart(maintenance_df):
         )
     else:
         maint_by_bus = maintenance_df.groupby('bus_number')['cost'].sum().reset_index()
+        maint_by_bus.columns = ['registration', 'cost']
         maint_by_bus = maint_by_bus.sort_values('cost', ascending=False).head(10)
         
         fig = px.bar(
             maint_by_bus,
-            x='bus_number',
+            x='registration',
             y='cost',
             title='Top 10 Buses by Maintenance Cost'
         )

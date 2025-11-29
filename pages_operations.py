@@ -678,7 +678,7 @@ def income_entry_page():
                 col_a, col_b = st.columns([3, 1])
                 
                 with col_a:
-                    st.write(f"**Bus:** {bus_num}")
+                    st.write(f"**Registration:** {bus_num}")
                     st.write(f"**Route:** {route_display}")
                     st.write(f"**Driver:** {driver or 'N/A'}")
                     st.write(f"**Conductor:** {conductor or 'N/A'}")
@@ -986,7 +986,7 @@ def maintenance_entry_page():
                 col_a, col_b = st.columns([3, 1])
                 
                 with col_a:
-                    st.write(f"**Bus:** {bus_num}")
+                    st.write(f"**Registration:** {bus_num}")
                     st.write(f"**Type:** {maint_type}")
                     st.write(f"**Mechanic:** {mechanic or 'N/A'}")
                     st.write(f"**Cost:** ${cost_amt:,.2f}")

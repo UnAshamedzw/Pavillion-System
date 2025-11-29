@@ -559,7 +559,7 @@ def bus_analysis_page():
             # Prepare summary stats for export
             summary_stats = {
                 'Analysis Period': f"{start_date} to {end_date}",
-                'Bus Number': selected_bus,
+                'Registration': selected_bus,
                 'Route': selected_route,
                 'Driver': selected_driver,
                 'Conductor': selected_conductor,  # NEW
