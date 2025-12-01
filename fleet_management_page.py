@@ -152,7 +152,7 @@ def manage_buses():
     st.subheader("🚌 Bus Fleet Management")
     
     # Action selector
-    action = st.radio("Select Action:", ["View All Buses", "Add New Bus", "Edit Bus", "View Documents Status"], horizontal=True)
+    action = st.radio("Select Action:", ["View All Buses", "Add New Bus", "Edit Bus", "Delete Bus", "View Documents Status"], horizontal=True)
     
     conn = get_connection()
     
@@ -359,6 +359,141 @@ def manage_buses():
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"Error updating bus: {e}")
+        except Exception as e:
+            st.error(f"Error: {e}")
+    
+    elif action == "Delete Bus":
+        st.subheader("🗑️ Delete Bus")
+        st.warning("⚠️ **Warning:** Deleting a bus will remove the bus record. Income and maintenance records associated with this bus will NOT be deleted but will no longer be linked to an active bus.")
+        
+        try:
+            buses_df = pd.read_sql_query("""
+                SELECT bus_number, registration_number, make, model, status 
+                FROM buses 
+                ORDER BY bus_number
+            """, get_engine())
+            
+            if buses_df.empty:
+                st.info("No buses to delete.")
+            else:
+                # Show bus list with details
+                st.markdown("### Select Bus to Delete")
+                
+                # Create display options
+                bus_options = []
+                for _, bus in buses_df.iterrows():
+                    reg = bus['registration_number'] or 'No Reg'
+                    model = bus['model'] or 'Unknown'
+                    status = bus['status'] or 'Unknown'
+                    bus_options.append(f"{reg} - {bus['bus_number']} ({model}) - {status}")
+                
+                selected_option = st.selectbox("Select Bus", bus_options)
+                
+                if selected_option:
+                    # Extract bus_number from selection
+                    selected_bus = buses_df.iloc[bus_options.index(selected_option)]['bus_number']
+                    selected_reg = buses_df.iloc[bus_options.index(selected_option)]['registration_number']
+                    
+                    # Show bus details
+                    st.markdown("---")
+                    st.markdown(f"**Selected Bus:** {selected_reg or selected_bus}")
+                    
+                    # Check for related records
+                    ph = '%s' if USE_POSTGRES else '?'
+                    
+                    # Count income records (using registration number which is stored in bus_number field in income table)
+                    income_count_df = pd.read_sql_query(
+                        f"SELECT COUNT(*) as count FROM income WHERE bus_number = {ph}", 
+                        get_engine(), 
+                        params=(selected_reg or selected_bus,)
+                    )
+                    income_count = income_count_df['count'].iloc[0]
+                    
+                    # Count maintenance records
+                    maint_count_df = pd.read_sql_query(
+                        f"SELECT COUNT(*) as count FROM maintenance WHERE bus_number = {ph}", 
+                        get_engine(), 
+                        params=(selected_reg or selected_bus,)
+                    )
+                    maint_count = maint_count_df['count'].iloc[0]
+                    
+                    # Count assignments
+                    assign_count_df = pd.read_sql_query(
+                        f"SELECT COUNT(*) as count FROM bus_assignments WHERE bus_number = {ph}", 
+                        get_engine(), 
+                        params=(selected_reg or selected_bus,)
+                    )
+                    assign_count = assign_count_df['count'].iloc[0]
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("📊 Income Records", income_count)
+                    with col2:
+                        st.metric("🔧 Maintenance Records", maint_count)
+                    with col3:
+                        st.metric("📋 Assignments", assign_count)
+                    
+                    st.markdown("---")
+                    
+                    # Delete options
+                    delete_related = st.checkbox(
+                        "🗑️ Also delete ALL related records (income, maintenance, assignments)", 
+                        value=False,
+                        help="If checked, all income, maintenance, and assignment records for this bus will be permanently deleted."
+                    )
+                    
+                    if delete_related:
+                        st.error("⚠️ **DANGER:** This will permanently delete ALL income, maintenance, and assignment records for this bus!")
+                    
+                    # Confirmation
+                    confirm_text = st.text_input(
+                        f"Type '{selected_reg or selected_bus}' to confirm deletion",
+                        placeholder=f"Type: {selected_reg or selected_bus}"
+                    )
+                    
+                    if st.button("🗑️ Delete Bus", type="primary", width="stretch"):
+                        if confirm_text == (selected_reg or selected_bus):
+                            try:
+                                cursor = conn.cursor()
+                                
+                                if delete_related:
+                                    # Delete related records first
+                                    if USE_POSTGRES:
+                                        cursor.execute("DELETE FROM income WHERE bus_number = %s", (selected_reg or selected_bus,))
+                                        cursor.execute("DELETE FROM maintenance WHERE bus_number = %s", (selected_reg or selected_bus,))
+                                        cursor.execute("DELETE FROM bus_assignments WHERE bus_number = %s", (selected_reg or selected_bus,))
+                                    else:
+                                        cursor.execute("DELETE FROM income WHERE bus_number = ?", (selected_reg or selected_bus,))
+                                        cursor.execute("DELETE FROM maintenance WHERE bus_number = ?", (selected_reg or selected_bus,))
+                                        cursor.execute("DELETE FROM bus_assignments WHERE bus_number = ?", (selected_reg or selected_bus,))
+                                    
+                                    AuditLogger.log_action(
+                                        "Delete", 
+                                        "Fleet Management", 
+                                        f"Deleted bus {selected_bus} ({selected_reg}) with {income_count} income, {maint_count} maintenance, {assign_count} assignment records"
+                                    )
+                                else:
+                                    AuditLogger.log_action(
+                                        "Delete", 
+                                        "Fleet Management", 
+                                        f"Deleted bus {selected_bus} ({selected_reg}) - related records preserved"
+                                    )
+                                
+                                # Delete the bus
+                                if USE_POSTGRES:
+                                    cursor.execute("DELETE FROM buses WHERE bus_number = %s", (selected_bus,))
+                                else:
+                                    cursor.execute("DELETE FROM buses WHERE bus_number = ?", (selected_bus,))
+                                
+                                conn.commit()
+                                st.success(f"✅ Bus {selected_reg or selected_bus} deleted successfully!")
+                                st.rerun()
+                                
+                            except Exception as e:
+                                st.error(f"Error deleting bus: {e}")
+                        else:
+                            st.error(f"❌ Please type '{selected_reg or selected_bus}' exactly to confirm deletion")
+                            
         except Exception as e:
             st.error(f"Error: {e}")
     
