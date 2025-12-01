@@ -531,7 +531,9 @@ def initialize_predefined_roles():
                         RETURNING id
                     ''', (role_name, role_data['description'], 
                           role_data['is_system_role'], role_data['can_be_modified']))
-                    role_id = cursor.fetchone()[0]
+                    result = cursor.fetchone()
+                    # Handle both dict-like (RealDictCursor) and tuple results
+                    role_id = result['id'] if hasattr(result, 'keys') else result[0]
                 else:
                     cursor.execute('''
                         INSERT INTO roles (name, description, is_system_role, can_be_modified)
@@ -556,6 +558,7 @@ def initialize_predefined_roles():
                         ''', (role_id, permission))
                 
                 conn.commit()
+                print(f"✅ Initialized role: {role_name} with {len(role_data['permissions'])} permissions")
         except Exception as e:
             print(f"Error initializing role {role_name}: {e}")
             continue
@@ -1147,7 +1150,8 @@ def create_custom_role(name: str, description: str, permissions: list) -> bool:
                 VALUES (%s, %s, FALSE, TRUE)
                 RETURNING id
             ''', (name, description))
-            role_id = cursor.fetchone()[0]
+            result = cursor.fetchone()
+            role_id = result['id'] if hasattr(result, 'keys') else result[0]
         else:
             cursor.execute('''
                 INSERT INTO roles (name, description, is_system_role, can_be_modified)
