@@ -220,11 +220,11 @@ def routes_assignments_page():
                         st.caption(f"Added: {route['created_at']} by {route.get('created_by', 'N/A')}")
                     
                     with col_actions:
-                        if st.button("✏️ Edit", key=f"edit_route_{route['id']}"):
-                            st.session_state[f'edit_route_{route["id"]}'] = True
+                        if st.button("✏️ Edit", key=f"btn_edit_route_{route['id']}"):
+                            st.session_state[f'editing_route_{route["id"]}'] = True
                             st.rerun()
                         
-                        if st.button("🗑️ Delete", key=f"delete_route_{route['id']}"):
+                        if st.button("🗑️ Delete", key=f"btn_delete_route_{route['id']}"):
                             if st.session_state.get(f'confirm_delete_route_{route["id"]}', False):
                                 delete_route(route['id'])
                                 st.success(f"Route '{route['name']}' deleted")
@@ -234,7 +234,7 @@ def routes_assignments_page():
                                 st.warning("Click again to confirm")
                     
                     # Edit Form
-                    if st.session_state.get(f'edit_route_{route["id"]}', False):
+                    if st.session_state.get(f'editing_route_{route["id"]}', False):
                         st.markdown("---")
                         with st.form(f"edit_route_form_{route['id']}"):
                             edit_name = st.text_input("Route Name", value=route['name'])
@@ -251,11 +251,11 @@ def routes_assignments_page():
                             if save_btn:
                                 update_route(route['id'], edit_name, edit_distance if edit_distance > 0 else None, edit_desc)
                                 st.success("✅ Route updated successfully!")
-                                st.session_state[f'edit_route_{route["id"]}'] = False
+                                st.session_state[f'editing_route_{route["id"]}'] = False
                                 st.rerun()
                             
                             if cancel_btn:
-                                st.session_state[f'edit_route_{route["id"]}'] = False
+                                st.session_state[f'editing_route_{route["id"]}'] = False
                                 st.rerun()
         else:
             st.info("🔭 No routes added yet. Add your first route above!")
