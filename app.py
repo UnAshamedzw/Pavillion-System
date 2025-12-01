@@ -1,20 +1,23 @@
 """
 app.py - Main Application Entry Point
 Pavillion Coaches Bus Management System
-CORRECTED VERSION - Fixed imports and removed unused code
-WITH PERSISTENT SESSIONS - Login persists across page refreshes
+WITH ROLE-BASED PERMISSIONS - Menu items filtered by user permissions
 """
 
 import streamlit as st
 from database import init_database, migrate_database
-from auth import create_users_table, create_sessions_table, login_page, logout, restore_session
+from auth import (
+    create_users_table, create_sessions_table, create_permissions_tables,
+    initialize_predefined_roles, login_page, logout, restore_session,
+    has_permission, can_access_page, get_accessible_menu_items
+)
 from pages_operations import (
     income_entry_page, 
     maintenance_entry_page, 
     revenue_history_page,
     import_data_page,
     dashboard_page,
-    routes_assignments_page  # Combined Routes & Assignments
+    routes_assignments_page
 )
 from pages_hr import (
     employee_management_page,
@@ -25,7 +28,7 @@ from pages_hr import (
     get_expiring_documents, 
     display_document_expiry_alerts
 )
-from pages_users import user_management_page, my_profile_page
+from pages_users import user_management_page, my_profile_page, role_management_page
 from pages_audit import activity_log_page, user_activity_dashboard
 from pages_bus_analysis import bus_analysis_page
 from pages_performance_metrics import performance_metrics_page
@@ -58,9 +61,11 @@ def main():
     # Initialize database only once per session
     if 'initialized' not in st.session_state:
         init_database()
-        migrate_database()  # FIXED: Run migrations to add any missing columns
+        migrate_database()
         create_users_table()
-        create_sessions_table()  # Create sessions table for persistent login
+        create_sessions_table()
+        create_permissions_tables()
+        initialize_predefined_roles()
         st.session_state.initialized = True
     
     # Try to restore session from query params (persistent login)
@@ -98,110 +103,63 @@ def main():
         /* Branded metrics */
         .stMetric {
             background-color: var(--pavillion-light);
-            padding: 1rem;
-            border-radius: 0.5rem;
-            border-left: 4px solid var(--pavillion-gold);
-        }
-        
-        /* Buttons */
-        .stButton>button {
-            background-color: var(--pavillion-gold);
-            color: white;
-            border: none;
-            font-weight: 600;
-        }
-        
-        .stButton>button:hover {
-            background-color: #d89a15;
-            border: none;
-        }
-        
-        /* Primary buttons */
-        .stButton>button[kind="primary"] {
-            background-color: var(--pavillion-green);
-            color: white;
-        }
-        
-        .stButton>button[kind="primary"]:hover {
-            background-color: #153d31;
+            border-radius: 8px;
+            padding: 0.5rem;
         }
         
         /* Sidebar styling */
-        [data-testid="stSidebar"] {
-            background-color: #fafafa;
+        .css-1d391kg {
+            background-color: var(--pavillion-light);
         }
         
-        /* Success messages */
-        .element-container div[data-testid="stMarkdownContainer"] div[style*="background-color: rgb(144, 238, 144)"] {
-            background-color: var(--pavillion-gold) !important;
-        }
-        
-        /* Logo container */
-        .logo-container {
+        /* Header styling */
+        .brand-header {
             text-align: center;
             padding: 1rem 0;
+            border-bottom: 3px solid var(--pavillion-gold);
             margin-bottom: 1rem;
         }
         
-        /* Brand header */
-        .brand-header {
-            background: linear-gradient(135deg, var(--pavillion-green) 0%, var(--pavillion-gold) 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-            text-align: center;
-        }
-        
         .brand-header h1 {
-            color: white;
+            color: var(--pavillion-green);
             margin: 0;
-            font-size: 2.5rem;
         }
         
         .brand-header p {
-            color: white;
+            color: var(--pavillion-gold);
+            font-style: italic;
             margin: 0.5rem 0 0 0;
-            font-size: 1.1rem;
         }
         
-        /* Tab styling */
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 8px;
-        }
-        
-        .stTabs [data-baseweb="tab"] {
-            background-color: var(--pavillion-light);
-            border-radius: 4px 4px 0 0;
-            padding: 10px 20px;
-        }
-        
-        .stTabs [aria-selected="true"] {
-            background-color: var(--pavillion-gold);
-            color: white;
+        /* Permission denied styling */
+        .access-denied {
+            text-align: center;
+            padding: 2rem;
+            background-color: #fee;
+            border-radius: 8px;
+            margin: 1rem 0;
         }
         </style>
     """, unsafe_allow_html=True)
     
-    # Get current user info
+    # Get current user
     user = st.session_state['user']
     
     # Sidebar with logo
-    # Try to load and display logo
-    logo_path = Path("logo.png")
+    logo_path = Path("pavillion_logo.png")
     if logo_path.exists():
-        logo_base64 = get_base64_image("logo.png")
-        if logo_base64:
+        logo_b64 = get_base64_image(str(logo_path))
+        if logo_b64:
             st.sidebar.markdown(
                 f"""
-                <div class="logo-container">
-                    <img src="data:image/png;base64,{logo_base64}" width="200">
+                <div style="text-align: center; padding: 1rem 0;">
+                    <img src="data:image/png;base64,{logo_b64}" style="max-width: 180px;">
+                    <p style="color: #E6A918; margin: 0.5rem 0 0 0; font-style: italic;">smart travel</p>
                 </div>
                 """,
                 unsafe_allow_html=True
             )
     else:
-        # Fallback if logo not found
         st.sidebar.markdown("""
             <div style="text-align: center; padding: 1rem 0;">
                 <h2 style="color: #1B4D3E; margin: 0;">Pavillion Coaches</h2>
@@ -210,7 +168,8 @@ def main():
         """, unsafe_allow_html=True)
     
     st.sidebar.markdown("---")
-    st.sidebar.markdown(f"**👤 {user['full_name']}** ({user['role']})")
+    st.sidebar.markdown(f"**👤 {user['full_name']}**")
+    st.sidebar.markdown(f"*{user['role']}*")
     st.sidebar.markdown("---")
     
     # Initialize default page in session state
@@ -225,46 +184,67 @@ def main():
     
     st.sidebar.markdown("---")
     
-    # Sub-menu based on main menu - with Dashboard as first option
+    # Define all menu items with permission requirements
+    operations_items = [
+        "📈 Dashboard",
+        "📊 Income Entry",
+        "🔧 Maintenance Entry",
+        "📥 Import from Excel",
+        "💰 Revenue History",
+        "🚌 Fleet Management",
+        "🛣️ Routes & Assignments"
+    ]
+    
+    hr_items = [
+        "👥 Employee Management",
+        "📊 Employee Performance",
+        "💰 Payroll & Payslips",
+        "📅 Leave Management",
+        "⚠️ Disciplinary Records"
+    ]
+    
+    analytics_items = [
+        "🚌 Bus-by-Bus Analysis",
+        "📈 Performance Metrics"
+    ]
+    
+    system_items = ["👤 My Profile", "📊 My Activity"]
+    
+    # Add admin-only items if user has permissions
+    if has_permission('view_users'):
+        system_items.append("👥 User Management")
+    if has_permission('manage_roles'):
+        system_items.append("🔐 Role Management")
+    if has_permission('view_audit_logs'):
+        system_items.append("📜 Activity Log")
+    
+    # Filter menu items based on permissions
     if menu_section == "🚌 Operations":
-        page = st.sidebar.radio(
-            "Operations:",
-            [
-                "📈 Dashboard",
-                "📊 Income Entry",
-                "🔧 Maintenance Entry",
-                "📥 Import from Excel",
-                "💰 Revenue History",
-                "🚌 Fleet Management",
-                "🛣️ Routes & Assignments"
-            ]
-        )
+        available_items = get_accessible_menu_items(operations_items)
+        if available_items:
+            page = st.sidebar.radio("Operations:", available_items)
+        else:
+            page = None
+            st.sidebar.warning("No accessible pages in this section")
+            
     elif menu_section == "👥 HR Management":
-        page = st.sidebar.radio(
-            "HR Management:",
-            [
-                "👥 Employee Management",
-                "📊 Employee Performance",
-                "💰 Payroll & Payslips",
-                "📅 Leave Management",
-                "⚠️ Disciplinary Records"
-            ]
-        )
+        available_items = get_accessible_menu_items(hr_items)
+        if available_items:
+            page = st.sidebar.radio("HR Management:", available_items)
+        else:
+            page = None
+            st.sidebar.warning("No accessible pages in this section")
+            
     elif menu_section == "📊 Analytics":
-        page = st.sidebar.radio(
-            "Analytics:",
-            [
-                "🚌 Bus-by-Bus Analysis",
-                "📈 Performance Metrics"
-            ]
-        )
+        available_items = get_accessible_menu_items(analytics_items)
+        if available_items:
+            page = st.sidebar.radio("Analytics:", available_items)
+        else:
+            page = None
+            st.sidebar.warning("No accessible pages in this section")
+            
     else:  # System
-        pages_list = ["👤 My Profile", "📊 My Activity"]
-        # Only show User Management and Activity Log for Admins
-        if user['role'] == 'Admin':
-            pages_list.extend(["👥 User Management", "📜 Activity Log"])
-        
-        page = st.sidebar.radio("System:", pages_list)
+        page = st.sidebar.radio("System:", system_items)
     
     st.sidebar.markdown("---")
     
@@ -279,8 +259,6 @@ def main():
         - 💰 Revenue history
         - 🚌 Fleet management
         - 🛣️ Routes & assignments
-        - ⚠️ Document tracking
-        - ✅ Full audit trail
         """)
     elif menu_section == "👥 HR Management":
         st.sidebar.info("""
@@ -290,7 +268,6 @@ def main():
         - 💰 Payroll & payslips
         - 📅 Leave management
         - ⚠️ Disciplinary records
-        - 💵 Commission tracking
         """)
     elif menu_section == "📊 Analytics":
         st.sidebar.info("""
@@ -299,7 +276,6 @@ def main():
         - 💰 Revenue vs expenses
         - 📊 Profit/loss tracking
         - 📈 Performance trends
-        - 📥 Export to Excel/PDF
         """)
     else:
         st.sidebar.info(f"""
@@ -307,11 +283,6 @@ def main():
         - **Name:** {user['full_name']}
         - **Role:** {user['role']}
         - **Username:** {user['username']}
-        
-        **System Features:**
-        - 🔐 Secure authentication
-        - 📜 Complete audit trail
-        - 👥 User management
         """)
     
     # Logout button
@@ -332,58 +303,127 @@ def main():
         </div>
     """, unsafe_allow_html=True)
     
+    # Handle no page selected
+    if page is None:
+        st.warning("🚫 You don't have access to any pages in this section.")
+        st.info("Please contact your administrator if you need access.")
+        return
+    
     # Show document expiry alerts on Dashboard page
     if page == "📈 Dashboard":
         try:
             show_expiry_alerts()
             st.markdown("---")
         except Exception:
-            # Silently fail if fleet management is not set up yet
             pass
         
-        # Also show HR document expiry alerts
         try:
             display_document_expiry_alerts()
         except Exception:
             pass
     
-    # Route to appropriate page
+    # Route to appropriate page with permission check
     if page == "📊 Income Entry":
-        income_entry_page()
+        if can_access_page(page):
+            income_entry_page()
+        else:
+            show_access_denied(page)
     elif page == "🔧 Maintenance Entry":
-        maintenance_entry_page()
+        if can_access_page(page):
+            maintenance_entry_page()
+        else:
+            show_access_denied(page)
     elif page == "📥 Import from Excel":
-        import_data_page()
+        if can_access_page(page):
+            import_data_page()
+        else:
+            show_access_denied(page)
     elif page == "💰 Revenue History":
-        revenue_history_page()
+        if can_access_page(page):
+            revenue_history_page()
+        else:
+            show_access_denied(page)
     elif page == "📈 Dashboard":
-        dashboard_page()
+        if can_access_page(page):
+            dashboard_page()
+        else:
+            show_access_denied(page)
     elif page == "🚌 Fleet Management":
-        fleet_management_page()
+        if can_access_page(page):
+            fleet_management_page()
+        else:
+            show_access_denied(page)
     elif page == "🛣️ Routes & Assignments":
-        routes_assignments_page()
+        if can_access_page(page):
+            routes_assignments_page()
+        else:
+            show_access_denied(page)
     elif page == "👥 Employee Management":
-        employee_management_page()
+        if can_access_page(page):
+            employee_management_page()
+        else:
+            show_access_denied(page)
     elif page == "📊 Employee Performance":
-        employee_performance_page()
+        if can_access_page(page):
+            employee_performance_page()
+        else:
+            show_access_denied(page)
     elif page == "💰 Payroll & Payslips":
-        payroll_management_page()
+        if can_access_page(page):
+            payroll_management_page()
+        else:
+            show_access_denied(page)
     elif page == "📅 Leave Management":
-        leave_management_page()
+        if can_access_page(page):
+            leave_management_page()
+        else:
+            show_access_denied(page)
     elif page == "⚠️ Disciplinary Records":
-        disciplinary_records_page()
+        if can_access_page(page):
+            disciplinary_records_page()
+        else:
+            show_access_denied(page)
     elif page == "🚌 Bus-by-Bus Analysis":
-        bus_analysis_page()
+        if can_access_page(page):
+            bus_analysis_page()
+        else:
+            show_access_denied(page)
     elif page == "📈 Performance Metrics":
-        performance_metrics_page()
+        if can_access_page(page):
+            performance_metrics_page()
+        else:
+            show_access_denied(page)
     elif page == "👤 My Profile":
         my_profile_page()
     elif page == "📊 My Activity":
         user_activity_dashboard()
     elif page == "👥 User Management":
-        user_management_page()
+        if has_permission('view_users'):
+            user_management_page()
+        else:
+            show_access_denied(page)
+    elif page == "🔐 Role Management":
+        if has_permission('manage_roles'):
+            role_management_page()
+        else:
+            show_access_denied(page)
     elif page == "📜 Activity Log":
-        activity_log_page()
+        if has_permission('view_audit_logs'):
+            activity_log_page()
+        else:
+            show_access_denied(page)
+
+
+def show_access_denied(page_name: str):
+    """Display access denied message"""
+    st.error("🚫 Access Denied")
+    st.markdown(f"""
+        <div class="access-denied">
+            <h3>You don't have permission to access this page</h3>
+            <p><strong>Page:</strong> {page_name}</p>
+            <p>Please contact your administrator if you need access to this feature.</p>
+        </div>
+    """, unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
