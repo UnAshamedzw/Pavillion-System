@@ -1043,12 +1043,20 @@ def import_data_page():
         ### Required Columns:
         
         **Income Data:**
-        - bus_number, route, driver_name, conductor_name, date, amount
-        - Optional: hire_destination (required if route = "Hire"), notes
+        - `registration_number` - Bus registration (e.g., ABC-1234)
+        - `route` - Route name or "Hire" for private hire
+        - `driver_name` - Name of the driver
+        - `conductor_name` - Name of the conductor
+        - `date` - Date in YYYY-MM-DD format
+        - `amount` - Income amount
+        - Optional: `hire_destination` (required if route = "Hire"), `notes`
         
         **Maintenance Data:**
-        - bus_number, maintenance_type, date, cost
-        - Optional: mechanic_name, status, description, parts_used
+        - `registration_number` - Bus registration (e.g., ABC-1234)
+        - `maintenance_type` - Type of maintenance
+        - `date` - Date in YYYY-MM-DD format
+        - `cost` - Maintenance cost
+        - Optional: `mechanic_name`, `status`, `description`, `parts_used`
         
         **Date Format:** YYYY-MM-DD (e.g., 2025-10-15)
         """)
@@ -1060,7 +1068,7 @@ def import_data_page():
     
     with col_temp1:
         income_template = pd.DataFrame({
-            'bus_number': ['PAV-07', 'PAV-08', 'PAV-09'],
+            'registration_number': ['ABC-1234', 'DEF-5678', 'GHI-9012'],
             'route': ['Harare-Mutare', 'Hire', 'Harare-Bulawayo'],
             'hire_destination': ['', 'Wedding at Lake Chivero', ''],
             'driver_name': ['John Doe', 'Jane Smith', 'Bob Wilson'],
@@ -1081,7 +1089,7 @@ def import_data_page():
     
     with col_temp2:
         maint_template = pd.DataFrame({
-            'bus_number': ['PAV-07', 'PAV-08'],
+            'registration_number': ['ABC-1234', 'DEF-5678'],
             'maintenance_type': ['Oil Change', 'Tire Replacement'],
             'mechanic_name': ['Mike Smith', 'Tom Brown'],
             'date': ['2025-10-15', '2025-10-15'],
@@ -1131,11 +1139,16 @@ def import_data_page():
             st.subheader("✓ Validation")
             
             if import_type == "💰 Income Data":
-                required_cols = ['bus_number', 'route', 'driver_name', 'conductor_name', 'date', 'amount']
+                required_cols = ['registration_number', 'route', 'driver_name', 'conductor_name', 'date', 'amount']
                 optional_cols = ['hire_destination', 'notes']
             else:  # Maintenance
-                required_cols = ['bus_number', 'maintenance_type', 'date', 'cost']
+                required_cols = ['registration_number', 'maintenance_type', 'date', 'cost']
                 optional_cols = ['mechanic_name', 'status', 'description', 'parts_used']
+            
+            # Support backward compatibility - rename bus_number to registration_number if present
+            if 'bus_number' in df.columns and 'registration_number' not in df.columns:
+                df = df.rename(columns={'bus_number': 'registration_number'})
+                st.info("ℹ️ Column 'bus_number' automatically renamed to 'registration_number'")
             
             missing_cols = [col for col in required_cols if col not in df.columns]
             
@@ -1167,7 +1180,7 @@ def import_data_page():
                                         raise ValueError("Hire destination required for Hire routes")
                                     
                                     record_id = add_income_record(
-                                        bus_number=row['bus_number'],
+                                        bus_number=row['registration_number'],  # Store registration in bus_number field
                                         route=row['route'],
                                         hire_destination=row.get('hire_destination', ''),
                                         driver_name=row['driver_name'],
@@ -1179,7 +1192,7 @@ def import_data_page():
                                     )
                                 else:  # Maintenance
                                     record_id = add_maintenance_record(
-                                        bus_number=row['bus_number'],
+                                        bus_number=row['registration_number'],  # Store registration in bus_number field
                                         maintenance_type=row['maintenance_type'],
                                         mechanic_name=row.get('mechanic_name', ''),
                                         date=str(row['date']),
