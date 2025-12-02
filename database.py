@@ -303,6 +303,173 @@ def init_database():
                 )
             ''')
             
+            # FUEL_RECORDS TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS fuel_records (
+                    id SERIAL PRIMARY KEY,
+                    bus_number TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    liters REAL NOT NULL,
+                    cost_per_liter REAL NOT NULL,
+                    total_cost REAL NOT NULL,
+                    odometer_reading REAL,
+                    previous_odometer REAL,
+                    km_traveled REAL,
+                    fuel_efficiency REAL,
+                    fuel_station TEXT,
+                    payment_method TEXT DEFAULT 'Cash',
+                    receipt_number TEXT,
+                    filled_by TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # TRIPS TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS trips (
+                    id SERIAL PRIMARY KEY,
+                    bus_number TEXT NOT NULL,
+                    route_id INTEGER,
+                    route_name TEXT NOT NULL,
+                    driver_id INTEGER,
+                    driver_name TEXT,
+                    conductor_id INTEGER,
+                    conductor_name TEXT,
+                    trip_date TEXT NOT NULL,
+                    departure_time TEXT,
+                    arrival_time TEXT,
+                    duration_minutes INTEGER,
+                    passengers INTEGER NOT NULL DEFAULT 0,
+                    revenue REAL NOT NULL DEFAULT 0,
+                    revenue_per_passenger REAL,
+                    trip_type TEXT DEFAULT 'Scheduled',
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # DOCUMENTS TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS documents (
+                    id SERIAL PRIMARY KEY,
+                    document_name TEXT NOT NULL,
+                    document_type TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    entity_name TEXT,
+                    issue_date TEXT,
+                    expiry_date TEXT,
+                    days_to_expiry INTEGER,
+                    days_until_expiry INTEGER,
+                    status TEXT DEFAULT 'Active',
+                    document_number TEXT,
+                    issuing_authority TEXT,
+                    file_data TEXT,
+                    file_name TEXT,
+                    file_type TEXT,
+                    file_size INTEGER,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # CUSTOMERS TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS customers (
+                    id SERIAL PRIMARY KEY,
+                    customer_name TEXT NOT NULL,
+                    contact_person TEXT,
+                    phone TEXT,
+                    email TEXT,
+                    address TEXT,
+                    customer_type TEXT DEFAULT 'Individual',
+                    notes TEXT,
+                    status TEXT DEFAULT 'Active',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # BOOKINGS TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS bookings (
+                    id SERIAL PRIMARY KEY,
+                    booking_ref TEXT UNIQUE NOT NULL,
+                    customer_id INTEGER REFERENCES customers(id),
+                    trip_date TEXT NOT NULL,
+                    pickup_time TEXT,
+                    pickup_location TEXT,
+                    dropoff_location TEXT,
+                    trip_type TEXT DEFAULT 'One Way',
+                    num_passengers INTEGER,
+                    bus_type TEXT,
+                    assigned_bus TEXT,
+                    assigned_driver TEXT,
+                    distance_km REAL,
+                    duration_hours REAL,
+                    base_rate REAL,
+                    total_amount REAL NOT NULL,
+                    deposit_amount REAL DEFAULT 0,
+                    balance REAL,
+                    notes TEXT,
+                    status TEXT DEFAULT 'Pending',
+                    payment_status TEXT DEFAULT 'Unpaid',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # INVENTORY TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory (
+                    id SERIAL PRIMARY KEY,
+                    part_number TEXT NOT NULL,
+                    part_name TEXT NOT NULL,
+                    category TEXT,
+                    description TEXT,
+                    quantity INTEGER DEFAULT 0,
+                    unit TEXT DEFAULT 'Piece',
+                    unit_cost REAL DEFAULT 0,
+                    total_value REAL DEFAULT 0,
+                    reorder_level INTEGER DEFAULT 5,
+                    supplier TEXT,
+                    location TEXT,
+                    notes TEXT,
+                    status TEXT DEFAULT 'Active',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # INVENTORY_TRANSACTIONS TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory_transactions (
+                    id SERIAL PRIMARY KEY,
+                    inventory_id INTEGER REFERENCES inventory(id),
+                    part_name TEXT,
+                    transaction_type TEXT NOT NULL,
+                    quantity_change INTEGER NOT NULL,
+                    quantity_before INTEGER,
+                    quantity_after INTEGER,
+                    unit_cost REAL,
+                    total_value REAL,
+                    reference TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             # Create indexes
             try:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
@@ -311,6 +478,21 @@ def init_database():
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_income_bus ON income(bus_number)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_maintenance_date ON maintenance(date)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_bus_assignments_date ON bus_assignments(assignment_date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_fuel_date ON fuel_records(date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_fuel_bus ON fuel_records(bus_number)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(trip_date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_bus ON trips(bus_number)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_route ON trips(route_name)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_documents_expiry ON documents(expiry_date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(customer_name)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(trip_date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_part ON inventory(part_number)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_trans_item ON inventory_transactions(inventory_id)')
             except Exception as e:
                 print(f"Index creation note: {e}")
             
@@ -520,6 +702,132 @@ def init_database():
                 )
             ''')
             
+            # FUEL_RECORDS TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS fuel_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bus_number TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    liters REAL NOT NULL,
+                    cost_per_liter REAL NOT NULL,
+                    total_cost REAL NOT NULL,
+                    odometer_reading REAL,
+                    previous_odometer REAL,
+                    km_traveled REAL,
+                    fuel_efficiency REAL,
+                    fuel_station TEXT,
+                    payment_method TEXT DEFAULT 'Cash',
+                    receipt_number TEXT,
+                    filled_by TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # TRIPS TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS trips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bus_number TEXT NOT NULL,
+                    route_id INTEGER,
+                    route_name TEXT NOT NULL,
+                    driver_id INTEGER,
+                    driver_name TEXT,
+                    conductor_id INTEGER,
+                    conductor_name TEXT,
+                    trip_date TEXT NOT NULL,
+                    departure_time TEXT,
+                    arrival_time TEXT,
+                    duration_minutes INTEGER,
+                    passengers INTEGER NOT NULL DEFAULT 0,
+                    revenue REAL NOT NULL DEFAULT 0,
+                    revenue_per_passenger REAL,
+                    trip_type TEXT DEFAULT 'Scheduled',
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # DOCUMENTS TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS documents (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    document_name TEXT NOT NULL,
+                    document_type TEXT NOT NULL,
+                    entity_type TEXT NOT NULL,
+                    entity_id TEXT NOT NULL,
+                    entity_name TEXT,
+                    issue_date TEXT,
+                    expiry_date TEXT,
+                    days_to_expiry INTEGER,
+                    days_until_expiry INTEGER,
+                    status TEXT DEFAULT 'Active',
+                    document_number TEXT,
+                    issuing_authority TEXT,
+                    file_data TEXT,
+                    file_name TEXT,
+                    file_type TEXT,
+                    file_size INTEGER,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # CUSTOMERS TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS customers (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    customer_name TEXT NOT NULL,
+                    contact_person TEXT,
+                    phone TEXT,
+                    email TEXT,
+                    address TEXT,
+                    customer_type TEXT DEFAULT 'Individual',
+                    notes TEXT,
+                    status TEXT DEFAULT 'Active',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # BOOKINGS TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS bookings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    booking_ref TEXT UNIQUE NOT NULL,
+                    customer_id INTEGER,
+                    trip_date TEXT NOT NULL,
+                    pickup_time TEXT,
+                    pickup_location TEXT,
+                    dropoff_location TEXT,
+                    trip_type TEXT DEFAULT 'One Way',
+                    num_passengers INTEGER,
+                    bus_type TEXT,
+                    assigned_bus TEXT,
+                    assigned_driver TEXT,
+                    distance_km REAL,
+                    duration_hours REAL,
+                    base_rate REAL,
+                    total_amount REAL NOT NULL,
+                    deposit_amount REAL DEFAULT 0,
+                    balance REAL,
+                    notes TEXT,
+                    status TEXT DEFAULT 'Pending',
+                    payment_status TEXT DEFAULT 'Unpaid',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (customer_id) REFERENCES customers(id)
+                )
+            ''')
+            
             # Create indexes for SQLite
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_timestamp ON activity_log(timestamp)')
@@ -527,6 +835,65 @@ def init_database():
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_income_bus ON income(bus_number)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_maintenance_date ON maintenance(date)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_bus_assignments_date ON bus_assignments(assignment_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_fuel_date ON fuel_records(date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_fuel_bus ON fuel_records(bus_number)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_date ON trips(trip_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_bus ON trips(bus_number)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_trips_route ON trips(route_name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_documents_entity ON documents(entity_type, entity_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_documents_expiry ON documents(expiry_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_documents_status ON documents(status)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_customers_name ON customers(customer_name)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_date ON bookings(trip_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_customer ON bookings(customer_id)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)')
+            
+            # INVENTORY TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    part_number TEXT NOT NULL,
+                    part_name TEXT NOT NULL,
+                    category TEXT,
+                    description TEXT,
+                    quantity INTEGER DEFAULT 0,
+                    unit TEXT DEFAULT 'Piece',
+                    unit_cost REAL DEFAULT 0,
+                    total_value REAL DEFAULT 0,
+                    reorder_level INTEGER DEFAULT 5,
+                    supplier TEXT,
+                    location TEXT,
+                    notes TEXT,
+                    status TEXT DEFAULT 'Active',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # INVENTORY_TRANSACTIONS TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS inventory_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    inventory_id INTEGER,
+                    part_name TEXT,
+                    transaction_type TEXT NOT NULL,
+                    quantity_change INTEGER NOT NULL,
+                    quantity_before INTEGER,
+                    quantity_after INTEGER,
+                    unit_cost REAL,
+                    total_value REAL,
+                    reference TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (inventory_id) REFERENCES inventory(id)
+                )
+            ''')
+            
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_part ON inventory(part_number)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_trans_item ON inventory_transactions(inventory_id)')
         
         conn.commit()
         print("✅ Database initialized successfully")

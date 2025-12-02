@@ -33,6 +33,16 @@ from pages_audit import activity_log_page, user_activity_dashboard
 from pages_bus_analysis import bus_analysis_page
 from pages_performance_metrics import performance_metrics_page
 from fleet_management_page import fleet_management_page, show_expiry_alerts
+from pages_fuel import fuel_entry_page, fuel_analysis_page
+from pages_backup import backup_export_page
+from pages_trips import trip_entry_page, trip_analysis_page
+from pages_route_profitability import route_profitability_page
+from pages_driver_performance import driver_scoring_page
+from pages_documents import document_management_page
+from pages_customers import customer_management_page
+from pages_inventory import inventory_management_page
+from pages_alerts import alerts_dashboard_page, get_dashboard_alerts_widget
+from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
 
@@ -57,6 +67,9 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded"
     )
+    
+    # Apply mobile-responsive styles
+    apply_mobile_styles()
     
     # Initialize database only once per session
     if 'initialized' not in st.session_state:
@@ -187,8 +200,14 @@ def main():
     # Define all menu items with permission requirements
     operations_items = [
         "📈 Dashboard",
+        "🔔 Alerts",
         "📊 Income Entry",
+        "🚌 Trip Entry",
+        "👥 Customers & Bookings",
         "🔧 Maintenance Entry",
+        "⛽ Fuel Entry",
+        "📦 Inventory",
+        "📄 Documents",
         "📥 Import from Excel",
         "💰 Revenue History",
         "🚌 Fleet Management",
@@ -205,12 +224,18 @@ def main():
     
     analytics_items = [
         "🚌 Bus-by-Bus Analysis",
-        "📈 Performance Metrics"
+        "📈 Performance Metrics",
+        "⛽ Fuel Analysis",
+        "🚌 Trip Analysis",
+        "💰 Route Profitability",
+        "🏆 Driver Scoring"
     ]
     
     system_items = ["👤 My Profile", "📊 My Activity"]
     
     # Add admin-only items if user has permissions
+    if has_permission('export_income') or has_permission('generate_reports'):
+        system_items.append("💾 Backup & Export")
     if has_permission('view_users'):
         system_items.append("👥 User Management")
     if has_permission('manage_roles'):
@@ -348,6 +373,11 @@ def main():
             dashboard_page()
         else:
             show_access_denied(page)
+    elif page == "🔔 Alerts":
+        if can_access_page(page):
+            alerts_dashboard_page()
+        else:
+            show_access_denied(page)
     elif page == "🚌 Fleet Management":
         if can_access_page(page):
             fleet_management_page()
@@ -393,10 +423,60 @@ def main():
             performance_metrics_page()
         else:
             show_access_denied(page)
+    elif page == "⛽ Fuel Entry":
+        if can_access_page(page):
+            fuel_entry_page()
+        else:
+            show_access_denied(page)
+    elif page == "⛽ Fuel Analysis":
+        if can_access_page(page):
+            fuel_analysis_page()
+        else:
+            show_access_denied(page)
+    elif page == "📄 Documents":
+        if can_access_page(page):
+            document_management_page()
+        else:
+            show_access_denied(page)
+    elif page == "📦 Inventory":
+        if can_access_page(page):
+            inventory_management_page()
+        else:
+            show_access_denied(page)
+    elif page == "👥 Customers & Bookings":
+        if can_access_page(page):
+            customer_management_page()
+        else:
+            show_access_denied(page)
+    elif page == "🚌 Trip Entry":
+        if can_access_page(page):
+            trip_entry_page()
+        else:
+            show_access_denied(page)
+    elif page == "🚌 Trip Analysis":
+        if can_access_page(page):
+            trip_analysis_page()
+        else:
+            show_access_denied(page)
+    elif page == "💰 Route Profitability":
+        if can_access_page(page):
+            route_profitability_page()
+        else:
+            show_access_denied(page)
+    elif page == "🏆 Driver Scoring":
+        if can_access_page(page):
+            driver_scoring_page()
+        else:
+            show_access_denied(page)
     elif page == "👤 My Profile":
         my_profile_page()
     elif page == "📊 My Activity":
         user_activity_dashboard()
+    elif page == "💾 Backup & Export":
+        if has_permission('export_income') or has_permission('generate_reports'):
+            backup_export_page()
+        else:
+            show_access_denied(page)
     elif page == "👥 User Management":
         if has_permission('view_users'):
             user_management_page()

@@ -1309,8 +1309,14 @@ def clear_user_permission_overrides(user_id: int) -> bool:
 
 PAGE_PERMISSIONS = {
     '📈 Dashboard': ['view_dashboard'],
+    '🔔 Alerts': ['view_dashboard'],  # Same as dashboard - all users can see alerts
     '📊 Income Entry': ['view_income', 'add_income'],
+    '🚌 Trip Entry': ['view_income', 'add_income'],  # Using income permissions for trips
     '🔧 Maintenance Entry': ['view_maintenance', 'add_maintenance'],
+    '⛽ Fuel Entry': ['view_maintenance', 'add_maintenance'],  # Using maintenance permissions for fuel
+    '📄 Documents': ['view_fleet', 'view_employees'],  # Document management permission
+    '📦 Inventory': ['view_maintenance', 'add_maintenance'],  # Inventory permission
+    '👥 Customers & Bookings': ['view_income', 'add_income'],  # Booking/customer permission
     '📥 Import from Excel': ['import_data'],
     '💰 Revenue History': ['view_revenue_history'],
     '🚌 Fleet Management': ['view_fleet'],
@@ -1322,6 +1328,10 @@ PAGE_PERMISSIONS = {
     '⚠️ Disciplinary Records': ['view_disciplinary'],
     '🚌 Bus-by-Bus Analysis': ['view_bus_analysis'],
     '📈 Performance Metrics': ['view_performance_metrics'],
+    '⛽ Fuel Analysis': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
+    '🚌 Trip Analysis': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
+    '💰 Route Profitability': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
+    '🏆 Driver Scoring': ['view_performance', 'view_performance_metrics'],  # Performance permission
     '👤 My Profile': [],  # Everyone can access their own profile
     '📊 My Activity': [],  # Everyone can view their own activity
     '👥 User Management': ['view_users'],
