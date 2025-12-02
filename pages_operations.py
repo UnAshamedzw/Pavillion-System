@@ -817,18 +817,106 @@ def income_entry_page():
 # MAINTENANCE ENTRY PAGE - FIXED with database abstraction
 # ============================================================================
 
+def get_inventory_items_for_maintenance():
+    """Get inventory items for maintenance parts selection"""
+    conn = get_connection()
+    
+    query = """
+        SELECT id, part_number, part_name, category, quantity, unit, unit_cost
+        FROM inventory
+        WHERE status = 'Active' AND quantity > 0
+        ORDER BY category, part_name
+    """
+    
+    df = pd.read_sql_query(query, get_engine())
+    conn.close()
+    return df
+
+
+def deduct_parts_from_inventory(parts_list, maintenance_ref, created_by):
+    """
+    Deduct parts from inventory when used in maintenance.
+    parts_list: list of tuples [(item_id, quantity), ...]
+    Returns: (success, message, total_parts_cost)
+    """
+    from pages_inventory import adjust_stock
+    
+    total_parts_cost = 0
+    deducted_parts = []
+    
+    conn = get_connection()
+    ph = '%s' if USE_POSTGRES else '?'
+    
+    for item_id, qty in parts_list:
+        # Get part details
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT part_name, unit_cost, quantity FROM inventory WHERE id = {ph}", (item_id,))
+        result = cursor.fetchone()
+        
+        if not result:
+            conn.close()
+            return False, f"Part ID {item_id} not found", 0
+        
+        if hasattr(result, 'keys'):
+            part_name = result['part_name']
+            unit_cost = result['unit_cost']
+            current_qty = result['quantity']
+        else:
+            part_name = result[0]
+            unit_cost = result[1]
+            current_qty = result[2]
+        
+        if current_qty < qty:
+            conn.close()
+            return False, f"Insufficient stock for {part_name}. Available: {current_qty}, Requested: {qty}", 0
+        
+        # Deduct from inventory
+        success = adjust_stock(
+            item_id=item_id,
+            quantity_change=-qty,  # Negative for deduction
+            transaction_type="Stock Out",
+            reference=maintenance_ref,
+            notes=f"Used in maintenance: {maintenance_ref}",
+            created_by=created_by
+        )
+        
+        if not success:
+            conn.close()
+            return False, f"Failed to deduct {part_name} from inventory", 0
+        
+        parts_cost = qty * unit_cost
+        total_parts_cost += parts_cost
+        deducted_parts.append(f"{part_name} x{qty} (${parts_cost:.2f})")
+    
+    conn.close()
+    return True, ", ".join(deducted_parts), total_parts_cost
+
+
 def maintenance_entry_page():
-    """Maintenance entry page with automatic audit logging"""
+    """Maintenance entry page with automatic audit logging and inventory integration"""
     
     st.header("🔧 Maintenance Entry")
-    st.markdown("Record bus maintenance and repairs")
+    st.markdown("Record bus maintenance and repairs with automatic parts deduction from inventory")
     st.markdown("---")
     
     # Get active buses for dropdown
     buses = get_active_buses()
     
-    # Add Maintenance Form
-    with st.form("maintenance_form"):
+    # Get inventory items
+    inventory_df = get_inventory_items_for_maintenance()
+    has_inventory = not inventory_df.empty
+    
+    # Initialize session state for parts selection
+    if 'selected_parts' not in st.session_state:
+        st.session_state.selected_parts = []
+    
+    # Tabs for different entry modes
+    tab1, tab2 = st.tabs(["📝 New Maintenance", "📦 Quick Parts Usage"])
+    
+    with tab1:
+        # Add Maintenance Form
+        st.subheader("Add Maintenance Record")
+        
         col1, col2 = st.columns(2)
         
         with col1:
@@ -843,47 +931,225 @@ def maintenance_entry_page():
             maintenance_type = st.selectbox(
                 "🔧 Maintenance Type*",
                 ["Oil Change", "Tire Replacement", "Brake Service", 
-                 "Engine Repair", "Body Work", "Electrical", "Transmission", "Other"]
+                 "Engine Repair", "Body Work", "Electrical", "Transmission", 
+                 "AC Service", "Suspension", "Fuel System", "Other"]
             )
             mechanic_name = st.text_input("👨‍🔧 Mechanic Name", placeholder="e.g., Mike Smith")
         
         with col2:
             date = st.date_input("📅 Date*", datetime.now())
-            cost = st.number_input("💰 Cost*", min_value=0.0, step=0.01, format="%.2f")
+            labor_cost = st.number_input("💰 Labor Cost ($)*", min_value=0.0, step=0.01, format="%.2f")
             status = st.selectbox("📊 Status", ["Completed", "In Progress", "Scheduled"])
         
         description = st.text_area("📝 Description", placeholder="Details of maintenance work...")
-        parts_used = st.text_area("📦 Parts Used", placeholder="List of parts and quantities...")
         
-        submitted = st.form_submit_button("➕ Add Maintenance Record", width="stretch", type="primary")
+        st.markdown("---")
         
-        if submitted:
-            if not all([registration_number, maintenance_type, cost >= 0]):
-                st.error("⚠️ Please fill in all required fields")
-            else:
-                record_id = add_maintenance_record(
-                    bus_number=registration_number,  # Using registration as identifier
-                    maintenance_type=maintenance_type,
-                    mechanic_name=mechanic_name,
-                    date=date.strftime("%Y-%m-%d"),
-                    cost=cost,
-                    status=status,
-                    description=description,
-                    parts_used=parts_used,
-                    created_by=st.session_state['user']['username']
-                )
+        # Parts Selection from Inventory
+        st.subheader("📦 Parts Used from Inventory")
+        
+        if has_inventory:
+            st.info("💡 Select parts from inventory to automatically deduct stock and calculate costs")
+            
+            # Parts selection interface
+            col_part1, col_part2, col_part3 = st.columns([3, 1, 1])
+            
+            with col_part1:
+                # Create options with stock info
+                part_options = {
+                    f"{row['part_name']} ({row['part_number']}) - {row['category']} [Stock: {row['quantity']} {row['unit']}] @ ${row['unit_cost']:.2f}": row['id']
+                    for _, row in inventory_df.iterrows()
+                }
+                selected_part = st.selectbox("Select Part", ["-- Select a part --"] + list(part_options.keys()))
+            
+            with col_part2:
+                part_qty = st.number_input("Quantity", min_value=1, value=1, key="part_qty")
+            
+            with col_part3:
+                st.write("")  # Spacer
+                st.write("")  # Spacer
+                if st.button("➕ Add Part", use_container_width=True):
+                    if selected_part != "-- Select a part --":
+                        part_id = part_options[selected_part]
+                        # Check if already added
+                        existing = [p for p in st.session_state.selected_parts if p['id'] == part_id]
+                        if existing:
+                            st.warning("Part already added. Remove it first to change quantity.")
+                        else:
+                            # Get part details
+                            part_row = inventory_df[inventory_df['id'] == part_id].iloc[0]
+                            if part_qty > part_row['quantity']:
+                                st.error(f"Insufficient stock! Available: {part_row['quantity']}")
+                            else:
+                                st.session_state.selected_parts.append({
+                                    'id': part_id,
+                                    'name': part_row['part_name'],
+                                    'part_number': part_row['part_number'],
+                                    'quantity': part_qty,
+                                    'unit': part_row['unit'],
+                                    'unit_cost': part_row['unit_cost'],
+                                    'total': part_qty * part_row['unit_cost']
+                                })
+                                st.rerun()
+            
+            # Display selected parts
+            if st.session_state.selected_parts:
+                st.markdown("#### Selected Parts:")
                 
-                if record_id:
-                    AuditLogger.log_maintenance_add(
+                total_parts_cost = 0
+                for i, part in enumerate(st.session_state.selected_parts):
+                    col_p1, col_p2, col_p3 = st.columns([4, 2, 1])
+                    with col_p1:
+                        st.write(f"**{part['name']}** ({part['part_number']})")
+                    with col_p2:
+                        st.write(f"{part['quantity']} {part['unit']} × ${part['unit_cost']:.2f} = **${part['total']:.2f}**")
+                    with col_p3:
+                        if st.button("❌", key=f"remove_part_{i}"):
+                            st.session_state.selected_parts.pop(i)
+                            st.rerun()
+                    total_parts_cost += part['total']
+                
+                st.markdown(f"**Total Parts Cost: ${total_parts_cost:.2f}**")
+                st.markdown(f"**Total Cost (Labor + Parts): ${labor_cost + total_parts_cost:.2f}**")
+            else:
+                st.caption("No parts selected from inventory")
+                total_parts_cost = 0
+        else:
+            st.warning("📦 No inventory items available. Add parts to inventory first or enter parts manually below.")
+            total_parts_cost = 0
+        
+        # Manual parts entry (fallback)
+        st.markdown("---")
+        with st.expander("📝 Manual Parts Entry (Optional)", expanded=not has_inventory):
+            manual_parts = st.text_area(
+                "Parts Used (Manual Entry)", 
+                placeholder="Enter parts not in inventory system...\ne.g., Oil Filter x1, Engine Oil 5L x2",
+                help="Use this for parts not tracked in inventory"
+            )
+            manual_parts_cost = st.number_input("Manual Parts Cost ($)", min_value=0.0, step=0.01, format="%.2f")
+        
+        # Calculate final cost
+        final_total_cost = labor_cost + total_parts_cost + manual_parts_cost
+        
+        st.markdown("---")
+        st.markdown(f"### 💰 Total Maintenance Cost: **${final_total_cost:.2f}**")
+        
+        col_submit1, col_submit2 = st.columns([3, 1])
+        
+        with col_submit1:
+            if st.button("➕ Add Maintenance Record", type="primary", use_container_width=True):
+                if not all([registration_number, maintenance_type]):
+                    st.error("⚠️ Please fill in all required fields")
+                else:
+                    # Build parts used string
+                    parts_used_list = []
+                    if st.session_state.selected_parts:
+                        for p in st.session_state.selected_parts:
+                            parts_used_list.append(f"{p['name']} x{p['quantity']} (${p['total']:.2f})")
+                    if manual_parts:
+                        parts_used_list.append(f"[Manual] {manual_parts}")
+                    
+                    parts_used_str = "\n".join(parts_used_list) if parts_used_list else None
+                    
+                    # Add maintenance record
+                    record_id = add_maintenance_record(
                         bus_number=registration_number,
                         maintenance_type=maintenance_type,
-                        cost=cost,
-                        date=date.strftime("%Y-%m-%d")
+                        mechanic_name=mechanic_name,
+                        date=date.strftime("%Y-%m-%d"),
+                        cost=final_total_cost,
+                        status=status,
+                        description=description,
+                        parts_used=parts_used_str,
+                        created_by=st.session_state['user']['username']
                     )
-                    st.success(f"✅ Maintenance record added successfully! (ID: {record_id})")
-                    st.balloons()
-                else:
-                    st.error("❌ Error adding maintenance record")
+                    
+                    if record_id:
+                        # Deduct parts from inventory
+                        if st.session_state.selected_parts:
+                            parts_to_deduct = [(p['id'], p['quantity']) for p in st.session_state.selected_parts]
+                            maintenance_ref = f"MAINT-{record_id}"
+                            
+                            success, message, _ = deduct_parts_from_inventory(
+                                parts_to_deduct,
+                                maintenance_ref,
+                                st.session_state['user']['username']
+                            )
+                            
+                            if success:
+                                st.success(f"✅ Parts deducted from inventory: {message}")
+                            else:
+                                st.warning(f"⚠️ Maintenance recorded but inventory deduction failed: {message}")
+                        
+                        AuditLogger.log_maintenance_add(
+                            bus_number=registration_number,
+                            maintenance_type=maintenance_type,
+                            cost=final_total_cost,
+                            date=date.strftime("%Y-%m-%d")
+                        )
+                        
+                        # Clear selected parts
+                        st.session_state.selected_parts = []
+                        
+                        st.success(f"✅ Maintenance record added successfully! (ID: {record_id})")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error("❌ Error adding maintenance record")
+        
+        with col_submit2:
+            if st.button("🔄 Clear Parts", use_container_width=True):
+                st.session_state.selected_parts = []
+                st.rerun()
+    
+    with tab2:
+        st.subheader("📦 Quick Parts Usage")
+        st.markdown("Quickly deduct parts from inventory without creating a full maintenance record")
+        
+        if not has_inventory:
+            st.warning("No inventory items available")
+        else:
+            with st.form("quick_parts_form"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    if buses:
+                        bus_options_quick = [get_bus_display_option(bus) for bus in buses]
+                        selected_bus_quick = st.selectbox("🚌 Select Bus", bus_options_quick, key="quick_bus")
+                        reg_quick = extract_registration_from_option(selected_bus_quick)
+                    else:
+                        reg_quick = st.text_input("🚌 Registration Number", key="quick_reg")
+                    
+                    quick_part_options = {
+                        f"{row['part_name']} ({row['part_number']}) [Stock: {row['quantity']}]": row['id']
+                        for _, row in inventory_df.iterrows()
+                    }
+                    selected_quick_part = st.selectbox("📦 Select Part", list(quick_part_options.keys()))
+                
+                with col2:
+                    quick_qty = st.number_input("Quantity", min_value=1, value=1, key="quick_qty")
+                    quick_reason = st.text_input("Reason/Notes", placeholder="e.g., Routine check, Minor repair")
+                
+                if st.form_submit_button("📤 Deduct from Inventory", type="primary"):
+                    if selected_quick_part:
+                        part_id = quick_part_options[selected_quick_part]
+                        reference = f"QUICK-{reg_quick}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+                        
+                        success, message, cost = deduct_parts_from_inventory(
+                            [(part_id, quick_qty)],
+                            reference,
+                            st.session_state['user']['username']
+                        )
+                        
+                        if success:
+                            AuditLogger.log_action(
+                                "Update", "Inventory",
+                                f"Quick parts usage: {message} for {reg_quick}. Reason: {quick_reason}"
+                            )
+                            st.success(f"✅ Parts deducted: {message}")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
     
     st.markdown("---")
     

@@ -787,3 +787,24 @@ def inventory_management_page():
                 top_items.columns = ['Part #', 'Name', 'Qty', 'Unit Cost ($)', 'Total Value ($)']
                 
                 st.dataframe(top_items, use_container_width=True, hide_index=True)
+            
+            st.markdown("---")
+            
+            # Maintenance Parts Usage
+            st.markdown("### 🔧 Parts Used in Maintenance")
+            
+            maint_usage = transactions_df[transactions_df['reference'].str.contains('MAINT', case=False, na=False)] if not transactions_df.empty else pd.DataFrame()
+            
+            if maint_usage.empty:
+                st.info("No parts used in maintenance records yet")
+            else:
+                maint_usage_display = maint_usage[[
+                    'created_at', 'part_name', 'quantity_change', 'total_value', 'reference'
+                ]].copy()
+                maint_usage_display.columns = ['Date', 'Part', 'Qty Used', 'Value ($)', 'Maintenance Ref']
+                maint_usage_display['Qty Used'] = maint_usage_display['Qty Used'].abs()
+                
+                st.dataframe(maint_usage_display, use_container_width=True, hide_index=True)
+                
+                total_maint_value = maint_usage_display['Value ($)'].sum()
+                st.metric("Total Parts Value Used in Maintenance", f"${total_maint_value:,.2f}")
