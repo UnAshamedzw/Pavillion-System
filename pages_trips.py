@@ -178,7 +178,7 @@ def get_trips(bus_number=None, route_name=None, driver_name=None,
     
     query += " ORDER BY trip_date DESC, departure_time DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -263,7 +263,7 @@ def get_trip_summary_by_bus(start_date=None, end_date=None):
     
     query += " GROUP BY bus_number ORDER BY total_revenue DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -297,7 +297,7 @@ def get_trip_summary_by_route(start_date=None, end_date=None):
     
     query += " GROUP BY route_name ORDER BY total_revenue DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -330,7 +330,7 @@ def get_trip_summary_by_driver(start_date=None, end_date=None):
     
     query += " GROUP BY driver_name ORDER BY total_revenue DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -361,7 +361,7 @@ def get_daily_trip_summary(start_date=None, end_date=None):
     
     query += " GROUP BY trip_date ORDER BY trip_date"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -405,7 +405,7 @@ def get_hourly_distribution(start_date=None, end_date=None):
     query += " GROUP BY hour ORDER BY hour"
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=params)
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     except:
         df = pd.DataFrame()
     

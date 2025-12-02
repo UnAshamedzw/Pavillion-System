@@ -133,7 +133,7 @@ def get_documents(entity_type=None, entity_id=None, document_type=None,
     
     query += " ORDER BY expiry_date ASC NULLS LAST, created_at DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -220,7 +220,7 @@ def get_expiring_documents(days=30):
         ORDER BY expiry_date ASC
     """
     
-    df = pd.read_sql_query(query, get_engine(), params=[str(cutoff)])
+    df = pd.read_sql_query(query, get_engine(), params=(str(cutoff),))
     conn.close()
     return df
 
@@ -242,7 +242,7 @@ def get_expired_documents():
         ORDER BY expiry_date ASC
     """
     
-    df = pd.read_sql_query(query, get_engine(), params=[today])
+    df = pd.read_sql_query(query, get_engine(), params=(today,))
     conn.close()
     return df
 
@@ -260,17 +260,17 @@ def get_document_summary():
         total_docs = int(total_df['count'].values[0]) if not total_df.empty else 0
         
         expired_query = f"SELECT COUNT(*) as count FROM documents WHERE expiry_date < {ph} AND status = 'Active'"
-        expired_df = pd.read_sql_query(expired_query, get_engine(), params=[today])
+        expired_df = pd.read_sql_query(expired_query, get_engine(), params=(today,))
         expired = int(expired_df['count'].values[0]) if not expired_df.empty else 0
         
         cutoff_30 = str(datetime.now().date() + timedelta(days=30))
         expiring_30_query = f"SELECT COUNT(*) as count FROM documents WHERE expiry_date >= {ph} AND expiry_date <= {ph} AND status = 'Active'"
-        expiring_30_df = pd.read_sql_query(expiring_30_query, get_engine(), params=[today, cutoff_30])
+        expiring_30_df = pd.read_sql_query(expiring_30_query, get_engine(), params=(today, cutoff_30))
         expiring_30 = int(expiring_30_df['count'].values[0]) if not expiring_30_df.empty else 0
         
         cutoff_7 = str(datetime.now().date() + timedelta(days=7))
         expiring_7_query = f"SELECT COUNT(*) as count FROM documents WHERE expiry_date >= {ph} AND expiry_date <= {ph} AND status = 'Active'"
-        expiring_7_df = pd.read_sql_query(expiring_7_query, get_engine(), params=[today, cutoff_7])
+        expiring_7_df = pd.read_sql_query(expiring_7_query, get_engine(), params=(today, cutoff_7))
         expiring_7 = int(expiring_7_df['count'].values[0]) if not expiring_7_df.empty else 0
         
         valid = total_docs - expired

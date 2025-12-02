@@ -43,7 +43,7 @@ def get_inventory_items(category=None, search=None, low_stock_only=False):
     
     query += " ORDER BY category, part_name"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -225,7 +225,7 @@ def get_inventory_transactions(item_id=None, transaction_type=None,
     
     query += " ORDER BY created_at DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 

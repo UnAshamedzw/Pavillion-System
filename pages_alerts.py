@@ -35,7 +35,7 @@ def get_expiring_documents_alerts(days=30):
     """
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=[str(cutoff)])
+        df = pd.read_sql_query(query, get_engine(), params=(str(cutoff),))
     except:
         df = pd.DataFrame()
     
@@ -139,7 +139,7 @@ def get_upcoming_bookings_alerts(days=7):
     """
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=[today, cutoff])
+        df = pd.read_sql_query(query, get_engine(), params=(today, cutoff))
     except:
         df = pd.DataFrame()
     
@@ -275,7 +275,7 @@ def get_employee_documents_expiring(days=30):
     """
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=[str(cutoff)])
+        df = pd.read_sql_query(query, get_engine(), params=(str(cutoff),))
     except:
         df = pd.DataFrame()
     

@@ -41,7 +41,7 @@ def get_customers(search=None, status=None):
     
     query += " ORDER BY customer_name"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -146,7 +146,7 @@ def get_bookings(customer_id=None, status=None, start_date=None, end_date=None):
     
     query += " ORDER BY b.trip_date DESC, b.created_at DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 

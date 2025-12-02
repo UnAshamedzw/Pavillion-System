@@ -133,7 +133,7 @@ def get_fuel_records(bus_number=None, start_date=None, end_date=None):
     
     query += " ORDER BY date DESC, id DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -219,7 +219,7 @@ def get_fuel_summary_by_bus(start_date=None, end_date=None):
     
     query += " GROUP BY bus_number ORDER BY total_cost DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -257,7 +257,7 @@ def get_fuel_trends(bus_number=None, days=90):
     
     query += " GROUP BY date ORDER BY date"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 

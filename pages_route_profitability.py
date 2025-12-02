@@ -54,7 +54,7 @@ def get_route_income(start_date=None, end_date=None):
     
     query += " GROUP BY route ORDER BY total_income DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -89,7 +89,7 @@ def get_trip_revenue_by_route(start_date=None, end_date=None):
     query += " GROUP BY route_name ORDER BY total_revenue DESC"
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=params)
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     except:
         df = pd.DataFrame()
     

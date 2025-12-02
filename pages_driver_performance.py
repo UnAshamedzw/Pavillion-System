@@ -72,7 +72,7 @@ def get_driver_trips(driver_name=None, start_date=None, end_date=None):
     
     query += " ORDER BY trip_date DESC, departure_time DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=params)
+    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     conn.close()
     return df
 
@@ -111,7 +111,7 @@ def get_driver_incidents(driver_name=None, start_date=None, end_date=None):
     query += " ORDER BY d.incident_date DESC"
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=params)
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     except:
         df = pd.DataFrame()
     
@@ -153,7 +153,7 @@ def get_driver_leave_records(driver_name=None, start_date=None, end_date=None):
     query += " ORDER BY l.start_date DESC"
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=params)
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     except:
         df = pd.DataFrame()
     
@@ -193,7 +193,7 @@ def get_maintenance_issues_by_driver(start_date=None, end_date=None):
         params.append(end_date)
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=params)
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
     except:
         df = pd.DataFrame()
     
