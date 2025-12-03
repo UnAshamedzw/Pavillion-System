@@ -470,6 +470,28 @@ def init_database():
                 )
             ''')
             
+            # GENERAL_EXPENSES TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS general_expenses (
+                    id SERIAL PRIMARY KEY,
+                    expense_date TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    subcategory TEXT,
+                    description TEXT NOT NULL,
+                    vendor TEXT,
+                    amount REAL NOT NULL,
+                    payment_method TEXT,
+                    payment_status TEXT DEFAULT 'Unpaid',
+                    receipt_number TEXT,
+                    recurring BOOLEAN DEFAULT FALSE,
+                    recurring_frequency TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             # Create indexes
             try:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
@@ -493,6 +515,8 @@ def init_database():
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_part ON inventory(part_number)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category)')
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_trans_item ON inventory_transactions(inventory_id)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_expenses_date ON general_expenses(expense_date)')
+                cursor.execute('CREATE INDEX IF NOT EXISTS idx_expenses_category ON general_expenses(category)')
             except Exception as e:
                 print(f"Index creation note: {e}")
             
@@ -894,6 +918,31 @@ def init_database():
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_part ON inventory(part_number)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_category ON inventory(category)')
             cursor.execute('CREATE INDEX IF NOT EXISTS idx_inventory_trans_item ON inventory_transactions(inventory_id)')
+            
+            # GENERAL_EXPENSES TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS general_expenses (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    expense_date TEXT NOT NULL,
+                    category TEXT NOT NULL,
+                    subcategory TEXT,
+                    description TEXT NOT NULL,
+                    vendor TEXT,
+                    amount REAL NOT NULL,
+                    payment_method TEXT,
+                    payment_status TEXT DEFAULT 'Unpaid',
+                    receipt_number TEXT,
+                    recurring INTEGER DEFAULT 0,
+                    recurring_frequency TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_expenses_date ON general_expenses(expense_date)')
+            cursor.execute('CREATE INDEX IF NOT EXISTS idx_expenses_category ON general_expenses(category)')
         
         conn.commit()
         print("✅ Database initialized successfully")

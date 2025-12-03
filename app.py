@@ -42,6 +42,7 @@ from pages_documents import document_management_page
 from pages_customers import customer_management_page
 from pages_inventory import inventory_management_page
 from pages_alerts import alerts_dashboard_page, get_dashboard_alerts_widget
+from pages_expenses import general_expenses_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -206,6 +207,7 @@ def main():
         "👥 Customers & Bookings",
         "🔧 Maintenance Entry",
         "⛽ Fuel Entry",
+        "💸 General Expenses",
         "📦 Inventory",
         "📄 Documents",
         "📥 Import from Excel",
@@ -431,6 +433,11 @@ def main():
     elif page == "⛽ Fuel Analysis":
         if can_access_page(page):
             fuel_analysis_page()
+        else:
+            show_access_denied(page)
+    elif page == "💸 General Expenses":
+        if can_access_page(page):
+            general_expenses_page()
         else:
             show_access_denied(page)
     elif page == "📄 Documents":

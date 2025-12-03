@@ -1314,6 +1314,7 @@ PAGE_PERMISSIONS = {
     '🚌 Trip Entry': ['view_income', 'add_income'],  # Using income permissions for trips
     '🔧 Maintenance Entry': ['view_maintenance', 'add_maintenance'],
     '⛽ Fuel Entry': ['view_maintenance', 'add_maintenance'],  # Using maintenance permissions for fuel
+    '💸 General Expenses': ['view_income', 'add_income'],  # General expenses permission
     '📄 Documents': ['view_fleet', 'view_employees'],  # Document management permission
     '📦 Inventory': ['view_maintenance', 'add_maintenance'],  # Inventory permission
     '👥 Customers & Bookings': ['view_income', 'add_income'],  # Booking/customer permission
