@@ -25,7 +25,7 @@ def get_total_income(start_date, end_date):
     
     query = f"""
         SELECT 
-            COALESCE(SUM(total_income), 0) as total_income,
+            COALESCE(SUM(amount), 0) as total_income,
             COUNT(*) as trip_count
         FROM income
         WHERE date >= {ph} AND date <= {ph}
@@ -158,7 +158,7 @@ def get_income_by_route(start_date, end_date):
     query = f"""
         SELECT 
             route,
-            COALESCE(SUM(total_income), 0) as total,
+            COALESCE(SUM(amount), 0) as total,
             COUNT(*) as trips
         FROM income
         WHERE date >= {ph} AND date <= {ph}
@@ -263,7 +263,7 @@ def get_bus_expenses(start_date, end_date, bus_number=None):
     income_query = f"""
         SELECT 
             bus_number,
-            COALESCE(SUM(total_income), 0) as total_income
+            COALESCE(SUM(amount), 0) as total_income
         FROM income
         WHERE date >= {ph} AND date <= {ph}
     """
