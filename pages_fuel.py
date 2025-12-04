@@ -755,8 +755,9 @@ def fuel_analysis_page():
             
             # Add average line
             avg_eff = eff_df['avg_efficiency'].mean()
+            annotation_label = "Fleet Avg: " + str(round(avg_eff, 1)) + " km/L"
             fig_eff.add_hline(y=avg_eff, line_dash="dash", line_color="red", 
-                            annotation_text=f"Fleet Avg: {avg_eff:.1f} km/L")
+                            annotation_text=annotation_label)
             
             st.plotly_chart(fig_eff, use_container_width=True)
             
