@@ -113,7 +113,7 @@ def show_expiry_alerts():
     
     if expired:
         st.error(f"🚨 **URGENT: {len(expired)} EXPIRED DOCUMENTS!**")
-        with st.expander(⚠️ View Expired Documents", expanded=True):
+        with st.expander("⚠️ View Expired Documents", expanded=True):
             for item in expired:
                 st.error(f"❌ **{item['item']}** - {item['document']} expired {abs(item['days_remaining'])} days ago (Expired: {item['expiry_date']})")
     
