@@ -43,6 +43,7 @@ from pages_customers import customer_management_page
 from pages_inventory import inventory_management_page
 from pages_alerts import alerts_dashboard_page, get_dashboard_alerts_widget
 from pages_expenses import general_expenses_page
+from pages_profit_loss import profit_loss_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -230,7 +231,8 @@ def main():
         "⛽ Fuel Analysis",
         "🚌 Trip Analysis",
         "💰 Route Profitability",
-        "🏆 Driver Scoring"
+        "🏆 Driver Scoring",
+        "📊 Profit & Loss"
     ]
     
     system_items = ["👤 My Profile", "📊 My Activity"]
@@ -473,6 +475,11 @@ def main():
     elif page == "🏆 Driver Scoring":
         if can_access_page(page):
             driver_scoring_page()
+        else:
+            show_access_denied(page)
+    elif page == "📊 Profit & Loss":
+        if can_access_page(page):
+            profit_loss_page()
         else:
             show_access_denied(page)
     elif page == "👤 My Profile":

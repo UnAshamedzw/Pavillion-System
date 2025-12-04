@@ -18,6 +18,73 @@ from auth import has_permission
 # DATABASE FUNCTIONS
 # =============================================================================
 
+def create_linked_expense(expense_date, category, subcategory, description, vendor,
+                          amount, source_type, source_id, payment_status='Paid',
+                          payment_method='Bank Transfer', created_by=None):
+    """
+    Create an expense record linked from another module.
+    Used by: Fleet Management (insurance), Documents, etc.
+    
+    source_type: 'insurance', 'maintenance', 'document', etc.
+    source_id: ID or reference from source table
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # Add source reference to notes
+    notes = f"Auto-linked from {source_type} (Ref: {source_id})"
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute("""
+                INSERT INTO general_expenses (
+                    expense_date, category, subcategory, description, vendor,
+                    amount, payment_method, payment_status, receipt_number,
+                    recurring, recurring_frequency, notes, created_by
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+            """, (expense_date, category, subcategory, description, vendor,
+                  amount, payment_method, payment_status, source_id,
+                  False, None, notes, created_by))
+            result = cursor.fetchone()
+            expense_id = result['id'] if hasattr(result, 'keys') else result[0]
+        else:
+            cursor.execute("""
+                INSERT INTO general_expenses (
+                    expense_date, category, subcategory, description, vendor,
+                    amount, payment_method, payment_status, receipt_number,
+                    recurring, recurring_frequency, notes, created_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (expense_date, category, subcategory, description, vendor,
+                  amount, payment_method, payment_status, source_id,
+                  False, None, notes, created_by))
+            expense_id = cursor.lastrowid
+        
+        conn.commit()
+        return expense_id
+    except Exception as e:
+        print(f"Error creating linked expense: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def check_linked_expense_exists(source_type, source_id):
+    """Check if an expense already exists for this source"""
+    conn = get_connection()
+    ph = '%s' if USE_POSTGRES else '?'
+    
+    cursor = conn.cursor()
+    cursor.execute(f"""
+        SELECT id FROM general_expenses 
+        WHERE receipt_number = {ph} AND notes LIKE {ph}
+    """, (source_id, f"%{source_type}%"))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result is not None
+
 def get_expenses(category=None, start_date=None, end_date=None, payment_status=None):
     """Get expenses with optional filters"""
     conn = get_connection()

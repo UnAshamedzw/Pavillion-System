@@ -1333,6 +1333,7 @@ PAGE_PERMISSIONS = {
     '🚌 Trip Analysis': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
     '💰 Route Profitability': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
     '🏆 Driver Scoring': ['view_performance', 'view_performance_metrics'],  # Performance permission
+    '📊 Profit & Loss': ['view_income', 'view_dashboard'],  # P&L permission
     '👤 My Profile': [],  # Everyone can access their own profile
     '📊 My Activity': [],  # Everyone can view their own activity
     '👥 User Management': ['view_users'],

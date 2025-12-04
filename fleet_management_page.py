@@ -113,7 +113,7 @@ def show_expiry_alerts():
     
     if expired:
         st.error(f"🚨 **URGENT: {len(expired)} EXPIRED DOCUMENTS!**")
-        with st.expander("⚠️ View Expired Documents", expanded=True):
+        with st.expander(⚠️ View Expired Documents", expanded=True):
             for item in expired:
                 st.error(f"❌ **{item['item']}** - {item['document']} expired {abs(item['days_remaining'])} days ago (Expired: {item['expiry_date']})")
     
@@ -152,7 +152,7 @@ def manage_buses():
     st.subheader("🚌 Bus Fleet Management")
     
     # Action selector
-    action = st.radio("Select Action:", ["View All Buses", "Add New Bus", "Edit Bus", "Delete Bus", "View Documents Status"], horizontal=True)
+    action = st.radio("Select Action:", ["View All Buses", "Add New Bus", "Edit Bus", "Delete Bus", "View Documents Status", "💰 Insurance & Renewals"], horizontal=True)
     
     conn = get_connection()
     
@@ -538,5 +538,159 @@ def manage_buses():
             with col4:
                 ok = len([x for x in expiring if x['days_remaining'] > 30])
                 st.metric("🟢 OK (90 days)", ok)
+    
+    elif action == "💰 Insurance & Renewals":
+        st.subheader("💰 Insurance & Renewals with Expense Tracking")
+        st.markdown("Record insurance renewals and link costs to General Expenses")
+        
+        st.info("""
+        💡 **How it works:** When you record an insurance renewal with a cost, 
+        it automatically creates an expense entry in General Expenses for accurate P&L tracking.
+        """)
+        
+        # Get buses
+        buses_df = pd.read_sql_query("SELECT * FROM buses WHERE status = 'Active' ORDER BY registration_number", get_engine())
+        
+        if buses_df.empty:
+            st.warning("No active buses found")
+        else:
+            st.markdown("### 📝 Record Insurance/License Renewal")
+            
+            with st.form("renewal_form"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Bus selection
+                    bus_options = {
+                        f"{row['registration_number']} ({row['make']} {row['model']})": row['bus_number']
+                        for _, row in buses_df.iterrows()
+                    }
+                    selected_bus_display = st.selectbox("Select Bus*", list(bus_options.keys()))
+                    selected_bus_number = bus_options[selected_bus_display]
+                    
+                    # Document type
+                    doc_type = st.selectbox("Document Type*", [
+                        "ZINARA License",
+                        "Vehicle Insurance",
+                        "Passenger Insurance",
+                        "Fitness Certificate",
+                        "Route Authority Permit"
+                    ])
+                    
+                    # Vendor/Provider
+                    vendor = st.text_input("Insurance Provider/Vendor", placeholder="e.g., Old Mutual, ZINARA")
+                
+                with col2:
+                    # New expiry date
+                    new_expiry = st.date_input("New Expiry Date*", value=datetime.now() + timedelta(days=365))
+                    
+                    # Cost
+                    cost = st.number_input("Cost ($)*", min_value=0.0, step=10.0, format="%.2f")
+                    
+                    # Payment method
+                    payment_method = st.selectbox("Payment Method", [
+                        "Bank Transfer", "Cash", "EcoCash", "Cheque", "Other"
+                    ])
+                
+                # Reference/Policy number
+                reference = st.text_input("Policy/Reference Number", placeholder="e.g., POL-2024-12345")
+                
+                # Link to expenses checkbox
+                link_to_expenses = st.checkbox("✅ Link to General Expenses (Recommended)", value=True)
+                
+                notes = st.text_area("Notes", placeholder="Additional details...")
+                
+                if st.form_submit_button("💾 Save Renewal", type="primary", use_container_width=True):
+                    if cost <= 0:
+                        st.error("Please enter a valid cost")
+                    else:
+                        try:
+                            cursor = conn.cursor()
+                            
+                            # Map document type to database column
+                            doc_column_map = {
+                                "ZINARA License": "zinara_licence_expiry",
+                                "Vehicle Insurance": "vehicle_insurance_expiry",
+                                "Passenger Insurance": "passenger_insurance_expiry",
+                                "Fitness Certificate": "fitness_expiry",
+                                "Route Authority Permit": "route_permit_expiry"
+                            }
+                            
+                            column = doc_column_map.get(doc_type)
+                            
+                            # Update bus document expiry
+                            if USE_POSTGRES:
+                                cursor.execute(f"""
+                                    UPDATE buses SET {column} = %s, updated_at = CURRENT_TIMESTAMP
+                                    WHERE bus_number = %s
+                                """, (new_expiry, selected_bus_number))
+                            else:
+                                cursor.execute(f"""
+                                    UPDATE buses SET {column} = ?, updated_at = CURRENT_TIMESTAMP
+                                    WHERE bus_number = ?
+                                """, (str(new_expiry), selected_bus_number))
+                            
+                            conn.commit()
+                            
+                            # Link to expenses if checked
+                            if link_to_expenses and cost > 0:
+                                try:
+                                    from pages_expenses import create_linked_expense
+                                    
+                                    expense_id = create_linked_expense(
+                                        expense_date=str(datetime.now().date()),
+                                        category="Administrative",
+                                        subcategory="Insurance",
+                                        description=f"{doc_type} renewal for {selected_bus_display}",
+                                        vendor=vendor or "Insurance Provider",
+                                        amount=cost,
+                                        source_type="bus_insurance",
+                                        source_id=f"{selected_bus_number}-{doc_type}-{new_expiry}",
+                                        payment_status="Paid",
+                                        payment_method=payment_method,
+                                        created_by=st.session_state.get('user', {}).get('username', 'system')
+                                    )
+                                    
+                                    if expense_id:
+                                        st.success(f"✅ Expense linked! (Expense ID: {expense_id})")
+                                except Exception as exp_err:
+                                    st.warning(f"Renewal saved but expense linking failed: {exp_err}")
+                            
+                            AuditLogger.log_action(
+                                "Update", "Fleet Management",
+                                f"Renewed {doc_type} for {selected_bus_display}, Cost: ${cost:.2f}"
+                            )
+                            
+                            st.success(f"✅ {doc_type} renewed successfully! New expiry: {new_expiry}")
+                            st.balloons()
+                            st.rerun()
+                            
+                        except Exception as e:
+                            st.error(f"Error saving renewal: {e}")
+            
+            st.markdown("---")
+            
+            # Recent renewals from expenses
+            st.markdown("### 📋 Recent Insurance Expenses")
+            
+            try:
+                insurance_expenses = pd.read_sql_query("""
+                    SELECT expense_date, description, vendor, amount, payment_method, payment_status
+                    FROM general_expenses
+                    WHERE subcategory = 'Insurance' OR notes LIKE '%bus_insurance%'
+                    ORDER BY expense_date DESC
+                    LIMIT 20
+                """, get_engine())
+                
+                if insurance_expenses.empty:
+                    st.info("No insurance expenses recorded yet")
+                else:
+                    insurance_expenses.columns = ['Date', 'Description', 'Vendor', 'Amount ($)', 'Payment', 'Status']
+                    st.dataframe(insurance_expenses, use_container_width=True, hide_index=True)
+                    
+                    total_insurance = insurance_expenses['Amount ($)'].sum()
+                    st.metric("Total Insurance Expenses", f"${total_insurance:,.2f}")
+            except Exception as e:
+                st.info("No insurance expense data available")
     
     conn.close()
