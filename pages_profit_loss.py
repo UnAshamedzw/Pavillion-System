@@ -220,7 +220,7 @@ def get_fuel_insights(start_date, end_date):
     query = f"""
         SELECT 
             COALESCE(SUM(total_cost), 0) as total_cost,
-            COALESCE(SUM(litres), 0) as total_litres,
+            COALESCE(SUM(liters), 0) as total_liters,
             COUNT(*) as count
         FROM fuel_records
         WHERE date >= {ph} AND date <= {ph}
@@ -231,7 +231,7 @@ def get_fuel_insights(start_date, end_date):
     
     return {
         'total_cost': float(df['total_cost'].values[0]) if not df.empty else 0,
-        'total_litres': float(df['total_litres'].values[0]) if not df.empty else 0,
+        'total_liters': float(df['total_liters'].values[0]) if not df.empty else 0,
         'count': int(df['count'].values[0]) if not df.empty else 0
     }
 
@@ -474,10 +474,10 @@ def profit_loss_page():
         st.metric("⛽ Total Fuel Cost", f"${fuel['total_cost']:,.2f}")
     
     with col2:
-        st.metric("🛢️ Total Litres", f"{fuel['total_litres']:,.0f} L")
+        st.metric("🛢️ Total Litres", f"{fuel['total_liters']:,.0f} L")
     
     with col3:
-        avg_price = fuel['total_cost'] / fuel['total_litres'] if fuel['total_litres'] > 0 else 0
+        avg_price = fuel['total_cost'] / fuel['total_liters'] if fuel['total_liters'] > 0 else 0
         st.metric("💲 Avg Price/Litre", f"${avg_price:.2f}")
     
     with col4:
