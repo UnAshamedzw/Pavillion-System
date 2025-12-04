@@ -30,7 +30,11 @@ def execute_hr_query(cursor, query, params=None):
     if USE_POSTGRES and params:
         # Convert ? to %s for PostgreSQL
         query = query.replace('?', '%s')
-    cursor.execute(query, params or ())
+    
+    if params:
+        cursor.execute(query, tuple(params) if isinstance(params, list) else params)
+    else:
+        cursor.execute(query)
 
 
 
