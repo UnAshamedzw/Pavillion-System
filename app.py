@@ -44,6 +44,7 @@ from pages_inventory import inventory_management_page
 from pages_alerts import alerts_dashboard_page, get_dashboard_alerts_widget
 from pages_expenses import general_expenses_page
 from pages_profit_loss import profit_loss_page
+from pages_contracts import contract_generator_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -219,6 +220,7 @@ def main():
     
     hr_items = [
         "👥 Employee Management",
+        "📝 Contract Generator",
         "📊 Employee Performance",
         "💰 Payroll & Payslips",
         "📅 Leave Management",
@@ -396,6 +398,11 @@ def main():
     elif page == "👥 Employee Management":
         if can_access_page(page):
             employee_management_page()
+        else:
+            show_access_denied(page)
+    elif page == "📝 Contract Generator":
+        if can_access_page(page):
+            contract_generator_page()
         else:
             show_access_denied(page)
     elif page == "📊 Employee Performance":

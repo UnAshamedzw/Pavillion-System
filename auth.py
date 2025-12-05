@@ -1323,6 +1323,7 @@ PAGE_PERMISSIONS = {
     '🚌 Fleet Management': ['view_fleet'],
     '🛣️ Routes & Assignments': ['view_routes', 'view_assignments'],
     '👥 Employee Management': ['view_employees'],
+    '📝 Contract Generator': ['view_employees', 'add_employees'],  # Contract generation permission
     '📊 Employee Performance': ['view_performance'],
     '💰 Payroll & Payslips': ['view_payroll'],
     '📅 Leave Management': ['view_leave'],

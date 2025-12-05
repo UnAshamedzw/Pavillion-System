@@ -984,6 +984,38 @@ def migrate_database():
             if 'conductor_employee_id' not in columns:
                 cursor.execute("ALTER TABLE income ADD COLUMN conductor_employee_id TEXT")
         
+        # Add new employee fields for contract generation
+        if USE_POSTGRES:
+            cursor.execute("""
+                ALTER TABLE employees 
+                ADD COLUMN IF NOT EXISTS national_id TEXT
+            """)
+            cursor.execute("""
+                ALTER TABLE employees 
+                ADD COLUMN IF NOT EXISTS date_of_birth TEXT
+            """)
+            cursor.execute("""
+                ALTER TABLE employees 
+                ADD COLUMN IF NOT EXISTS emergency_phone TEXT
+            """)
+            cursor.execute("""
+                ALTER TABLE employees 
+                ADD COLUMN IF NOT EXISTS next_of_kin_relationship TEXT
+            """)
+        else:
+            # SQLite: check if columns exist
+            cursor.execute("PRAGMA table_info(employees)")
+            emp_columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'national_id' not in emp_columns:
+                cursor.execute("ALTER TABLE employees ADD COLUMN national_id TEXT")
+            if 'date_of_birth' not in emp_columns:
+                cursor.execute("ALTER TABLE employees ADD COLUMN date_of_birth TEXT")
+            if 'emergency_phone' not in emp_columns:
+                cursor.execute("ALTER TABLE employees ADD COLUMN emergency_phone TEXT")
+            if 'next_of_kin_relationship' not in emp_columns:
+                cursor.execute("ALTER TABLE employees ADD COLUMN next_of_kin_relationship TEXT")
+        
         conn.commit()
         print("✅ Migrations completed")
     except Exception as e:

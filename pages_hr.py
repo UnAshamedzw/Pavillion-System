@@ -924,6 +924,7 @@ def employee_management_page():
                 department = st.selectbox("Department*", ["Operations", "Maintenance", "Administration", "HR"])
             
             with col2:
+                national_id = st.text_input("National ID Number*", placeholder="e.g., 63-123456-A-42")
                 date_of_birth = st.date_input("Date of Birth", 
                     value=datetime(1990, 1, 1),
                     min_value=datetime(1940, 1, 1),
@@ -942,10 +943,21 @@ def employee_management_page():
                 email = st.text_input("Email", placeholder="employee@example.com")
             
             with col4:
-                emergency_contact = st.text_input("Emergency Contact Name", placeholder="Full name")
-                emergency_phone = st.text_input("Emergency Contact Phone", placeholder="+263 xxx xxx xxx")
+                address = st.text_area("Residential Address", placeholder="Full residential address...")
             
-            address = st.text_area("Address", placeholder="Full residential address...")
+            st.markdown("---")
+            
+            # Emergency Contact / Next of Kin
+            st.markdown("#### 🆘 Next of Kin / Emergency Contact")
+            col_nok1, col_nok2 = st.columns(2)
+            
+            with col_nok1:
+                emergency_contact = st.text_input("Next of Kin Name*", placeholder="Full name")
+                emergency_phone = st.text_input("Next of Kin Phone*", placeholder="+263 xxx xxx xxx")
+            
+            with col_nok2:
+                next_of_kin_relationship = st.selectbox("Relationship*", 
+                    ["Spouse", "Parent", "Sibling", "Child", "Other Relative", "Friend", "Other"])
             
             # Driver-specific documents (only show if position is Driver)
             if 'driver' in position.lower():
@@ -992,7 +1004,7 @@ def employee_management_page():
             
             if submitted:
                 # Validation
-                required_fields = [full_name, position, department, salary > 0]
+                required_fields = [full_name, position, department, salary > 0, national_id, emergency_contact]
                 
                 if 'driver' in position.lower():
                     required_fields.extend([license_number, license_expiry])
@@ -1011,14 +1023,15 @@ def employee_management_page():
                             INSERT INTO employees 
                             (employee_id, full_name, position, department, hire_date, salary, 
                              phone, email, address, status, date_of_birth, emergency_contact, 
-                             emergency_phone, license_number, license_expiry, 
+                             emergency_phone, next_of_kin_relationship, national_id,
+                             license_number, license_expiry, 
                              defensive_driving_expiry, medical_cert_expiry, retest_date, created_by)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         ''', (
                             final_employee_id, full_name, position, department, 
                             hire_date.strftime("%Y-%m-%d"), salary, phone, email, address,
                             date_of_birth.strftime("%Y-%m-%d") if date_of_birth else None,
-                            emergency_contact, emergency_phone,
+                            emergency_contact, emergency_phone, next_of_kin_relationship, national_id,
                             license_number,
                             license_expiry.strftime("%Y-%m-%d") if license_expiry else None,
                             defensive_driving_expiry.strftime("%Y-%m-%d") if defensive_driving_expiry else None,
