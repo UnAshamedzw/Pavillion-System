@@ -360,6 +360,11 @@ def get_all_critical_alerts(days_threshold=7):
 
 def send_email(smtp_server, smtp_port, sender_email, sender_password, recipient_emails, subject, html_body):
     """Send email using SMTP"""
+    import socket
+    
+    # Set timeout for email operations
+    socket.setdefaulttimeout(30)
+    
     try:
         # Create message
         msg = MIMEMultipart('alternative')
@@ -371,22 +376,44 @@ def send_email(smtp_server, smtp_port, sender_email, sender_password, recipient_
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
+        # Ensure recipient_emails is a list
+        if isinstance(recipient_emails, str):
+            recipient_emails = [recipient_emails]
+        
         # Connect and send
         if smtp_port == 465:
-            # SSL
-            server = smtplib.SMTP_SSL(smtp_server, smtp_port)
+            # SSL connection
+            server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30)
         else:
-            # TLS
-            server = smtplib.SMTP(smtp_server, smtp_port)
+            # TLS connection (port 587)
+            server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
+            server.ehlo()
             server.starttls()
+            server.ehlo()
         
+        # Login
         server.login(sender_email, sender_password)
-        server.sendmail(sender_email, recipient_emails if isinstance(recipient_emails, list) else [recipient_emails], msg.as_string())
+        
+        # Send email
+        server.sendmail(sender_email, recipient_emails, msg.as_string())
+        
+        # Close connection
         server.quit()
         
         return True, "Email sent successfully"
+        
+    except smtplib.SMTPAuthenticationError as e:
+        return False, f"Authentication failed. Check your email and App Password. Error: {str(e)}"
+    except smtplib.SMTPRecipientsRefused as e:
+        return False, f"Recipients refused. Check email addresses. Error: {str(e)}"
+    except smtplib.SMTPException as e:
+        return False, f"SMTP error: {str(e)}"
+    except socket.timeout:
+        return False, "Connection timed out. Check your internet connection and SMTP settings."
+    except socket.gaierror as e:
+        return False, f"Could not connect to SMTP server. Check server address. Error: {str(e)}"
     except Exception as e:
-        return False, str(e)
+        return False, f"Unexpected error: {type(e).__name__}: {str(e)}"
 
 
 def build_alert_email_html(alerts_data, company_name="Pavillion Coaches"):
@@ -717,9 +744,43 @@ def notification_settings_page():
         st.markdown("---")
         
         # Test email button
-        col1, col2 = st.columns(2)
+        st.markdown("### 📧 Send Notifications")
+        
+        col1, col2, col3 = st.columns(3)
         
         with col1:
+            if st.button("🔌 Test Connection", type="secondary", use_container_width=True):
+                if not settings.get('notif_sender_email') or not settings.get('notif_sender_password'):
+                    st.error("Please configure email settings first")
+                else:
+                    smtp_server = settings.get('notif_smtp_server', 'smtp.gmail.com')
+                    smtp_port = int(settings.get('notif_smtp_port', 587))
+                    sender_email = settings.get('notif_sender_email', '')
+                    sender_password = settings.get('notif_sender_password', '')
+                    
+                    with st.spinner(f"Testing connection to {smtp_server}:{smtp_port}..."):
+                        import socket
+                        socket.setdefaulttimeout(15)
+                        try:
+                            if smtp_port == 465:
+                                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=15)
+                            else:
+                                server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
+                                server.ehlo()
+                                server.starttls()
+                                server.ehlo()
+                            
+                            server.login(sender_email, sender_password)
+                            server.quit()
+                            st.success("✅ Connection successful! SMTP server and credentials are valid.")
+                        except smtplib.SMTPAuthenticationError:
+                            st.error("❌ Authentication failed. Check your App Password (not regular password).")
+                        except socket.timeout:
+                            st.error("❌ Connection timed out. Render may be blocking SMTP ports.")
+                        except Exception as e:
+                            st.error(f"❌ Connection failed: {type(e).__name__}: {str(e)}")
+        
+        with col2:
             if st.button("🧪 Send Test Email", type="secondary", use_container_width=True):
                 if not settings.get('notif_sender_email') or not settings.get('notif_sender_password'):
                     st.error("Please configure email settings first")
@@ -731,8 +792,8 @@ def notification_settings_page():
                         else:
                             st.error(f"❌ Failed: {message}")
         
-        with col2:
-            if st.button("📧 Send Alert Notification Now", type="primary", use_container_width=True):
+        with col3:
+            if st.button("📧 Send Alert Now", type="primary", use_container_width=True):
                 if alerts_data['summary']['total'] == 0:
                     st.info("No alerts to send!")
                 elif not settings.get('notif_enabled') == 'true':
