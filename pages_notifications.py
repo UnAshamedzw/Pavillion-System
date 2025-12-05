@@ -638,7 +638,7 @@ def notification_settings_page():
     settings = get_notification_settings()
     
     # Tabs
-    tab1, tab2, tab3 = st.tabs([⚙️ Email Configuration", "📋 Alert Settings", "🧪 Test & Send"])
+    tab1, tab2, tab3 = st.tabs(["⚙️ Email Configuration", "📋 Alert Settings", "🧪 Test & Send"])
     
     with tab1:
         st.subheader("Email Configuration")
