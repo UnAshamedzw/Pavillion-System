@@ -45,6 +45,7 @@ from pages_alerts import alerts_dashboard_page, get_dashboard_alerts_widget
 from pages_expenses import general_expenses_page
 from pages_profit_loss import profit_loss_page
 from pages_contracts import contract_generator_page
+from pages_notifications import notification_settings_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -248,6 +249,8 @@ def main():
         system_items.append("🔐 Role Management")
     if has_permission('view_audit_logs'):
         system_items.append("📜 Activity Log")
+    if has_permission('manage_roles'):  # Admin only
+        system_items.append("🔔 Notification Settings")
     
     # Filter menu items based on permissions
     if menu_section == "🚌 Operations":
@@ -512,6 +515,11 @@ def main():
     elif page == "📜 Activity Log":
         if has_permission('view_audit_logs'):
             activity_log_page()
+        else:
+            show_access_denied(page)
+    elif page == "🔔 Notification Settings":
+        if has_permission('manage_roles'):
+            notification_settings_page()
         else:
             show_access_denied(page)
 

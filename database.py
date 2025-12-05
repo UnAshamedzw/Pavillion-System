@@ -506,6 +506,17 @@ def init_database():
                 )
             ''')
             
+            # SYSTEM_SETTINGS TABLE (for notifications, etc.)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    id SERIAL PRIMARY KEY,
+                    setting_key TEXT UNIQUE NOT NULL,
+                    setting_value TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             # Create indexes
             try:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
@@ -964,6 +975,17 @@ def init_database():
                     description TEXT,
                     is_active INTEGER DEFAULT 1,
                     created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # SYSTEM_SETTINGS TABLE (for notifications, etc.)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    setting_key TEXT UNIQUE NOT NULL,
+                    setting_value TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
