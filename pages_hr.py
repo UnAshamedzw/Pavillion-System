@@ -108,6 +108,8 @@ def unpack_employee(emp):
             emp.get('date_of_birth'),
             emp.get('emergency_contact'),
             emp.get('emergency_phone'),
+            emp.get('next_of_kin_relationship'),
+            emp.get('national_id'),
             emp.get('license_number'),
             emp.get('license_expiry'),
             emp.get('defensive_driving_expiry'),
@@ -118,8 +120,8 @@ def unpack_employee(emp):
         )
     else:
         # SQLite tuple - pad with None if needed
-        result = list(emp) + [None] * (21 - len(emp))
-        return tuple(result[:21])
+        result = list(emp) + [None] * (23 - len(emp))
+        return tuple(result[:23])
 
 
 def generate_employee_id(position, conn):
@@ -587,8 +589,8 @@ def employee_management_page():
             for emp in employees:
                 (emp_id, employee_id, full_name, position, department, hire_date, 
                  salary, phone, email, address, status, dob, emerg_contact, emerg_phone,
-                 license_num, license_exp, defensive_exp, medical_exp, retest,
-                 created_by, created_at) = unpack_employee(emp)
+                 nok_relationship, national_id, license_num, license_exp, defensive_exp, 
+                 medical_exp, retest, created_by, created_at) = unpack_employee(emp)
                 
                 status_icon = "✅" if status == "Active" else "⏸️" if status == "On Leave" else "❌"
                 
@@ -644,6 +646,7 @@ def employee_management_page():
                     with col_info1:
                         st.markdown("##### 👤 Basic Information")
                         st.write(f"**Employee ID:** {employee_id}")
+                        st.write(f"**National ID:** {national_id or 'N/A'}")
                         st.write(f"**Position:** {position}")
                         st.write(f"**Department:** {department}")
                         st.write(f"**Salary:** ${salary:,.2f}")
@@ -660,9 +663,10 @@ def employee_management_page():
                         st.write(f"**Address:** {address or 'N/A'}")
                         
                         if emerg_contact:
-                            st.markdown("##### 🚨 Emergency Contact")
+                            st.markdown("##### 🆘 Next of Kin")
                             st.write(f"**Name:** {emerg_contact}")
                             st.write(f"**Phone:** {emerg_phone or 'N/A'}")
+                            st.write(f"**Relationship:** {nok_relationship or 'N/A'}")
                     
                     # Driver documents section
                     if 'driver' in position.lower():
@@ -775,6 +779,7 @@ def employee_management_page():
                             
                             with edit_col1:
                                 new_full_name = st.text_input("Full Name", value=full_name)
+                                new_national_id = st.text_input("National ID Number", value=national_id or "", placeholder="e.g., 63-123456-A-42")
                                 new_position = st.text_input("Position", value=position)
                                 new_department = st.selectbox(
                                     "Department",
@@ -798,13 +803,16 @@ def employee_management_page():
                                 new_email = st.text_input("Email", value=email or "")
                                 new_address = st.text_area("Address", value=address or "")
                             
-                            st.markdown("#### 📞 Emergency Contact")
+                            st.markdown("#### 🆘 Next of Kin / Emergency Contact")
                             emerg_col1, emerg_col2 = st.columns(2)
                             
                             with emerg_col1:
-                                new_emerg_contact = st.text_input("Emergency Contact Name", value=emerg_contact or "")
+                                new_emerg_contact = st.text_input("Next of Kin Name", value=emerg_contact or "")
+                                new_emerg_phone = st.text_input("Next of Kin Phone", value=emerg_phone or "")
                             with emerg_col2:
-                                new_emerg_phone = st.text_input("Emergency Contact Phone", value=emerg_phone or "")
+                                relationship_options = ["Spouse", "Parent", "Sibling", "Child", "Other Relative", "Friend", "Other"]
+                                current_rel_index = relationship_options.index(nok_relationship) if nok_relationship in relationship_options else 0
+                                new_nok_relationship = st.selectbox("Relationship", relationship_options, index=current_rel_index)
                             
                             # Driver documents
                             if 'driver' in new_position.lower():
@@ -850,14 +858,16 @@ def employee_management_page():
                                         UPDATE employees
                                         SET full_name = ?, position = ?, department = ?, salary = ?,
                                             phone = ?, email = ?, address = ?, status = ?, date_of_birth = ?,
-                                            emergency_contact = ?, emergency_phone = ?, license_number = ?,
+                                            emergency_contact = ?, emergency_phone = ?, next_of_kin_relationship = ?,
+                                            national_id = ?, license_number = ?,
                                             license_expiry = ?, defensive_driving_expiry = ?, 
                                             medical_cert_expiry = ?, retest_date = ?
                                         WHERE id = ?
                                     ''', (new_full_name, new_position, new_department, new_salary,
                                           new_phone, new_email, new_address, new_status,
                                           new_dob.strftime("%Y-%m-%d") if new_dob else None,
-                                          new_emerg_contact, new_emerg_phone, new_license_num,
+                                          new_emerg_contact, new_emerg_phone, new_nok_relationship,
+                                          new_national_id, new_license_num,
                                           new_license_exp.strftime("%Y-%m-%d") if new_license_exp else None,
                                           new_defensive_exp.strftime("%Y-%m-%d") if new_defensive_exp else None,
                                           new_medical_exp.strftime("%Y-%m-%d") if new_medical_exp else None,
