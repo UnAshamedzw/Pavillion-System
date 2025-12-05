@@ -342,7 +342,6 @@ def main():
     if page == "📈 Dashboard":
         try:
             show_expiry_alerts()
-            st.markdown("---")
         except Exception:
             pass
         
@@ -350,6 +349,8 @@ def main():
             display_document_expiry_alerts()
         except Exception:
             pass
+        
+        st.markdown("---")
     
     # Route to appropriate page with permission check
     if page == "📊 Income Entry":
