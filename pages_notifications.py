@@ -358,62 +358,105 @@ def get_all_critical_alerts(days_threshold=7):
 # EMAIL FUNCTIONS
 # =============================================================================
 
-def send_email(smtp_server, smtp_port, sender_email, sender_password, recipient_emails, subject, html_body):
-    """Send email using SMTP"""
+def send_email_via_resend(api_key, sender_email, recipient_emails, subject, html_body):
+    """Send email using Resend API"""
+    import requests
+    
+    # Ensure recipient_emails is a list
+    if isinstance(recipient_emails, str):
+        recipient_emails = [e.strip() for e in recipient_emails.split(',') if e.strip()]
+    
+    url = "https://api.resend.com/emails"
+    
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "from": sender_email,
+        "to": recipient_emails,
+        "subject": subject,
+        "html": html_body
+    }
+    
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        
+        if response.status_code == 200:
+            return True, "Email sent successfully via Resend"
+        else:
+            error_msg = response.json().get('message', response.text)
+            return False, f"Resend API error ({response.status_code}): {error_msg}"
+            
+    except requests.exceptions.Timeout:
+        return False, "Request timed out"
+    except requests.exceptions.RequestException as e:
+        return False, f"Request error: {str(e)}"
+    except Exception as e:
+        return False, f"Unexpected error: {str(e)}"
+
+
+def send_email_via_smtp(smtp_server, smtp_port, sender_email, sender_password, recipient_emails, subject, html_body):
+    """Send email using SMTP (fallback)"""
     import socket
     
-    # Set timeout for email operations
     socket.setdefaulttimeout(30)
     
     try:
-        # Create message
         msg = MIMEMultipart('alternative')
         msg['Subject'] = subject
         msg['From'] = sender_email
         msg['To'] = ', '.join(recipient_emails) if isinstance(recipient_emails, list) else recipient_emails
         
-        # Attach HTML body
         html_part = MIMEText(html_body, 'html')
         msg.attach(html_part)
         
-        # Ensure recipient_emails is a list
         if isinstance(recipient_emails, str):
             recipient_emails = [recipient_emails]
         
-        # Connect and send
         if smtp_port == 465:
-            # SSL connection
             server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=30)
         else:
-            # TLS connection (port 587)
             server = smtplib.SMTP(smtp_server, smtp_port, timeout=30)
             server.ehlo()
             server.starttls()
             server.ehlo()
         
-        # Login
         server.login(sender_email, sender_password)
-        
-        # Send email
         server.sendmail(sender_email, recipient_emails, msg.as_string())
-        
-        # Close connection
         server.quit()
         
-        return True, "Email sent successfully"
+        return True, "Email sent successfully via SMTP"
         
-    except smtplib.SMTPAuthenticationError as e:
-        return False, f"Authentication failed. Check your email and App Password. Error: {str(e)}"
-    except smtplib.SMTPRecipientsRefused as e:
-        return False, f"Recipients refused. Check email addresses. Error: {str(e)}"
-    except smtplib.SMTPException as e:
-        return False, f"SMTP error: {str(e)}"
-    except socket.timeout:
-        return False, "Connection timed out. Check your internet connection and SMTP settings."
-    except socket.gaierror as e:
-        return False, f"Could not connect to SMTP server. Check server address. Error: {str(e)}"
     except Exception as e:
-        return False, f"Unexpected error: {type(e).__name__}: {str(e)}"
+        return False, f"SMTP error: {str(e)}"
+
+
+def send_email(settings, recipient_emails, subject, html_body):
+    """Send email using configured method (Resend API or SMTP)"""
+    
+    email_method = settings.get('notif_email_method', 'resend')
+    
+    if email_method == 'resend':
+        api_key = settings.get('notif_resend_api_key', '')
+        sender_email = settings.get('notif_sender_email', 'onboarding@resend.dev')
+        
+        if not api_key:
+            return False, "Resend API key not configured"
+        
+        return send_email_via_resend(api_key, sender_email, recipient_emails, subject, html_body)
+    else:
+        # SMTP method
+        smtp_server = settings.get('notif_smtp_server', 'smtp.gmail.com')
+        smtp_port = int(settings.get('notif_smtp_port', 587))
+        sender_email = settings.get('notif_sender_email', '')
+        sender_password = settings.get('notif_sender_password', '')
+        
+        if not sender_email or not sender_password:
+            return False, "SMTP credentials not configured"
+        
+        return send_email_via_smtp(smtp_server, smtp_port, sender_email, sender_password, recipient_emails, subject, html_body)
 
 
 def build_alert_email_html(alerts_data, company_name="Pavillion Coaches"):
@@ -538,16 +581,21 @@ def send_alert_notification():
     if not settings.get('notif_enabled') == 'true':
         return False, "Notifications are disabled"
     
-    # Get email settings
-    smtp_server = settings.get('notif_smtp_server', 'smtp.gmail.com')
-    smtp_port = int(settings.get('notif_smtp_port', 587))
-    sender_email = settings.get('notif_sender_email', '')
-    sender_password = settings.get('notif_sender_password', '')
+    # Get recipient emails
     recipient_emails = settings.get('notif_recipients', '').split(',')
     recipient_emails = [e.strip() for e in recipient_emails if e.strip()]
     
-    if not sender_email or not sender_password or not recipient_emails:
-        return False, "Email settings not configured"
+    if not recipient_emails:
+        return False, "No recipient emails configured"
+    
+    # Check if email method is configured
+    email_method = settings.get('notif_email_method', 'resend')
+    if email_method == 'resend':
+        if not settings.get('notif_resend_api_key'):
+            return False, "Resend API key not configured"
+    else:
+        if not settings.get('notif_sender_email') or not settings.get('notif_sender_password'):
+            return False, "SMTP credentials not configured"
     
     # Get alerts
     days_threshold = int(settings.get('notif_days_threshold', 7))
@@ -560,12 +608,7 @@ def send_alert_notification():
     html_body = build_alert_email_html(alerts_data)
     subject = f"🚨 Pavillion Coaches: {alerts_data['summary']['total']} Alert(s) Require Attention"
     
-    success, message = send_email(
-        smtp_server, smtp_port,
-        sender_email, sender_password,
-        recipient_emails,
-        subject, html_body
-    )
+    success, message = send_email(settings, recipient_emails, subject, html_body)
     
     if success:
         # Log the notification
@@ -595,72 +638,135 @@ def notification_settings_page():
     settings = get_notification_settings()
     
     # Tabs
-    tab1, tab2, tab3 = st.tabs(["⚙️ Email Configuration", "📋 Alert Settings", "🧪 Test & Send"])
+    tab1, tab2, tab3 = st.tabs([⚙️ Email Configuration", "📋 Alert Settings", "🧪 Test & Send"])
     
     with tab1:
         st.subheader("Email Configuration")
         
-        st.info("""
-        **For Gmail Users:**
-        1. Enable 2-Factor Authentication on your Google account
-        2. Go to Google Account → Security → App Passwords
-        3. Generate a new App Password for "Mail"
-        4. Use that App Password below (not your regular password)
-        """)
+        # Email method selection
+        email_method = st.radio(
+            "Email Service",
+            ["resend", "smtp"],
+            index=0 if settings.get('notif_email_method', 'resend') == 'resend' else 1,
+            format_func=lambda x: "📧 Resend API (Recommended)" if x == "resend" else "📮 SMTP (Gmail/Other)",
+            horizontal=True
+        )
         
-        with st.form("email_config_form"):
-            col1, col2 = st.columns(2)
+        st.markdown("---")
+        
+        if email_method == "resend":
+            st.info("""
+            **Resend Setup (Free - 100 emails/day):**
+            1. Go to **https://resend.com** and create a free account
+            2. Get your **API Key** from the dashboard
+            3. Use `onboarding@resend.dev` as sender for testing
+            4. Or verify your own domain for custom sender email
+            """)
             
-            with col1:
-                smtp_server = st.text_input(
-                    "SMTP Server",
-                    value=settings.get('notif_smtp_server', 'smtp.gmail.com'),
-                    help="For Gmail: smtp.gmail.com"
-                )
-                
-                smtp_port = st.selectbox(
-                    "SMTP Port",
-                    [587, 465, 25],
-                    index=[587, 465, 25].index(int(settings.get('notif_smtp_port', 587))) if settings.get('notif_smtp_port') else 0,
-                    help="For Gmail: 587 (TLS) or 465 (SSL)"
+            with st.form("resend_config_form"):
+                resend_api_key = st.text_input(
+                    "Resend API Key*",
+                    value=settings.get('notif_resend_api_key', ''),
+                    type="password",
+                    placeholder="re_xxxxxxxxx..."
                 )
                 
                 sender_email = st.text_input(
                     "Sender Email",
-                    value=settings.get('notif_sender_email', ''),
-                    placeholder="your-email@gmail.com"
-                )
-            
-            with col2:
-                sender_password = st.text_input(
-                    "App Password",
-                    value=settings.get('notif_sender_password', ''),
-                    type="password",
-                    help="Use App Password, not your regular password"
+                    value=settings.get('notif_sender_email', 'onboarding@resend.dev'),
+                    help="Use 'onboarding@resend.dev' for testing, or your verified domain email"
                 )
                 
                 recipients = st.text_area(
-                    "Recipient Emails",
+                    "Recipient Emails*",
                     value=settings.get('notif_recipients', ''),
                     placeholder="email1@gmail.com, email2@gmail.com",
                     help="Comma-separated list of email addresses"
                 )
-            
-            enabled = st.toggle(
-                "Enable Email Notifications",
-                value=settings.get('notif_enabled') == 'true'
-            )
-            
-            if st.form_submit_button("💾 Save Email Settings", type="primary"):
-                save_notification_setting('notif_smtp_server', smtp_server)
-                save_notification_setting('notif_smtp_port', str(smtp_port))
-                save_notification_setting('notif_sender_email', sender_email)
-                save_notification_setting('notif_sender_password', sender_password)
-                save_notification_setting('notif_recipients', recipients)
-                save_notification_setting('notif_enabled', 'true' if enabled else 'false')
                 
-                AuditLogger.log_action("Update", "Settings", "Updated notification email settings")
-                st.success("✅ Email settings saved!")
+                enabled = st.toggle(
+                    "Enable Email Notifications",
+                    value=settings.get('notif_enabled') == 'true'
+                )
+                
+                if st.form_submit_button("💾 Save Resend Settings", type="primary"):
+                    save_notification_setting('notif_email_method', 'resend')
+                    save_notification_setting('notif_resend_api_key', resend_api_key)
+                    save_notification_setting('notif_sender_email', sender_email)
+                    save_notification_setting('notif_recipients', recipients)
+                    save_notification_setting('notif_enabled', 'true' if enabled else 'false')
+                    
+                    AuditLogger.log_action("Update", "Settings", "Updated Resend email settings")
+                    st.success("✅ Resend settings saved!")
+        
+        else:
+            st.warning("""
+            ⚠️ **Note:** SMTP may not work on Render.com (ports blocked).
+            We recommend using **Resend API** instead.
+            """)
+            
+            st.info("""
+            **For Gmail SMTP:**
+            1. Enable 2-Factor Authentication on your Google account
+            2. Go to Google Account → Security → App Passwords
+            3. Generate a new App Password for "Mail"
+            4. Use that App Password below (not your regular password)
+            """)
+            
+            with st.form("smtp_config_form"):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    smtp_server = st.text_input(
+                        "SMTP Server",
+                        value=settings.get('notif_smtp_server', 'smtp.gmail.com'),
+                        help="For Gmail: smtp.gmail.com"
+                    )
+                    
+                    smtp_port = st.selectbox(
+                        "SMTP Port",
+                        [587, 465, 25],
+                        index=[587, 465, 25].index(int(settings.get('notif_smtp_port', 587))) if settings.get('notif_smtp_port') else 0,
+                        help="For Gmail: 587 (TLS) or 465 (SSL)"
+                    )
+                    
+                    sender_email = st.text_input(
+                        "Sender Email",
+                        value=settings.get('notif_sender_email', ''),
+                        placeholder="your-email@gmail.com"
+                    )
+                
+                with col2:
+                    sender_password = st.text_input(
+                        "App Password",
+                        value=settings.get('notif_sender_password', ''),
+                        type="password",
+                        help="Use App Password, not your regular password"
+                    )
+                    
+                    recipients = st.text_area(
+                        "Recipient Emails",
+                        value=settings.get('notif_recipients', ''),
+                        placeholder="email1@gmail.com, email2@gmail.com",
+                        help="Comma-separated list of email addresses"
+                    )
+                
+                enabled = st.toggle(
+                    "Enable Email Notifications",
+                    value=settings.get('notif_enabled') == 'true'
+                )
+                
+                if st.form_submit_button("💾 Save SMTP Settings", type="primary"):
+                    save_notification_setting('notif_email_method', 'smtp')
+                    save_notification_setting('notif_smtp_server', smtp_server)
+                    save_notification_setting('notif_smtp_port', str(smtp_port))
+                    save_notification_setting('notif_sender_email', sender_email)
+                    save_notification_setting('notif_sender_password', sender_password)
+                    save_notification_setting('notif_recipients', recipients)
+                    save_notification_setting('notif_enabled', 'true' if enabled else 'false')
+                    
+                    AuditLogger.log_action("Update", "Settings", "Updated SMTP email settings")
+                    st.success("✅ SMTP settings saved!")
     
     with tab2:
         st.subheader("Alert Settings")
@@ -746,53 +852,42 @@ def notification_settings_page():
         # Test email button
         st.markdown("### 📧 Send Notifications")
         
-        col1, col2, col3 = st.columns(3)
+        # Show current config
+        email_method = settings.get('notif_email_method', 'resend')
+        if email_method == 'resend':
+            st.info(f"📧 Using **Resend API** | Sender: `{settings.get('notif_sender_email', 'Not set')}`")
+        else:
+            st.info(f"📮 Using **SMTP** | Server: `{settings.get('notif_smtp_server', 'Not set')}`")
+        
+        col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("🔌 Test Connection", type="secondary", use_container_width=True):
-                if not settings.get('notif_sender_email') or not settings.get('notif_sender_password'):
-                    st.error("Please configure email settings first")
-                else:
-                    smtp_server = settings.get('notif_smtp_server', 'smtp.gmail.com')
-                    smtp_port = int(settings.get('notif_smtp_port', 587))
-                    sender_email = settings.get('notif_sender_email', '')
-                    sender_password = settings.get('notif_sender_password', '')
-                    
-                    with st.spinner(f"Testing connection to {smtp_server}:{smtp_port}..."):
-                        import socket
-                        socket.setdefaulttimeout(15)
-                        try:
-                            if smtp_port == 465:
-                                server = smtplib.SMTP_SSL(smtp_server, smtp_port, timeout=15)
+            if st.button("🧪 Send Test Email", type="secondary", use_container_width=True):
+                # Check configuration
+                if email_method == 'resend':
+                    if not settings.get('notif_resend_api_key'):
+                        st.error("Please configure Resend API key first")
+                    elif not settings.get('notif_recipients'):
+                        st.error("Please add recipient email addresses")
+                    else:
+                        with st.spinner("Sending test email via Resend..."):
+                            success, message = send_alert_notification()
+                            if success:
+                                st.success(f"✅ {message}")
                             else:
-                                server = smtplib.SMTP(smtp_server, smtp_port, timeout=15)
-                                server.ehlo()
-                                server.starttls()
-                                server.ehlo()
-                            
-                            server.login(sender_email, sender_password)
-                            server.quit()
-                            st.success("✅ Connection successful! SMTP server and credentials are valid.")
-                        except smtplib.SMTPAuthenticationError:
-                            st.error("❌ Authentication failed. Check your App Password (not regular password).")
-                        except socket.timeout:
-                            st.error("❌ Connection timed out. Render may be blocking SMTP ports.")
-                        except Exception as e:
-                            st.error(f"❌ Connection failed: {type(e).__name__}: {str(e)}")
+                                st.error(f"❌ Failed: {message}")
+                else:
+                    if not settings.get('notif_sender_email') or not settings.get('notif_sender_password'):
+                        st.error("Please configure SMTP settings first")
+                    else:
+                        with st.spinner("Sending test email via SMTP..."):
+                            success, message = send_alert_notification()
+                            if success:
+                                st.success(f"✅ {message}")
+                            else:
+                                st.error(f"❌ Failed: {message}")
         
         with col2:
-            if st.button("🧪 Send Test Email", type="secondary", use_container_width=True):
-                if not settings.get('notif_sender_email') or not settings.get('notif_sender_password'):
-                    st.error("Please configure email settings first")
-                else:
-                    with st.spinner("Sending test email..."):
-                        success, message = send_alert_notification()
-                        if success:
-                            st.success(f"✅ {message}")
-                        else:
-                            st.error(f"❌ Failed: {message}")
-        
-        with col3:
             if st.button("📧 Send Alert Now", type="primary", use_container_width=True):
                 if alerts_data['summary']['total'] == 0:
                     st.info("No alerts to send!")
