@@ -12,10 +12,6 @@ from dateutil.relativedelta import relativedelta
 from database import get_connection, get_engine, USE_POSTGRES
 from audit_logger import AuditLogger
 from auth import has_permission
-import subprocess
-import os
-import tempfile
-import re
 
 
 # =============================================================================
@@ -309,90 +305,78 @@ def replace_placeholders(template, employee, contract_start, contract_end, durat
 
 
 def generate_contract_docx(content, employee_name):
-    """Generate DOCX file from filled contract content"""
+    """Generate DOCX file from filled contract content using python-docx"""
+    from docx import Document
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from io import BytesIO
+    
+    # Create document
+    doc = Document()
+    
+    # Set default font
+    style = doc.styles['Normal']
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
     
     # Split content into paragraphs
     paragraphs = content.split('\n')
     
-    # Build paragraph JS array
-    para_js_parts = []
     for para in paragraphs:
         para = para.strip()
+        
         if not para:
             # Empty paragraph for spacing
-            para_js_parts.append('new Paragraph({ children: [] })')
+            doc.add_paragraph()
         elif para.startswith('=====') and para.endswith('====='):
             # Section header
             header_text = para.replace('=====', '').strip()
-            escaped_header = header_text.replace('\\', '\\\\').replace('"', '\\"')
-            para_js_parts.append(f'''new Paragraph({{
-                heading: HeadingLevel.HEADING_1,
-                spacing: {{ before: 300, after: 150 }},
-                children: [new TextRun({{ text: "{escaped_header}", bold: true }})]
-            }})''')
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            run = p.add_run(header_text)
+            run.bold = True
+            run.font.size = Pt(12)
+            p.space_before = Pt(12)
+            p.space_after = Pt(6)
+        elif para in ['FORESTVIEW ENTERPRISES']:
+            # Company name - centered, large, bold
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(para)
+            run.bold = True
+            run.font.size = Pt(16)
+        elif para in ['CONTRACT OF EMPLOYMENT']:
+            # Title - centered, bold
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(para)
+            run.bold = True
+            run.font.size = Pt(14)
+            p.space_after = Pt(12)
+        elif para in ['AND', 'STAMP']:
+            # Centered text
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = p.add_run(para)
+            run.bold = True
+            run.font.size = Pt(12)
         elif para.startswith('•'):
             # Bullet point
-            bullet_text = para[1:].strip().replace('\\', '\\\\').replace('"', '\\"')
-            para_js_parts.append(f'''new Paragraph({{
-                children: [new TextRun({{ text: "• {bullet_text}", size: 22 }})]
-            }})''')
-        elif para in ['FORESTVIEW ENTERPRISES', 'CONTRACT OF EMPLOYMENT', 'AND', 'STAMP']:
-            # Centered bold text
-            para_js_parts.append(f'''new Paragraph({{
-                alignment: AlignmentType.CENTER,
-                spacing: {{ after: 200 }},
-                children: [new TextRun({{ text: "{para}", bold: true, size: {32 if para == 'FORESTVIEW ENTERPRISES' else 28 if para == 'CONTRACT OF EMPLOYMENT' else 24} }})]
-            }})''')
+            bullet_text = para[1:].strip()
+            p = doc.add_paragraph(bullet_text, style='List Bullet')
         else:
-            # Normal paragraph
-            escaped = para.replace('\\', '\\\\').replace('"', '\\"').replace('\n', ' ')
-            para_js_parts.append(f'''new Paragraph({{
-                alignment: AlignmentType.JUSTIFIED,
-                children: [new TextRun({{ text: "{escaped}", size: 22 }})]
-            }})''')
+            # Normal paragraph - justified
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            run = p.add_run(para)
+            run.font.size = Pt(11)
     
-    paragraphs_js = ',\n            '.join(para_js_parts)
+    # Save to bytes buffer
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
     
-    js_code = f'''
-const {{ Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel }} = require('docx');
-const fs = require('fs');
-
-const doc = new Document({{
-    styles: {{
-        default: {{
-            document: {{
-                run: {{ font: "Arial", size: 22 }}
-            }}
-        }},
-        paragraphStyles: [
-            {{
-                id: "Heading1",
-                name: "Heading 1",
-                basedOn: "Normal",
-                run: {{ size: 24, bold: true, font: "Arial" }},
-                paragraph: {{ spacing: {{ before: 240, after: 120 }} }}
-            }}
-        ]
-    }},
-    sections: [{{
-        properties: {{
-            page: {{
-                margin: {{ top: 1080, right: 1080, bottom: 1080, left: 1080 }}
-            }}
-        }},
-        children: [
-            {paragraphs_js}
-        ]
-    }}]
-}});
-
-Packer.toBuffer(doc).then(buffer => {{
-    fs.writeFileSync(process.argv[2], buffer);
-    console.log("Contract generated successfully");
-}});
-'''
-    
-    return js_code
+    return buffer.getvalue()
 
 
 # =============================================================================
@@ -547,64 +531,33 @@ def generate_contract_tab():
                 # Fill template
                 filled_content = replace_placeholders(template, employee, contract_start, contract_end, duration_text)
                 
-                # Generate JS code
-                js_code = generate_contract_docx(filled_content, employee.get('full_name', 'Employee'))
+                # Generate DOCX using python-docx
+                docx_data = generate_contract_docx(filled_content, employee.get('full_name', 'Employee'))
                 
-                # Create temp files
-                with tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False) as js_file:
-                    js_file.write(js_code)
-                    js_path = js_file.name
-                
-                output_path = f"/tmp/contract_{employee.get('employee_id', 'unknown')}_{datetime.now().strftime('%Y%m%d%H%M%S')}.docx"
-                
-                # Run node to generate docx
-                result = subprocess.run(
-                    ['node', js_path, output_path],
-                    capture_output=True,
-                    text=True,
-                    timeout=30
+                # Log action
+                AuditLogger.log_action(
+                    "Generate",
+                    "Contracts",
+                    f"Generated contract for {employee.get('full_name')} ({contract_start} to {contract_end})"
                 )
                 
-                # Clean up JS file
-                os.unlink(js_path)
+                st.success("✅ Contract generated successfully!")
                 
-                if result.returncode == 0 and os.path.exists(output_path):
-                    # Read the generated file
-                    with open(output_path, 'rb') as f:
-                        docx_data = f.read()
+                # Download button
+                filename = f"Contract_{employee.get('full_name', 'Employee').replace(' ', '_')}_{contract_start.strftime('%Y%m%d')}.docx"
+                
+                st.download_button(
+                    label="📥 Download Contract (DOCX)",
+                    data=docx_data,
+                    file_name=filename,
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
+                
+                st.info("💡 **Tip:** Open in Microsoft Word, print, and have the employee sign.")
                     
-                    # Clean up output file
-                    os.unlink(output_path)
-                    
-                    # Log action
-                    AuditLogger.log_action(
-                        "Generate",
-                        "Contracts",
-                        f"Generated contract for {employee.get('full_name')} ({contract_start} to {contract_end})"
-                    )
-                    
-                    st.success("✅ Contract generated successfully!")
-                    
-                    # Download button
-                    filename = f"Contract_{employee.get('full_name', 'Employee').replace(' ', '_')}_{contract_start.strftime('%Y%m%d')}.docx"
-                    
-                    st.download_button(
-                        label="📥 Download Contract (DOCX)",
-                        data=docx_data,
-                        file_name=filename,
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        use_container_width=True
-                    )
-                    
-                    st.info("💡 **Tip:** Open in Microsoft Word, print, and have the employee sign.")
-                    
-                else:
-                    st.error(f"Error generating contract: {result.stderr}")
-                    
-            except subprocess.TimeoutExpired:
-                st.error("Contract generation timed out. Please try again.")
             except Exception as e:
-                st.error(f"Error: {str(e)}")
+                st.error(f"Error generating contract: {str(e)}")
 
 
 def edit_template_tab():
