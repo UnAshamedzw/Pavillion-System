@@ -111,8 +111,8 @@ def get_bus_document_alerts(days_threshold=7):
     
     query = """
         SELECT bus_number, 
-               zinara_expiry, vehicle_insurance_expiry, passenger_insurance_expiry,
-               fitness_expiry, route_authority_expiry
+               zinara_licence_expiry, vehicle_insurance_expiry, passenger_insurance_expiry,
+               fitness_expiry
         FROM buses 
         WHERE status = 'Active'
     """
@@ -125,11 +125,10 @@ def get_bus_document_alerts(days_threshold=7):
     threshold_date = today + timedelta(days=days_threshold)
     
     doc_fields = [
-        ('zinara_expiry', 'ZINARA License'),
+        ('zinara_licence_expiry', 'ZINARA License'),
         ('vehicle_insurance_expiry', 'Vehicle Insurance'),
         ('passenger_insurance_expiry', 'Passenger Insurance'),
-        ('fitness_expiry', 'Fitness Certificate'),
-        ('route_authority_expiry', 'Route Authority')
+        ('fitness_expiry', 'Fitness Certificate')
     ]
     
     for _, row in df.iterrows():
