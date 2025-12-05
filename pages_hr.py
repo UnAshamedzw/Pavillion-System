@@ -298,18 +298,14 @@ def get_expiring_documents(days_threshold=30):
 
 
 def display_document_expiry_alerts():
-    """Display document expiry alerts on the homepage"""
-    
-    st.markdown("### 📋 Document Expiry Alerts")
+    """Display document expiry alerts on the homepage - collapsed by default"""
     
     try:
         alerts = get_expiring_documents(days_threshold=30)
     except Exception as e:
-        st.info("Document expiry tracking not available yet.")
         return
     
     if not alerts:
-        st.success("✅ All documents are up to date!")
         return
     
     # Count alerts by urgency
@@ -318,50 +314,61 @@ def display_document_expiry_alerts():
     warning = [a for a in alerts if a['urgency'] == 'warning']
     info = [a for a in alerts if a['urgency'] == 'info']
     
-    # Summary metrics
-    col1, col2, col3, col4 = st.columns(4)
+    # Calculate totals for summary
+    total_urgent = len(expired) + len(critical) + len(warning)
     
-    with col1:
+    if total_urgent == 0 and len(info) == 0:
+        return
+    
+    # Determine header based on severity
+    if expired:
+        header_icon = "🚨"
+        header_text = f"Employee Documents: {len(expired)} Expired, {len(critical)} Critical, {len(warning)} Warning"
+    elif critical:
+        header_icon = "⚠️"
+        header_text = f"Employee Documents: {len(critical)} Critical, {len(warning)} Warning"
+    elif warning:
+        header_icon = "📋"
+        header_text = f"Employee Documents: {len(warning)} Expiring Soon"
+    else:
+        header_icon = "ℹ️"
+        header_text = f"Employee Documents: {len(info)} Upcoming Renewals"
+    
+    # Single collapsed expander with all alerts
+    with st.expander(f"{header_icon} {header_text}", expanded=False):
+        # Summary metrics row
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("🔴 Expired", len(expired))
+        with col2:
+            st.metric("🟠 Critical", len(critical))
+        with col3:
+            st.metric("🟡 Warning", len(warning))
+        with col4:
+            st.metric("ℹ️ Upcoming", len(info))
+        
+        st.markdown("---")
+        
+        # Display alerts by category
         if expired:
-            st.metric("🔴 EXPIRED", len(expired), delta=None)
-        else:
-            st.metric("✅ Expired", 0)
-    
-    with col2:
+            st.markdown("#### 🔴 Expired Documents")
+            for alert in expired:
+                st.error(f"❌ **{alert['name']}** ({alert['position']}) - {alert['document']}: Expired {abs(alert['days_until'])} days ago")
+        
         if critical:
-            st.metric("🟠 Critical (≤7 days)", len(critical))
-        else:
-            st.metric("✅ Critical", 0)
-    
-    with col3:
+            st.markdown("#### 🟠 Critical (≤7 days)")
+            for alert in critical:
+                st.warning(f"⏰ **{alert['name']}** ({alert['position']}) - {alert['document']}: Expires in {alert['days_until']} days")
+        
         if warning:
-            st.metric("🟡 Warning (≤14 days)", len(warning))
-        else:
-            st.metric("✅ Warning", 0)
-    
-    with col4:
-        st.metric("ℹ️ Upcoming (≤30 days)", len(info))
-    
-    st.markdown("---")
-    
-    # Display alerts
-    for alert in alerts:
-        if alert['expired']:
-            icon = "🔴"
-            status_text = f"**EXPIRED** {abs(alert['days_until'])} days ago"
-            st.error(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
-        elif alert['urgency'] == 'critical':
-            icon = "🟠"
-            status_text = f"Expires in **{alert['days_until']} days**"
-            st.warning(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
-        elif alert['urgency'] == 'warning':
-            icon = "🟡"
-            status_text = f"Expires in {alert['days_until']} days"
-            st.warning(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
-        else:
-            icon = "ℹ️"
-            status_text = f"Expires in {alert['days_until']} days"
-            st.info(f"{icon} **{alert['name']}** ({alert['position']}) - {alert['document']}: {status_text}")
+            st.markdown("#### 🟡 Warning (≤14 days)")
+            for alert in warning:
+                st.info(f"📅 **{alert['name']}** ({alert['position']}) - {alert['document']}: Expires in {alert['days_until']} days")
+        
+        if info:
+            st.markdown("#### ℹ️ Upcoming (≤30 days)")
+            for alert in info:
+                st.write(f"📆 **{alert['name']}** ({alert['position']}) - {alert['document']}: Expires in {alert['days_until']} days")
 # ============================================================================
 # PDF GENERATION HELPER FOR HR REPORTS
 # ============================================================================
