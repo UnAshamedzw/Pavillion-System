@@ -492,6 +492,20 @@ def init_database():
                 )
             ''')
             
+            # CONTRACT_TEMPLATES TABLE
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS contract_templates (
+                    id SERIAL PRIMARY KEY,
+                    template_name TEXT UNIQUE NOT NULL,
+                    template_content TEXT NOT NULL,
+                    description TEXT,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             # Create indexes
             try:
                 cursor.execute('CREATE INDEX IF NOT EXISTS idx_activity_username ON activity_log(username)')
@@ -935,6 +949,20 @@ def init_database():
                     recurring INTEGER DEFAULT 0,
                     recurring_frequency TEXT,
                     notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # CONTRACT_TEMPLATES TABLE (SQLite)
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS contract_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    template_name TEXT UNIQUE NOT NULL,
+                    template_content TEXT NOT NULL,
+                    description TEXT,
+                    is_active INTEGER DEFAULT 1,
                     created_by TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
