@@ -100,8 +100,8 @@ def get_expiring_documents(days_threshold=30):
 
 
 def show_expiry_alerts():
-    """Show expiry alerts on dashboard/home page"""
-    expiring = get_expiring_documents(30)
+    """Show expiry alerts on dashboard/home page - collapsed by default"""
+    expiring = get_expiring_documents(90)  # Get 90 days for full overview
     
     if not expiring:
         return
@@ -110,24 +110,54 @@ def show_expiry_alerts():
     expired = [x for x in expiring if x['days_remaining'] < 0]
     critical = [x for x in expiring if 0 <= x['days_remaining'] <= 7]
     warning = [x for x in expiring if 7 < x['days_remaining'] <= 30]
+    upcoming = [x for x in expiring if 30 < x['days_remaining'] <= 90]
     
-    if expired:
-        st.error(f"🚨 **URGENT: {len(expired)} EXPIRED DOCUMENTS!**")
-        with st.expander("⚠️ View Expired Documents", expanded=True):
-            for item in expired:
-                st.error(f"❌ **{item['item']}** - {item['document']} expired {abs(item['days_remaining'])} days ago (Expired: {item['expiry_date']})")
+    # Calculate totals for summary
+    total_issues = len(expired) + len(critical) + len(warning)
     
-    if critical:
-        st.warning(f"⚠️ **CRITICAL: {len(critical)} Documents Expiring Within 7 Days!**")
-        with st.expander("📋 View Critical Documents", expanded=True):
-            for item in critical:
-                st.warning(f"⏰ **{item['item']}** - {item['document']} expires in {item['days_remaining']} days (Expiry: {item['expiry_date']})")
-    
-    if warning:
-        st.info(f"📢 **NOTICE: {len(warning)} Documents Expiring Within 30 Days**")
-        with st.expander("📅 View Upcoming Expirations"):
-            for item in warning:
-                st.info(f"📅 **{item['item']}** - {item['document']} expires in {item['days_remaining']} days (Expiry: {item['expiry_date']})")
+    # Create a single collapsible section with summary
+    if total_issues > 0:
+        # Determine header color based on severity
+        if expired:
+            header_icon = "🚨"
+            header_text = f"Document Alerts: {len(expired)} Expired, {len(critical)} Critical, {len(warning)} Warning"
+        elif critical:
+            header_icon = "⚠️"
+            header_text = f"Document Alerts: {len(critical)} Critical, {len(warning)} Warning"
+        else:
+            header_icon = "📋"
+            header_text = f"Document Alerts: {len(warning)} Expiring Soon"
+        
+        # Single collapsed expander with all alerts
+        with st.expander(f"{header_icon} {header_text}", expanded=False):
+            if expired:
+                st.markdown("### 🔴 Expired Documents")
+                for item in expired:
+                    st.error(f"❌ **{item['item']}** - {item['document']} expired {abs(item['days_remaining'])} days ago")
+                st.markdown("---")
+            
+            if critical:
+                st.markdown("### 🟠 Critical (Within 7 Days)")
+                for item in critical:
+                    st.warning(f"⏰ **{item['item']}** - {item['document']} expires in {item['days_remaining']} days")
+                st.markdown("---")
+            
+            if warning:
+                st.markdown("### 🟡 Warning (Within 30 Days)")
+                for item in warning:
+                    st.info(f"📅 **{item['item']}** - {item['document']} expires in {item['days_remaining']} days")
+            
+            if upcoming:
+                st.markdown("---")
+                st.markdown("### 🟢 Upcoming (30-90 Days)")
+                for item in upcoming:
+                    st.write(f"📆 **{item['item']}** - {item['document']} expires in {item['days_remaining']} days")
+    else:
+        # Just show upcoming if no urgent issues
+        if upcoming:
+            with st.expander(f"📋 Document Status: {len(upcoming)} upcoming renewals", expanded=False):
+                for item in upcoming:
+                    st.write(f"📆 **{item['item']}** - {item['document']} expires in {item['days_remaining']} days")
 
 
 def fleet_management_page():
