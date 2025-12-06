@@ -137,48 +137,115 @@ def apply_mobile_styles():
         font-size: 16px !important; /* Prevents zoom on iOS */
     }
     
-    /* ----- SIDEBAR AUTO-COLLAPSE ON MOBILE ----- */
+    /* ----- HIDE STREAMLIT TOP BAR & DECORATIONS ON MOBILE ----- */
     
     @media (max-width: 768px) {
-        /* Make sidebar overlay instead of push */
-        [data-testid="stSidebar"] {
-            position: fixed !important;
-            z-index: 999 !important;
-            height: 100vh !important;
-            transition: transform 0.3s ease-in-out !important;
+        /* Hide the top toolbar/header with 3 dots and arrows */
+        [data-testid="stHeader"],
+        header[data-testid="stHeader"] {
+            display: none !important;
+            height: 0 !important;
+            visibility: hidden !important;
         }
         
-        /* Collapsed state */
+        /* Hide the top decoration bar */
+        [data-testid="stDecoration"],
+        .stDeployButton,
+        #MainMenu,
+        footer {
+            display: none !important;
+            visibility: hidden !important;
+        }
+        
+        /* Remove top padding that was for header */
+        .main > div:first-child {
+            padding-top: 0 !important;
+        }
+        
+        /* Adjust app view container */
+        [data-testid="stAppViewContainer"] {
+            padding-top: 0 !important;
+        }
+        
+        .appview-container {
+            padding-top: 0 !important;
+        }
+    }
+    
+    /* ----- SIDEBAR MOBILE FIXES ----- */
+    
+    @media (max-width: 768px) {
+        /* Completely hide sidebar when collapsed - no residual line */
+        [data-testid="stSidebar"] {
+            min-width: 0 !important;
+            width: 280px !important;
+            transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out !important;
+        }
+        
+        /* Collapsed state - fully hidden */
         [data-testid="stSidebar"][aria-expanded="false"] {
             transform: translateX(-100%) !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            overflow: hidden !important;
+        }
+        
+        /* Hide the sidebar inner content when collapsed */
+        [data-testid="stSidebar"][aria-expanded="false"] > div {
+            display: none !important;
+            visibility: hidden !important;
         }
         
         /* Expanded state */
         [data-testid="stSidebar"][aria-expanded="true"] {
             transform: translateX(0) !important;
-            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2) !important;
+            visibility: visible !important;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.3) !important;
+            z-index: 9999 !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            height: 100vh !important;
         }
         
         /* Main content takes full width */
         .main .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
             max-width: 100% !important;
+            margin-left: 0 !important;
         }
         
-        /* Hamburger menu styling */
-        [data-testid="stSidebarCollapsedControl"] {
+        /* Style the hamburger/collapse button */
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"] {
             position: fixed !important;
             top: 0.5rem !important;
             left: 0.5rem !important;
-            z-index: 1000 !important;
-            background: var(--primary-color) !important;
+            z-index: 99999 !important;
+            background: #1E88E5 !important;
             border-radius: 8px !important;
-            padding: 8px !important;
+            padding: 6px !important;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
         }
         
-        [data-testid="stSidebarCollapsedControl"] svg {
+        [data-testid="stSidebarCollapsedControl"] button,
+        [data-testid="collapsedControl"] button {
             color: white !important;
+            background: transparent !important;
+            border: none !important;
+        }
+        
+        [data-testid="stSidebarCollapsedControl"] svg,
+        [data-testid="collapsedControl"] svg {
+            fill: white !important;
+            color: white !important;
+        }
+        
+        /* Add top padding for content to not overlap with hamburger */
+        .main .block-container {
+            padding-top: 3.5rem !important;
         }
     }
     
