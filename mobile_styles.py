@@ -140,46 +140,39 @@ def apply_mobile_styles():
     /* ----- HIDE STREAMLIT TOP BAR & DECORATIONS ON MOBILE ----- */
     
     @media (max-width: 768px) {
-        /* Hide the top toolbar/header with 3 dots and arrows */
-        [data-testid="stHeader"],
-        header[data-testid="stHeader"] {
-            display: none !important;
-            height: 0 !important;
-            visibility: hidden !important;
-        }
-        
-        /* Hide the top decoration bar */
-        [data-testid="stDecoration"],
+        /* Hide the deploy button and main menu (3 dots) */
         .stDeployButton,
         #MainMenu,
-        footer {
+        [data-testid="stMainMenu"],
+        footer,
+        [data-testid="stDecoration"] {
             display: none !important;
             visibility: hidden !important;
         }
         
-        /* Remove top padding that was for header */
-        .main > div:first-child {
-            padding-top: 0 !important;
+        /* Make header smaller/transparent but keep functional */
+        [data-testid="stHeader"],
+        header[data-testid="stHeader"] {
+            background: transparent !important;
+            height: auto !important;
+            min-height: 0 !important;
         }
         
-        /* Adjust app view container */
-        [data-testid="stAppViewContainer"] {
-            padding-top: 0 !important;
-        }
-        
-        .appview-container {
-            padding-top: 0 !important;
+        /* Hide the right side toolbar items (but not left hamburger) */
+        [data-testid="stToolbar"] {
+            display: none !important;
         }
     }
     
     /* ----- SIDEBAR MOBILE FIXES ----- */
     
     @media (max-width: 768px) {
-        /* Completely hide sidebar when collapsed - no residual line */
+        /* Sidebar styling */
         [data-testid="stSidebar"] {
             min-width: 0 !important;
             width: 280px !important;
             transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out !important;
+            z-index: 9999 !important;
         }
         
         /* Collapsed state - fully hidden */
@@ -193,8 +186,8 @@ def apply_mobile_styles():
         
         /* Hide the sidebar inner content when collapsed */
         [data-testid="stSidebar"][aria-expanded="false"] > div {
-            display: none !important;
             visibility: hidden !important;
+            opacity: 0 !important;
         }
         
         /* Expanded state */
@@ -202,11 +195,15 @@ def apply_mobile_styles():
             transform: translateX(0) !important;
             visibility: visible !important;
             box-shadow: 4px 0 10px rgba(0, 0, 0, 0.3) !important;
-            z-index: 9999 !important;
             position: fixed !important;
             top: 0 !important;
             left: 0 !important;
             height: 100vh !important;
+        }
+        
+        [data-testid="stSidebar"][aria-expanded="true"] > div {
+            visibility: visible !important;
+            opacity: 1 !important;
         }
         
         /* Main content takes full width */
@@ -217,17 +214,22 @@ def apply_mobile_styles():
             margin-left: 0 !important;
         }
         
-        /* Style the hamburger/collapse button */
+        /* Keep hamburger button visible and styled */
         [data-testid="stSidebarCollapsedControl"],
-        [data-testid="collapsedControl"] {
+        [data-testid="collapsedControl"],
+        button[kind="headerNoPadding"] {
+            display: block !important;
+            visibility: visible !important;
             position: fixed !important;
             top: 0.5rem !important;
             left: 0.5rem !important;
             z-index: 99999 !important;
             background: #1E88E5 !important;
             border-radius: 8px !important;
-            padding: 6px !important;
+            padding: 8px !important;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
+            width: 40px !important;
+            height: 40px !important;
         }
         
         [data-testid="stSidebarCollapsedControl"] button,
@@ -235,12 +237,17 @@ def apply_mobile_styles():
             color: white !important;
             background: transparent !important;
             border: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
         }
         
         [data-testid="stSidebarCollapsedControl"] svg,
         [data-testid="collapsedControl"] svg {
             fill: white !important;
             color: white !important;
+            width: 20px !important;
+            height: 20px !important;
         }
         
         /* Add top padding for content to not overlap with hamburger */
