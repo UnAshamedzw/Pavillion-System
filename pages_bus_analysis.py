@@ -436,14 +436,14 @@ def bus_analysis_page():
         with tab1:
             fig_revenue = create_revenue_vs_expenses_chart(income_df, maintenance_df)
             if fig_revenue:
-                st.plotly_chart(fig_revenue, width="stretch")
+                st.plotly_chart(fig_revenue, use_container_width=True)
             else:
                 st.info("No data available for chart")
         
         with tab2:
             fig_profit = create_profit_chart(income_df, maintenance_df)
             if fig_profit:
-                st.plotly_chart(fig_profit, width="stretch")
+                st.plotly_chart(fig_profit, use_container_width=True)
             else:
                 st.info("No data available for chart")
         
@@ -487,7 +487,7 @@ def bus_analysis_page():
                         names='Maintenance Type',
                         title='Maintenance Cost Distribution'
                     )
-                    st.plotly_chart(fig_maint_pie, width="stretch")
+                    st.plotly_chart(fig_maint_pie, use_container_width=True)
             else:
                 st.info("No maintenance records found for the selected filters")
         
@@ -514,7 +514,7 @@ def bus_analysis_page():
                             orientation='h',
                             title='Top 10 Drivers by Revenue'
                         )
-                        st.plotly_chart(fig_drivers, width="stretch")
+                        st.plotly_chart(fig_drivers, use_container_width=True)
                 
                 with col_staff2:
                     # NEW: Conductor breakdown
@@ -534,7 +534,7 @@ def bus_analysis_page():
                             orientation='h',
                             title='Top 10 Conductors by Revenue'
                         )
-                        st.plotly_chart(fig_conductors, width="stretch")
+                        st.plotly_chart(fig_conductors, use_container_width=True)
                 
                 # NEW: Driver-Conductor Team Analysis
                 st.markdown("---")

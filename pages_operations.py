@@ -1845,7 +1845,7 @@ def dashboard_page():
                 height=400
             )
             
-            st.plotly_chart(fig, width="stretch")
+            st.plotly_chart(fig, use_container_width=True)
         
         st.markdown("---")
         
@@ -1865,7 +1865,7 @@ def dashboard_page():
                     labels={'x': 'Revenue ($)', 'y': 'Bus Number'}
                 )
                 fig_buses.update_layout(height=400, showlegend=False)
-                st.plotly_chart(fig_buses, width="stretch")
+                st.plotly_chart(fig_buses, use_container_width=True)
         
         with col_chart2:
             # Maintenance by type
@@ -1879,7 +1879,7 @@ def dashboard_page():
                     hole=0.4
                 )
                 fig_maint.update_layout(height=400)
-                st.plotly_chart(fig_maint, width="stretch")
+                st.plotly_chart(fig_maint, use_container_width=True)
         
         st.markdown("---")
         

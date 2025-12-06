@@ -599,44 +599,6 @@ def apply_mobile_styles():
     
     </style>
     """, unsafe_allow_html=True)
-    
-    # Add JavaScript for sidebar auto-collapse on mobile
-    st.markdown("""
-    <script>
-    // Auto-collapse sidebar after selection on mobile
-    (function() {
-        function isMobile() {
-            return window.innerWidth <= 768;
-        }
-        
-        function collapseSidebar() {
-            if (isMobile()) {
-                const sidebar = document.querySelector('[data-testid="stSidebar"]');
-                const collapseButton = document.querySelector('[data-testid="stSidebarCollapsedControl"] button');
-                
-                if (sidebar && sidebar.getAttribute('aria-expanded') === 'true' && collapseButton) {
-                    setTimeout(() => {
-                        collapseButton.click();
-                    }, 150);
-                }
-            }
-        }
-        
-        // Listen for clicks on sidebar navigation
-        document.addEventListener('click', function(e) {
-            const sidebar = document.querySelector('[data-testid="stSidebar"]');
-            if (sidebar && sidebar.contains(e.target)) {
-                const isRadioLabel = e.target.closest('.stRadio label');
-                const isSelectOption = e.target.closest('[role="option"]');
-                
-                if (isRadioLabel || isSelectOption) {
-                    collapseSidebar();
-                }
-            }
-        });
-    })();
-    </script>
-    """, unsafe_allow_html=True)
 
 
 def apply_compact_mobile_styles():

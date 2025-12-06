@@ -617,7 +617,7 @@ def performance_metrics_page():
         # Revenue trend
         fig_revenue_trend = create_revenue_trend_chart(income_df)
         if fig_revenue_trend:
-            st.plotly_chart(fig_revenue_trend, width="stretch")
+            st.plotly_chart(fig_revenue_trend, use_container_width=True)
         else:
             st.info("No revenue data available for trend analysis")
         
@@ -640,7 +640,7 @@ def performance_metrics_page():
         # Bus performance
         fig_bus_perf = create_bus_performance_chart(income_df)
         if fig_bus_perf:
-            st.plotly_chart(fig_bus_perf, width="stretch")
+            st.plotly_chart(fig_bus_perf, use_container_width=True)
         
         # Detailed bus metrics table
         if not income_df.empty:
@@ -666,7 +666,7 @@ def performance_metrics_page():
         # Route performance
         fig_route = create_route_performance_chart(income_df)
         if fig_route:
-            st.plotly_chart(fig_route, width="stretch")
+            st.plotly_chart(fig_route, use_container_width=True)
         else:
             st.info("Route data not available")
         
@@ -691,13 +691,13 @@ def performance_metrics_page():
         
         with col_staff1:
             if driver_fig:
-                st.plotly_chart(driver_fig, width="stretch")
+                st.plotly_chart(driver_fig, use_container_width=True)
             else:
                 st.info("No driver data available")
         
         with col_staff2:
             if conductor_fig:
-                st.plotly_chart(conductor_fig, width="stretch")
+                st.plotly_chart(conductor_fig, use_container_width=True)
             else:
                 st.info("No conductor data available")
         
@@ -715,14 +715,14 @@ def performance_metrics_page():
         # Maintenance analysis
         fig_maint = create_maintenance_analysis_chart(maintenance_df)
         if fig_maint:
-            st.plotly_chart(fig_maint, width="stretch")
+            st.plotly_chart(fig_maint, use_container_width=True)
         else:
             st.info("No maintenance data available")
         
         # Efficiency scatter plot
         fig_efficiency = create_efficiency_metrics_chart(income_df, maintenance_df)
         if fig_efficiency:
-            st.plotly_chart(fig_efficiency, width="stretch")
+            st.plotly_chart(fig_efficiency, use_container_width=True)
         
         # Efficiency metrics table
         if not income_df.empty and not maintenance_df.empty:
