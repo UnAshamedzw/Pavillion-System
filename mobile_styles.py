@@ -27,8 +27,91 @@ def apply_mobile_styles():
         --warning-color: #FB8C00;
         --danger-color: #E53935;
         --text-color: #333333;
+        --text-light: #666666;
         --bg-light: #F5F5F5;
         --border-radius: 8px;
+    }
+    
+    /* ----- DARK MODE VARIABLES ----- */
+    [data-theme="dark"], 
+    .stApp[data-theme="dark"],
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --text-color: #FFFFFF;
+            --text-light: #CCCCCC;
+            --bg-light: #2D2D2D;
+        }
+    }
+    
+    /* ----- DARK MODE FIXES ----- */
+    
+    /* Fix text readability in dark mode */
+    [data-theme="dark"] .stMarkdown,
+    [data-theme="dark"] .stText,
+    [data-theme="dark"] p,
+    [data-theme="dark"] span,
+    [data-theme="dark"] label,
+    [data-theme="dark"] .stMetric label,
+    .stApp[data-testid="stAppViewContainer"][style*="color-scheme: dark"] p,
+    .stApp[data-testid="stAppViewContainer"][style*="color-scheme: dark"] span {
+        color: #FFFFFF !important;
+    }
+    
+    /* Dark mode metric values */
+    [data-theme="dark"] [data-testid="stMetricValue"],
+    .stApp[data-testid="stAppViewContainer"][style*="color-scheme: dark"] [data-testid="stMetricValue"] {
+        color: #FFFFFF !important;
+    }
+    
+    /* Dark mode metric labels */
+    [data-theme="dark"] [data-testid="stMetricLabel"],
+    .stApp[data-testid="stAppViewContainer"][style*="color-scheme: dark"] [data-testid="stMetricLabel"] {
+        color: #CCCCCC !important;
+    }
+    
+    /* Dark mode metric delta */
+    [data-theme="dark"] [data-testid="stMetricDelta"],
+    .stApp[data-testid="stAppViewContainer"][style*="color-scheme: dark"] [data-testid="stMetricDelta"] {
+        opacity: 1 !important;
+    }
+    
+    /* Dark mode table text */
+    [data-theme="dark"] .stDataFrame,
+    [data-theme="dark"] .stDataFrame td,
+    [data-theme="dark"] .stDataFrame th,
+    [data-theme="dark"] .stTable td,
+    [data-theme="dark"] .stTable th {
+        color: #FFFFFF !important;
+    }
+    
+    /* Dark mode expander text */
+    [data-theme="dark"] .streamlit-expanderHeader,
+    [data-theme="dark"] .streamlit-expanderContent {
+        color: #FFFFFF !important;
+    }
+    
+    /* Dark mode selectbox and input text */
+    [data-theme="dark"] .stSelectbox label,
+    [data-theme="dark"] .stTextInput label,
+    [data-theme="dark"] .stNumberInput label,
+    [data-theme="dark"] .stTextArea label,
+    [data-theme="dark"] .stDateInput label {
+        color: #FFFFFF !important;
+    }
+    
+    /* Dark mode info/warning boxes */
+    [data-theme="dark"] .stAlert p {
+        color: inherit !important;
+    }
+    
+    /* Dark mode sidebar text */
+    [data-theme="dark"] [data-testid="stSidebar"],
+    [data-theme="dark"] [data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
+    }
+    
+    [data-theme="dark"] [data-testid="stSidebar"] .stRadio label {
+        color: #FFFFFF !important;
     }
     
     /* ----- GENERAL MOBILE ADJUSTMENTS ----- */
@@ -54,77 +137,125 @@ def apply_mobile_styles():
         font-size: 16px !important; /* Prevents zoom on iOS */
     }
     
-    /* ----- SIDEBAR MOBILE STYLES ----- */
+    /* ----- SIDEBAR AUTO-COLLAPSE ON MOBILE ----- */
     
     @media (max-width: 768px) {
-        /* Sidebar adjustments */
+        /* Make sidebar overlay instead of push */
         [data-testid="stSidebar"] {
-            min-width: 100% !important;
-            width: 100% !important;
+            position: fixed !important;
+            z-index: 999 !important;
+            height: 100vh !important;
+            transition: transform 0.3s ease-in-out !important;
         }
         
-        [data-testid="stSidebar"] > div:first-child {
-            width: 100% !important;
-        }
-        
-        /* When sidebar is collapsed, show hamburger better */
+        /* Collapsed state */
         [data-testid="stSidebar"][aria-expanded="false"] {
-            min-width: 0 !important;
-            width: 0 !important;
+            transform: translateX(-100%) !important;
         }
         
-        /* Main content when sidebar collapsed */
+        /* Expanded state */
+        [data-testid="stSidebar"][aria-expanded="true"] {
+            transform: translateX(0) !important;
+            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.2) !important;
+        }
+        
+        /* Main content takes full width */
         .main .block-container {
-            padding-left: 0.5rem;
-            padding-right: 0.5rem;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            max-width: 100% !important;
+        }
+        
+        /* Hamburger menu styling */
+        [data-testid="stSidebarCollapsedControl"] {
+            position: fixed !important;
+            top: 0.5rem !important;
+            left: 0.5rem !important;
+            z-index: 1000 !important;
+            background: var(--primary-color) !important;
+            border-radius: 8px !important;
+            padding: 8px !important;
+        }
+        
+        [data-testid="stSidebarCollapsedControl"] svg {
+            color: white !important;
         }
     }
     
-    /* ----- METRIC CARDS MOBILE ----- */
+    /* ----- METRIC CARDS - PREVENT NUMBER TRUNCATION ----- */
     
-    /* Stack metrics on mobile */
-    @media (max-width: 640px) {
-        [data-testid="stHorizontalBlock"] {
-            flex-wrap: wrap;
-        }
-        
-        [data-testid="stHorizontalBlock"] > div {
-            flex: 1 1 45% !important;
-            min-width: 45% !important;
-        }
-        
-        /* Full width for single column items */
-        [data-testid="stHorizontalBlock"] > div:only-child {
-            flex: 1 1 100% !important;
-            min-width: 100% !important;
-        }
-    }
-    
-    /* Metric styling */
+    /* Ensure numbers don't get cut off */
     [data-testid="stMetricValue"] {
-        font-size: clamp(1.2rem, 4vw, 2rem);
+        font-size: clamp(0.9rem, 3.5vw, 1.8rem) !important;
+        white-space: nowrap !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        min-width: 0 !important;
+        word-break: keep-all !important;
     }
     
     [data-testid="stMetricLabel"] {
-        font-size: clamp(0.75rem, 2.5vw, 0.875rem);
+        font-size: clamp(0.65rem, 2vw, 0.875rem) !important;
+        white-space: normal !important;
+        word-wrap: break-word !important;
+    }
+    
+    /* Metric container - allow content to fit */
+    [data-testid="metric-container"] {
+        overflow: visible !important;
+        min-width: fit-content !important;
+    }
+    
+    /* Stack metrics properly on mobile */
+    @media (max-width: 640px) {
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+            gap: 0.5rem !important;
+        }
+        
+        /* Each metric takes half width on mobile */
+        [data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+            flex: 0 0 calc(50% - 0.5rem) !important;
+            min-width: calc(50% - 0.5rem) !important;
+            max-width: calc(50% - 0.5rem) !important;
+        }
+        
+        /* Single column for very small screens */
+        @media (max-width: 360px) {
+            [data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+                flex: 0 0 100% !important;
+                min-width: 100% !important;
+                max-width: 100% !important;
+            }
+        }
+        
+        /* Metric value smaller on mobile */
+        [data-testid="stMetricValue"] {
+            font-size: 1rem !important;
+        }
+        
+        [data-testid="stMetricLabel"] {
+            font-size: 0.7rem !important;
+        }
     }
     
     /* ----- TABLES MOBILE ----- */
     
     /* Make tables scrollable on mobile */
     .stDataFrame {
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch !important;
     }
     
     @media (max-width: 768px) {
         .stDataFrame > div {
-            font-size: 12px;
+            font-size: 12px !important;
         }
         
         /* Reduce padding in table cells */
         .stDataFrame td, .stDataFrame th {
             padding: 4px 8px !important;
+            white-space: nowrap !important;
         }
     }
     
@@ -133,7 +264,7 @@ def apply_mobile_styles():
     @media (max-width: 640px) {
         /* Stack form columns */
         [data-testid="stForm"] [data-testid="stHorizontalBlock"] {
-            flex-direction: column;
+            flex-direction: column !important;
         }
         
         [data-testid="stForm"] [data-testid="stHorizontalBlock"] > div {
@@ -143,7 +274,7 @@ def apply_mobile_styles():
         
         /* Full width buttons in forms */
         [data-testid="stForm"] button {
-            width: 100%;
+            width: 100% !important;
         }
     }
     
@@ -152,17 +283,18 @@ def apply_mobile_styles():
     @media (max-width: 768px) {
         /* Make tabs scrollable */
         .stTabs [data-baseweb="tab-list"] {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            flex-wrap: nowrap;
-            gap: 0;
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            flex-wrap: nowrap !important;
+            gap: 0 !important;
+            padding-bottom: 5px !important;
         }
         
         .stTabs [data-baseweb="tab"] {
-            flex-shrink: 0;
-            padding: 8px 12px;
-            font-size: 13px;
-            white-space: nowrap;
+            flex-shrink: 0 !important;
+            padding: 8px 12px !important;
+            font-size: 12px !important;
+            white-space: nowrap !important;
         }
     }
     
@@ -177,6 +309,13 @@ def apply_mobile_styles():
         .js-plotly-plot .plot-container {
             width: 100% !important;
         }
+        
+        /* Smaller chart fonts */
+        .js-plotly-plot .gtitle,
+        .js-plotly-plot .xtitle,
+        .js-plotly-plot .ytitle {
+            font-size: 11px !important;
+        }
     }
     
     /* ----- BUTTONS MOBILE ----- */
@@ -184,20 +323,22 @@ def apply_mobile_styles():
     @media (max-width: 640px) {
         /* Stack buttons in horizontal blocks */
         .stButton {
-            width: 100%;
+            width: 100% !important;
         }
         
         .stButton > button {
-            width: 100%;
+            width: 100% !important;
+            padding: 0.5rem 1rem !important;
+            font-size: 14px !important;
         }
         
         /* Download buttons */
         .stDownloadButton {
-            width: 100%;
+            width: 100% !important;
         }
         
         .stDownloadButton > button {
-            width: 100%;
+            width: 100% !important;
         }
     }
     
@@ -205,12 +346,12 @@ def apply_mobile_styles():
     
     @media (max-width: 768px) {
         .streamlit-expanderHeader {
-            font-size: 14px;
-            padding: 12px;
+            font-size: 14px !important;
+            padding: 12px !important;
         }
         
         .streamlit-expanderContent {
-            padding: 8px;
+            padding: 8px !important;
         }
     }
     
@@ -218,8 +359,8 @@ def apply_mobile_styles():
     
     @media (max-width: 640px) {
         .stAlert {
-            padding: 12px;
-            font-size: 14px;
+            padding: 12px !important;
+            font-size: 14px !important;
         }
         
         /* Custom alert cards */
@@ -235,15 +376,21 @@ def apply_mobile_styles():
     
     @media (max-width: 768px) {
         h1 {
-            font-size: 1.5rem !important;
+            font-size: 1.4rem !important;
+            margin-top: 0.5rem !important;
         }
         
         h2 {
-            font-size: 1.25rem !important;
+            font-size: 1.2rem !important;
         }
         
         h3 {
-            font-size: 1.1rem !important;
+            font-size: 1rem !important;
+        }
+        
+        /* Add padding for hamburger menu */
+        .main .block-container {
+            padding-top: 3rem !important;
         }
     }
     
@@ -251,15 +398,19 @@ def apply_mobile_styles():
     
     /* Better radio button navigation on mobile */
     @media (max-width: 768px) {
-        .stRadio > div {
-            flex-direction: column;
+        [data-testid="stSidebar"] .stRadio > div {
+            flex-direction: column !important;
         }
         
-        .stRadio > div > label {
-            padding: 10px 15px;
-            margin: 2px 0;
-            background: var(--bg-light);
-            border-radius: var(--border-radius);
+        [data-testid="stSidebar"] .stRadio > div > label {
+            padding: 12px 15px !important;
+            margin: 3px 0 !important;
+            border-radius: var(--border-radius) !important;
+            transition: background 0.2s ease !important;
+        }
+        
+        [data-testid="stSidebar"] .stRadio > div > label:hover {
+            background: rgba(255, 255, 255, 0.1) !important;
         }
     }
     
@@ -267,11 +418,11 @@ def apply_mobile_styles():
     
     @media (max-width: 640px) {
         .stSelectbox > div > div {
-            min-height: 44px;
+            min-height: 44px !important;
         }
         
         .stSelectbox label {
-            font-size: 14px;
+            font-size: 14px !important;
         }
     }
     
@@ -281,7 +432,7 @@ def apply_mobile_styles():
         .stDateInput > div > div > input,
         .stTimeInput > div > div > input {
             font-size: 16px !important;
-            min-height: 44px;
+            min-height: 44px !important;
         }
     }
     
@@ -289,11 +440,11 @@ def apply_mobile_styles():
     
     @media (max-width: 640px) {
         .stFileUploader > div {
-            padding: 15px;
+            padding: 15px !important;
         }
         
         .stFileUploader label {
-            font-size: 14px;
+            font-size: 14px !important;
         }
     }
     
@@ -301,20 +452,12 @@ def apply_mobile_styles():
     
     @media (max-width: 640px) {
         .stMultiSelect > div > div {
-            min-height: 44px;
+            min-height: 44px !important;
         }
         
         .stMultiSelect [data-baseweb="tag"] {
-            font-size: 12px;
-            padding: 2px 6px;
-        }
-    }
-    
-    /* ----- PROGRESS BAR MOBILE ----- */
-    
-    @media (max-width: 640px) {
-        .stProgress > div > div {
-            height: 8px;
+            font-size: 12px !important;
+            padding: 2px 6px !important;
         }
     }
     
@@ -334,25 +477,35 @@ def apply_mobile_styles():
         }
     }
     
+    /* Dark mode card */
+    [data-theme="dark"] .metric-card {
+        background: #2D2D2D !important;
+        color: #FFFFFF !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3) !important;
+    }
+    
+    [data-theme="dark"] .metric-card * {
+        color: #FFFFFF !important;
+    }
+    
     /* ----- FOOTER SPACING MOBILE ----- */
     
     @media (max-width: 768px) {
         .main .block-container {
-            padding-bottom: 80px;
+            padding-bottom: 80px !important;
         }
     }
     
     /* ----- TOUCH IMPROVEMENTS ----- */
     
-    /* Increase touch targets */
     @media (max-width: 768px) {
         a, button, input, select, textarea {
-            touch-action: manipulation;
+            touch-action: manipulation !important;
         }
         
         /* Prevent double-tap zoom */
         * {
-            touch-action: manipulation;
+            touch-action: manipulation !important;
         }
     }
     
@@ -360,12 +513,12 @@ def apply_mobile_styles():
     
     @media (max-width: 900px) and (orientation: landscape) {
         .main .block-container {
-            padding-top: 1rem;
+            padding-top: 1rem !important;
         }
         
         [data-testid="stSidebar"] {
-            max-height: 100vh;
-            overflow-y: auto;
+            max-height: 100vh !important;
+            overflow-y: auto !important;
         }
     }
     
@@ -377,21 +530,12 @@ def apply_mobile_styles():
         }
         
         .main .block-container {
-            padding: 0;
-            max-width: 100%;
+            padding: 0 !important;
+            max-width: 100% !important;
         }
         
         button, .stButton {
             display: none !important;
-        }
-    }
-    
-    /* ----- DARK MODE SUPPORT ----- */
-    
-    @media (prefers-color-scheme: dark) {
-        .metric-card {
-            background: #1E1E1E;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
         }
     }
     
@@ -403,8 +547,8 @@ def apply_mobile_styles():
     select:focus, 
     textarea:focus,
     a:focus {
-        outline: 2px solid var(--primary-color);
-        outline-offset: 2px;
+        outline: 2px solid var(--primary-color) !important;
+        outline-offset: 2px !important;
     }
     
     /* Reduced motion preference */
@@ -444,7 +588,54 @@ def apply_mobile_styles():
         }
     }
     
+    /* Dark mode scrollbar */
+    [data-theme="dark"] ::-webkit-scrollbar-track {
+        background: #333;
+    }
+    
+    [data-theme="dark"] ::-webkit-scrollbar-thumb {
+        background: #666;
+    }
+    
     </style>
+    """, unsafe_allow_html=True)
+    
+    # Add JavaScript for sidebar auto-collapse on mobile
+    st.markdown("""
+    <script>
+    // Auto-collapse sidebar after selection on mobile
+    (function() {
+        function isMobile() {
+            return window.innerWidth <= 768;
+        }
+        
+        function collapseSidebar() {
+            if (isMobile()) {
+                const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                const collapseButton = document.querySelector('[data-testid="stSidebarCollapsedControl"] button');
+                
+                if (sidebar && sidebar.getAttribute('aria-expanded') === 'true' && collapseButton) {
+                    setTimeout(() => {
+                        collapseButton.click();
+                    }, 150);
+                }
+            }
+        }
+        
+        // Listen for clicks on sidebar navigation
+        document.addEventListener('click', function(e) {
+            const sidebar = document.querySelector('[data-testid="stSidebar"]');
+            if (sidebar && sidebar.contains(e.target)) {
+                const isRadioLabel = e.target.closest('.stRadio label');
+                const isSelectOption = e.target.closest('[role="option"]');
+                
+                if (isRadioLabel || isSelectOption) {
+                    collapseSidebar();
+                }
+            }
+        });
+    })();
+    </script>
     """, unsafe_allow_html=True)
 
 
@@ -459,29 +650,29 @@ def apply_compact_mobile_styles():
     @media (max-width: 480px) {
         /* Extra compact for small phones */
         .main .block-container {
-            padding-left: 0.25rem;
-            padding-right: 0.25rem;
+            padding-left: 0.25rem !important;
+            padding-right: 0.25rem !important;
         }
         
         h1 {
-            font-size: 1.3rem !important;
+            font-size: 1.2rem !important;
         }
         
         h2 {
-            font-size: 1.1rem !important;
+            font-size: 1rem !important;
         }
         
         h3 {
-            font-size: 1rem !important;
+            font-size: 0.9rem !important;
         }
         
         /* Smaller metrics */
         [data-testid="stMetricValue"] {
-            font-size: 1rem;
+            font-size: 0.9rem !important;
         }
         
         [data-testid="stMetricLabel"] {
-            font-size: 0.7rem;
+            font-size: 0.65rem !important;
         }
         
         /* Compact tables */
@@ -494,11 +685,28 @@ def apply_compact_mobile_styles():
         .stTextInput label,
         .stSelectbox label,
         .stNumberInput label {
-            font-size: 12px;
+            font-size: 12px !important;
         }
     }
     </style>
     """, unsafe_allow_html=True)
+
+
+def format_currency_mobile(value, symbol="$"):
+    """
+    Format currency for mobile display - abbreviates large numbers.
+    $1,234,567 becomes $1.23M on mobile
+    """
+    try:
+        value = float(value)
+        if value >= 1000000:
+            return f"{symbol}{value/1000000:.1f}M"
+        elif value >= 1000:
+            return f"{symbol}{value/1000:.1f}K"
+        else:
+            return f"{symbol}{value:,.0f}"
+    except:
+        return f"{symbol}0"
 
 
 def get_device_type():
@@ -507,8 +715,6 @@ def get_device_type():
     Note: This is a workaround as Streamlit doesn't directly expose viewport info.
     Returns a hint to use for conditional rendering.
     """
-    # This is a placeholder - in production, you might use JavaScript injection
-    # to detect actual viewport width
     return "desktop"  # Default assumption
 
 
@@ -542,8 +748,8 @@ def mobile_metric_card(label, value, delta=None, delta_color="normal"):
     
     st.markdown(f"""
     <div class="metric-card">
-        <div style="color: #666; font-size: 0.85rem; margin-bottom: 4px;">{label}</div>
-        <div style="font-size: 1.5rem; font-weight: bold; color: #333;">{value}</div>
+        <div style="font-size: 0.85rem; margin-bottom: 4px; opacity: 0.8;">{label}</div>
+        <div style="font-size: 1.5rem; font-weight: bold;">{value}</div>
         {delta_html}
     </div>
     """, unsafe_allow_html=True)
