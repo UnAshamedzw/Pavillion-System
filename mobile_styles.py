@@ -137,29 +137,12 @@ def apply_mobile_styles():
         font-size: 16px !important; /* Prevents zoom on iOS */
     }
     
-    /* ----- HIDE STREAMLIT TOP BAR & DECORATIONS ON MOBILE ----- */
+    /* ----- HIDE UNNECESSARY ELEMENTS ON MOBILE ----- */
     
     @media (max-width: 768px) {
-        /* Hide the deploy button and main menu (3 dots) */
+        /* Hide deploy button and footer only */
         .stDeployButton,
-        #MainMenu,
-        [data-testid="stMainMenu"],
-        footer,
-        [data-testid="stDecoration"] {
-            display: none !important;
-            visibility: hidden !important;
-        }
-        
-        /* Make header smaller/transparent but keep functional */
-        [data-testid="stHeader"],
-        header[data-testid="stHeader"] {
-            background: transparent !important;
-            height: auto !important;
-            min-height: 0 !important;
-        }
-        
-        /* Hide the right side toolbar items (but not left hamburger) */
-        [data-testid="stToolbar"] {
+        footer {
             display: none !important;
         }
     }
@@ -169,90 +152,35 @@ def apply_mobile_styles():
     @media (max-width: 768px) {
         /* Sidebar styling */
         [data-testid="stSidebar"] {
-            min-width: 0 !important;
-            width: 280px !important;
-            transition: transform 0.3s ease-in-out, visibility 0.3s ease-in-out !important;
-            z-index: 9999 !important;
+            transition: all 0.3s ease-in-out !important;
         }
         
-        /* Collapsed state - fully hidden */
+        /* Collapsed state - fully hidden, no residual line */
         [data-testid="stSidebar"][aria-expanded="false"] {
-            transform: translateX(-100%) !important;
-            visibility: hidden !important;
-            width: 0 !important;
             min-width: 0 !important;
+            width: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
             overflow: hidden !important;
         }
         
-        /* Hide the sidebar inner content when collapsed */
-        [data-testid="stSidebar"][aria-expanded="false"] > div {
-            visibility: hidden !important;
-            opacity: 0 !important;
+        /* Hide all sidebar content when collapsed */
+        [data-testid="stSidebar"][aria-expanded="false"] * {
+            display: none !important;
         }
         
         /* Expanded state */
         [data-testid="stSidebar"][aria-expanded="true"] {
-            transform: translateX(0) !important;
-            visibility: visible !important;
-            box-shadow: 4px 0 10px rgba(0, 0, 0, 0.3) !important;
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            height: 100vh !important;
+            min-width: 280px !important;
+            width: 280px !important;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3) !important;
         }
         
-        [data-testid="stSidebar"][aria-expanded="true"] > div {
-            visibility: visible !important;
-            opacity: 1 !important;
-        }
-        
-        /* Main content takes full width */
+        /* Main content takes full width when sidebar collapsed */
         .main .block-container {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
             max-width: 100% !important;
-            margin-left: 0 !important;
-        }
-        
-        /* Keep hamburger button visible and styled */
-        [data-testid="stSidebarCollapsedControl"],
-        [data-testid="collapsedControl"],
-        button[kind="headerNoPadding"] {
-            display: block !important;
-            visibility: visible !important;
-            position: fixed !important;
-            top: 0.5rem !important;
-            left: 0.5rem !important;
-            z-index: 99999 !important;
-            background: #1E88E5 !important;
-            border-radius: 8px !important;
-            padding: 8px !important;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.2) !important;
-            width: 40px !important;
-            height: 40px !important;
-        }
-        
-        [data-testid="stSidebarCollapsedControl"] button,
-        [data-testid="collapsedControl"] button {
-            color: white !important;
-            background: transparent !important;
-            border: none !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-        }
-        
-        [data-testid="stSidebarCollapsedControl"] svg,
-        [data-testid="collapsedControl"] svg {
-            fill: white !important;
-            color: white !important;
-            width: 20px !important;
-            height: 20px !important;
-        }
-        
-        /* Add top padding for content to not overlap with hamburger */
-        .main .block-container {
-            padding-top: 3.5rem !important;
         }
     }
     
