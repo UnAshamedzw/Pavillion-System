@@ -44,7 +44,7 @@ def verify_password(password: str, hashed_password: str, salt: str) -> bool:
 # PERMISSION DEFINITIONS
 # =============================================================================
 
-# All available permissions in the system (47 total)
+# All available permissions in the system
 ALL_PERMISSIONS = {
     # ----- FLEET / OPERATIONS -----
     'view_fleet': 'View bus fleet information',
@@ -77,6 +77,44 @@ ALL_PERMISSIONS = {
     'delete_maintenance': 'Delete maintenance entries',
     'export_maintenance': 'Export maintenance reports',
     
+    # ----- FUEL MANAGEMENT -----
+    'view_fuel': 'View fuel records',
+    'add_fuel': 'Add fuel entries',
+    'edit_fuel': 'Edit fuel entries',
+    'delete_fuel': 'Delete fuel entries',
+    
+    # ----- TRIP MANAGEMENT -----
+    'view_trips': 'View trip records',
+    'add_trip': 'Add trip entries',
+    'edit_trip': 'Edit trip entries',
+    'delete_trip': 'Delete trip entries',
+    
+    # ----- INVENTORY -----
+    'view_inventory': 'View inventory/parts',
+    'add_inventory': 'Add inventory items',
+    'edit_inventory': 'Edit inventory items',
+    'delete_inventory': 'Delete inventory items',
+    'manage_stock': 'Manage stock levels (add/remove)',
+    
+    # ----- CUSTOMERS & BOOKINGS -----
+    'view_customers': 'View customers and bookings',
+    'add_customer': 'Add customers',
+    'edit_customer': 'Edit customer information',
+    'delete_customer': 'Delete customers',
+    'manage_bookings': 'Manage customer bookings',
+    
+    # ----- DOCUMENTS -----
+    'view_documents': 'View document management',
+    'add_documents': 'Upload documents',
+    'delete_documents': 'Delete documents',
+    
+    # ----- EXPENSES -----
+    'view_expenses': 'View general expenses',
+    'add_expense': 'Add expense entries',
+    'edit_expense': 'Edit expense entries',
+    'delete_expense': 'Delete expense entries',
+    'approve_expense': 'Approve expenses for payment',
+    
     # ----- HR / EMPLOYEES -----
     'view_employees': 'View employee information',
     'add_employee': 'Add new employees',
@@ -97,6 +135,11 @@ ALL_PERMISSIONS = {
     'add_disciplinary': 'Add disciplinary records',
     'edit_disciplinary': 'Edit disciplinary records',
     
+    # ----- CONTRACTS -----
+    'view_contracts': 'View employment contracts',
+    'generate_contracts': 'Generate employee contracts',
+    'edit_contract_templates': 'Edit contract templates',
+    
     # ----- PAYROLL -----
     'view_payroll': 'View payroll information',
     'manage_payroll': 'Manage payroll (add, edit, process)',
@@ -108,10 +151,16 @@ ALL_PERMISSIONS = {
     'view_bus_analysis': 'View bus-by-bus analysis',
     'view_performance_metrics': 'View performance metrics/KPIs',
     'view_revenue_history': 'View revenue history',
+    'view_profit_loss': 'View profit & loss reports',
+    'view_route_profitability': 'View route profitability analysis',
+    'view_driver_scoring': 'View driver scoring/performance',
+    'view_alerts': 'View alerts dashboard',
     'generate_reports': 'Generate PDF/Excel reports',
     
-    # ----- DATA IMPORT -----
+    # ----- DATA IMPORT/EXPORT -----
     'import_data': 'Import data from Excel/CSV',
+    'export_data': 'Export data and backups',
+    'manage_backup': 'Manage system backups',
     
     # ----- USER MANAGEMENT (System Admin only) -----
     'view_users': 'View user accounts',
@@ -125,6 +174,7 @@ ALL_PERMISSIONS = {
     'view_audit_logs': 'View audit logs',
     'view_all_activity': 'View all user activity',
     'manage_system_settings': 'Manage system-wide settings',
+    'manage_notifications': 'Manage notification settings',
 }
 
 # Permission categories for UI organization
@@ -142,6 +192,24 @@ PERMISSION_CATEGORIES = {
     'Maintenance': [
         'view_maintenance', 'add_maintenance', 'edit_maintenance', 'delete_maintenance', 'export_maintenance'
     ],
+    'Fuel Management': [
+        'view_fuel', 'add_fuel', 'edit_fuel', 'delete_fuel'
+    ],
+    'Trip Management': [
+        'view_trips', 'add_trip', 'edit_trip', 'delete_trip'
+    ],
+    'Inventory / Parts': [
+        'view_inventory', 'add_inventory', 'edit_inventory', 'delete_inventory', 'manage_stock'
+    ],
+    'Customers & Bookings': [
+        'view_customers', 'add_customer', 'edit_customer', 'delete_customer', 'manage_bookings'
+    ],
+    'Documents': [
+        'view_documents', 'add_documents', 'delete_documents'
+    ],
+    'General Expenses': [
+        'view_expenses', 'add_expense', 'edit_expense', 'delete_expense', 'approve_expense'
+    ],
     'HR - Employees': [
         'view_employees', 'add_employee', 'edit_employee', 'delete_employee', 'manage_employee_documents'
     ],
@@ -154,21 +222,25 @@ PERMISSION_CATEGORIES = {
     'HR - Disciplinary': [
         'view_disciplinary', 'add_disciplinary', 'edit_disciplinary'
     ],
+    'HR - Contracts': [
+        'view_contracts', 'generate_contracts', 'edit_contract_templates'
+    ],
     'Payroll': [
         'view_payroll', 'manage_payroll', 'approve_payroll', 'export_payroll'
     ],
     'Analytics & Reports': [
         'view_dashboard', 'view_bus_analysis', 'view_performance_metrics', 
-        'view_revenue_history', 'generate_reports'
+        'view_revenue_history', 'view_profit_loss', 'view_route_profitability',
+        'view_driver_scoring', 'view_alerts', 'generate_reports'
     ],
-    'Data Import': [
-        'import_data'
+    'Data Import/Export': [
+        'import_data', 'export_data', 'manage_backup'
     ],
     'User Management': [
         'view_users', 'add_user', 'edit_user', 'delete_user', 'manage_roles', 'reset_passwords'
     ],
-    'Audit & Security': [
-        'view_audit_logs', 'view_all_activity', 'manage_system_settings'
+    'System & Security': [
+        'view_audit_logs', 'view_all_activity', 'manage_system_settings', 'manage_notifications'
     ]
 }
 
@@ -196,18 +268,32 @@ PREDEFINED_ROLES = {
             'view_income', 'add_income', 'edit_income', 'delete_income', 'export_income',
             # Maintenance
             'view_maintenance', 'add_maintenance', 'edit_maintenance', 'delete_maintenance', 'export_maintenance',
+            # Fuel
+            'view_fuel', 'add_fuel', 'edit_fuel', 'delete_fuel',
+            # Trips
+            'view_trips', 'add_trip', 'edit_trip', 'delete_trip',
+            # Inventory
+            'view_inventory', 'add_inventory', 'edit_inventory', 'delete_inventory', 'manage_stock',
+            # Customers
+            'view_customers', 'add_customer', 'edit_customer', 'delete_customer', 'manage_bookings',
+            # Documents
+            'view_documents', 'add_documents', 'delete_documents',
+            # Expenses
+            'view_expenses', 'add_expense', 'edit_expense', 'delete_expense', 'approve_expense',
             # HR
             'view_employees', 'add_employee', 'edit_employee', 'delete_employee', 'manage_employee_documents',
             'view_performance', 'add_performance', 'edit_performance',
             'view_leave', 'approve_leave', 'manage_leave',
             'view_disciplinary', 'add_disciplinary', 'edit_disciplinary',
+            'view_contracts', 'generate_contracts', 'edit_contract_templates',
             # Payroll
             'view_payroll', 'manage_payroll', 'approve_payroll', 'export_payroll',
             # Analytics
             'view_dashboard', 'view_bus_analysis', 'view_performance_metrics', 
-            'view_revenue_history', 'generate_reports',
+            'view_revenue_history', 'view_profit_loss', 'view_route_profitability',
+            'view_driver_scoring', 'view_alerts', 'generate_reports',
             # Data
-            'import_data',
+            'import_data', 'export_data', 'manage_backup',
         ],
         'is_system_role': True,
         'can_be_modified': False
@@ -220,9 +306,10 @@ PREDEFINED_ROLES = {
             'view_performance', 'add_performance', 'edit_performance',
             'view_leave', 'approve_leave', 'manage_leave',
             'view_disciplinary', 'add_disciplinary', 'edit_disciplinary',
+            'view_contracts', 'generate_contracts', 'edit_contract_templates',
             'view_payroll', 'manage_payroll', 'export_payroll',
             'view_fleet', 'view_routes', 'view_assignments',
-            'view_dashboard', 'view_performance_metrics', 'generate_reports',
+            'view_dashboard', 'view_performance_metrics', 'view_driver_scoring', 'generate_reports',
         ],
         'is_system_role': False,
         'can_be_modified': True
@@ -236,10 +323,17 @@ PREDEFINED_ROLES = {
             'view_assignments', 'create_assignment', 'edit_assignment', 'delete_assignment',
             'view_income', 'add_income', 'edit_income', 'delete_income', 'export_income',
             'view_maintenance', 'add_maintenance', 'edit_maintenance', 'delete_maintenance', 'export_maintenance',
+            'view_fuel', 'add_fuel', 'edit_fuel', 'delete_fuel',
+            'view_trips', 'add_trip', 'edit_trip', 'delete_trip',
+            'view_inventory', 'add_inventory', 'edit_inventory', 'manage_stock',
+            'view_customers', 'add_customer', 'edit_customer', 'manage_bookings',
+            'view_documents', 'add_documents',
+            'view_expenses', 'add_expense', 'edit_expense',
             'view_employees', 'view_performance',
             'view_dashboard', 'view_bus_analysis', 'view_performance_metrics', 
-            'view_revenue_history', 'generate_reports',
-            'import_data',
+            'view_revenue_history', 'view_profit_loss', 'view_route_profitability',
+            'view_driver_scoring', 'view_alerts', 'generate_reports',
+            'import_data', 'export_data',
         ],
         'is_system_role': False,
         'can_be_modified': True
@@ -250,11 +344,17 @@ PREDEFINED_ROLES = {
         'permissions': [
             'view_income', 'export_income',
             'view_maintenance', 'export_maintenance',
+            'view_fuel', 'view_trips',
+            'view_expenses', 'add_expense', 'edit_expense', 'approve_expense',
+            'view_inventory',
+            'view_customers',
             'view_payroll', 'manage_payroll', 'approve_payroll', 'export_payroll',
             'view_fleet', 'view_routes',
             'view_employees',
             'view_dashboard', 'view_bus_analysis', 'view_performance_metrics', 
-            'view_revenue_history', 'generate_reports',
+            'view_revenue_history', 'view_profit_loss', 'view_route_profitability',
+            'view_alerts', 'generate_reports',
+            'export_data',
         ],
         'is_system_role': False,
         'can_be_modified': True
@@ -267,8 +367,10 @@ PREDEFINED_ROLES = {
             'view_routes', 'add_route', 'edit_route',
             'view_assignments', 'create_assignment', 'edit_assignment',
             'view_income', 'add_income',
+            'view_fuel', 'add_fuel',
+            'view_trips', 'add_trip', 'edit_trip',
             'view_employees',
-            'view_dashboard',
+            'view_dashboard', 'view_route_profitability', 'view_driver_scoring',
         ],
         'is_system_role': False,
         'can_be_modified': True
@@ -279,7 +381,9 @@ PREDEFINED_ROLES = {
         'permissions': [
             'view_fleet', 'edit_bus', 'manage_bus_documents',
             'view_maintenance', 'add_maintenance', 'edit_maintenance', 'delete_maintenance', 'export_maintenance',
-            'view_dashboard', 'view_bus_analysis',
+            'view_inventory', 'add_inventory', 'edit_inventory', 'manage_stock',
+            'view_documents', 'add_documents',
+            'view_dashboard', 'view_bus_analysis', 'view_alerts',
         ],
         'is_system_role': False,
         'can_be_modified': True
