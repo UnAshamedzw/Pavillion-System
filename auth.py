@@ -400,6 +400,19 @@ PREDEFINED_ROLES = {
         'can_be_modified': True
     },
     
+    'Stores Supervisor': {
+        'description': 'Inventory and stores management',
+        'permissions': [
+            'view_inventory', 'add_inventory', 'edit_inventory', 'delete_inventory', 'manage_stock',
+            'view_documents', 'add_documents',
+            'view_maintenance',
+            'view_fleet',
+            'view_dashboard', 'view_alerts',
+        ],
+        'is_system_role': False,
+        'can_be_modified': True
+    },
+    
     'Data Entry Clerk': {
         'description': 'Basic data entry',
         'permissions': [
@@ -1019,6 +1032,12 @@ def delete_user(user_id: int) -> bool:
 # PERMISSION CHECKING FUNCTIONS
 # =============================================================================
 
+def get_user_role() -> str:
+    """Get the current user's role from session state"""
+    user = st.session_state.get('user', {})
+    return user.get('role', 'Viewer')
+
+
 def get_user_permissions(user_id: int, user_role: str) -> set:
     """Get all permissions for a user based on their role and any custom overrides"""
     # System Admin has all permissions
@@ -1412,38 +1431,42 @@ def clear_user_permission_overrides(user_id: int) -> bool:
 # =============================================================================
 
 PAGE_PERMISSIONS = {
-    '📈 Dashboard': ['view_dashboard'],
-    '🔔 Alerts': ['view_dashboard'],  # Same as dashboard - all users can see alerts
+    '🏠 Home': [],  # Everyone can access their landing page
+    '📈 Operations Dashboard': ['view_dashboard'],  # Full dashboard - restricted
+    '🔔 Alerts': ['view_dashboard'],  # Alerts for authorized users
     '📊 Income Entry': ['view_income', 'add_income'],
-    '🚌 Trip Entry': ['view_income', 'add_income'],  # Using income permissions for trips
+    '🚌 Trip Entry': ['view_trips', 'add_trip'],
     '🔧 Maintenance Entry': ['view_maintenance', 'add_maintenance'],
-    '⛽ Fuel Entry': ['view_maintenance', 'add_maintenance'],  # Using maintenance permissions for fuel
-    '💸 General Expenses': ['view_income', 'add_income'],  # General expenses permission
-    '📄 Documents': ['view_fleet', 'view_employees'],  # Document management permission
-    '📦 Inventory': ['view_maintenance', 'add_maintenance'],  # Inventory permission
-    '👥 Customers & Bookings': ['view_income', 'add_income'],  # Booking/customer permission
+    '⛽ Fuel Entry': ['view_fuel', 'add_fuel'],
+    '💸 General Expenses': ['view_expenses', 'add_expense'],
+    '📄 Documents': ['view_documents'],
+    '📦 Inventory': ['view_inventory'],
+    '👥 Customers & Bookings': ['view_customers'],
     '📥 Import from Excel': ['import_data'],
     '💰 Revenue History': ['view_revenue_history'],
     '🚌 Fleet Management': ['view_fleet'],
     '🛣️ Routes & Assignments': ['view_routes', 'view_assignments'],
     '👥 Employee Management': ['view_employees'],
-    '📝 Contract Generator': ['view_employees', 'add_employees'],  # Contract generation permission
+    '📝 Contract Generator': ['view_contracts', 'generate_contracts'],
     '📊 Employee Performance': ['view_performance'],
     '💰 Payroll & Payslips': ['view_payroll'],
     '📅 Leave Management': ['view_leave'],
     '⚠️ Disciplinary Records': ['view_disciplinary'],
     '🚌 Bus-by-Bus Analysis': ['view_bus_analysis'],
     '📈 Performance Metrics': ['view_performance_metrics'],
-    '⛽ Fuel Analysis': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
-    '🚌 Trip Analysis': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
-    '💰 Route Profitability': ['view_bus_analysis', 'view_performance_metrics'],  # Analytics permission
-    '🏆 Driver Scoring': ['view_performance', 'view_performance_metrics'],  # Performance permission
-    '📊 Profit & Loss': ['view_income', 'view_dashboard'],  # P&L permission
+    '⛽ Fuel Analysis': ['view_fuel', 'view_bus_analysis'],
+    '🚌 Trip Analysis': ['view_trips', 'view_bus_analysis'],
+    '💰 Route Profitability': ['view_route_profitability'],
+    '🏆 Driver Scoring': ['view_driver_scoring'],
+    '📊 Profit & Loss': ['view_profit_loss'],
+    '🚨 Alerts Dashboard': ['view_alerts'],
     '👤 My Profile': [],  # Everyone can access their own profile
     '📊 My Activity': [],  # Everyone can view their own activity
     '👥 User Management': ['view_users'],
     '📜 Activity Log': ['view_audit_logs'],
     '🔐 Role Management': ['manage_roles'],
+    '💾 Backup & Export': ['export_data', 'manage_backup'],
+    '🔔 Notification Settings': ['manage_notifications'],
 }
 
 

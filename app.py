@@ -9,7 +9,7 @@ from database import init_database, migrate_database
 from auth import (
     create_users_table, create_sessions_table, create_permissions_tables,
     initialize_predefined_roles, login_page, logout, restore_session,
-    has_permission, can_access_page, get_accessible_menu_items
+    has_permission, can_access_page, get_accessible_menu_items, get_user_role
 )
 from pages_operations import (
     income_entry_page, 
@@ -46,6 +46,7 @@ from pages_expenses import general_expenses_page
 from pages_profit_loss import profit_loss_page
 from pages_contracts import contract_generator_page
 from pages_notifications import notification_settings_page
+from pages_landing import show_landing_page, can_see_full_dashboard, FULL_DASHBOARD_ROLES
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -191,7 +192,20 @@ def main():
     
     # Initialize default page in session state
     if 'current_page' not in st.session_state:
-        st.session_state.current_page = "📈 Dashboard"
+        st.session_state.current_page = "🏠 Home"
+    
+    # Check for navigation requests from landing pages
+    if 'navigate_to' in st.session_state:
+        st.session_state.current_page = st.session_state.navigate_to
+        del st.session_state.navigate_to
+        st.rerun()
+    
+    # Home button at top of sidebar
+    if st.sidebar.button("🏠 Home", use_container_width=True):
+        st.session_state.current_page = "🏠 Home"
+        st.rerun()
+    
+    st.sidebar.markdown("---")
     
     # Main menu selection
     menu_section = st.sidebar.radio(
@@ -202,8 +216,14 @@ def main():
     st.sidebar.markdown("---")
     
     # Define all menu items with permission requirements
-    operations_items = [
-        "📈 Dashboard",
+    # Only show full dashboard to authorized roles
+    user_role = get_user_role()
+    
+    operations_items = []
+    if user_role in FULL_DASHBOARD_ROLES:
+        operations_items.append("📈 Operations Dashboard")
+    
+    operations_items.extend([
         "🔔 Alerts",
         "📊 Income Entry",
         "🚌 Trip Entry",
@@ -217,7 +237,7 @@ def main():
         "💰 Revenue History",
         "🚌 Fleet Management",
         "🛣️ Routes & Assignments"
-    ]
+    ])
     
     hr_items = [
         "👥 Employee Management",
@@ -337,14 +357,13 @@ def main():
         </div>
     """, unsafe_allow_html=True)
     
-    # Handle no page selected
-    if page is None:
-        st.warning("🚫 You don't have access to any pages in this section.")
-        st.info("Please contact your administrator if you need access.")
+    # Handle Home page - show role-based landing page
+    if page == "🏠 Home" or page is None:
+        show_landing_page()
         return
     
-    # Show document expiry alerts on Dashboard page
-    if page == "📈 Dashboard":
+    # Show document expiry alerts on Operations Dashboard page
+    if page == "📈 Operations Dashboard":
         try:
             show_expiry_alerts()
         except Exception:
@@ -378,8 +397,9 @@ def main():
             revenue_history_page()
         else:
             show_access_denied(page)
-    elif page == "📈 Dashboard":
-        if can_access_page(page):
+    elif page == "📈 Operations Dashboard":
+        # Only authorized roles can see full dashboard
+        if get_user_role() in FULL_DASHBOARD_ROLES and can_access_page(page):
             dashboard_page()
         else:
             show_access_denied(page)
