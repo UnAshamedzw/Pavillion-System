@@ -27,11 +27,15 @@ def get_placeholder():
 
 def execute_hr_query(cursor, query, params=None):
     """Execute a query with automatic placeholder conversion for PostgreSQL"""
-    if USE_POSTGRES and params:
+    # Convert params to proper format
+    if params is None:
+        params = []
+    
+    if USE_POSTGRES:
         # Convert ? to %s for PostgreSQL
         query = query.replace('?', '%s')
     
-    if params:
+    if len(params) > 0:
         cursor.execute(query, tuple(params) if isinstance(params, list) else params)
     else:
         cursor.execute(query)
@@ -536,9 +540,9 @@ def employee_management_page():
         query = """
             SELECT id, employee_id, full_name, position, department, hire_date, 
                    salary, phone, email, address, status, date_of_birth, 
-                   emergency_contact, emergency_phone, license_number, license_expiry,
-                   defensive_driving_expiry, medical_cert_expiry, retest_date,
-                   created_by, created_at 
+                   emergency_contact, emergency_phone, next_of_kin_relationship, national_id,
+                   license_number, license_expiry, defensive_driving_expiry, medical_cert_expiry, 
+                   retest_date, created_by, created_at 
             FROM employees WHERE 1=1
         """
         params = []
