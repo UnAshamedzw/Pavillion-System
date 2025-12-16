@@ -1113,11 +1113,11 @@ def employee_management_page():
         params = []
         
         if exp_dept != "All":
-            query += " AND department = ?"
+            query += f" AND department = {get_placeholder()}"
             params.append(exp_dept)
         
         if exp_status != "All":
-            query += " AND status = ?"
+            query += f" AND status = {get_placeholder()}"
             params.append(exp_status)
         
         export_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
@@ -1397,13 +1397,14 @@ def payroll_management_page():
             WHERE 1=1
         '''
         params = []
+        ph = get_placeholder()
         
         if filter_period:
-            query += " AND p.pay_period LIKE ?"
+            query += f" AND p.pay_period LIKE {ph}"
             params.append(f"%{filter_period}%")
         
         if filter_status != "All":
-            query += " AND p.status = ?"
+            query += f" AND p.status = {ph}"
             params.append(filter_status)
         
         query += " ORDER BY p.created_at DESC"
@@ -1640,13 +1641,14 @@ def leave_management_page():
             WHERE 1=1
         '''
         params = []
+        ph = get_placeholder()
         
         if filter_status != "All":
-            query += " AND l.status = ?"
+            query += f" AND l.status = {ph}"
             params.append(filter_status)
         
         if filter_type != "All":
-            query += " AND l.leave_type = ?"
+            query += f" AND l.leave_type = {ph}"
             params.append(filter_type)
         
         query += " ORDER BY l.created_at DESC"
@@ -1904,17 +1906,18 @@ def disciplinary_records_page():
             WHERE 1=1
         '''
         params = []
+        ph = get_placeholder()
         
         if filter_severity != "All":
-            query += " AND d.action_type = ?"
+            query += f" AND d.action_type = {ph}"
             params.append(filter_severity)
         
         if filter_status != "All":
-            query += " AND d.status = ?"
+            query += f" AND d.status = {ph}"
             params.append(filter_status)
         
         if search_emp:
-            query += " AND e.full_name LIKE ?"
+            query += f" AND e.full_name LIKE {ph}"
             params.append(f"%{search_emp}%")
         
         query += " ORDER BY d.created_at DESC"
