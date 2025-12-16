@@ -556,11 +556,15 @@ def employee_management_page():
             params.append(filter_status)
         
         if filter_position == "Drivers":
-            query += " AND position LIKE '%Driver%'"
+            query += " AND position LIKE ?"
+            params.append("%Driver%")
         elif filter_position == "Conductors":
-            query += " AND position LIKE '%Conductor%'"
+            query += " AND position LIKE ?"
+            params.append("%Conductor%")
         elif filter_position == "Other Staff":
-            query += " AND position NOT LIKE '%Driver%' AND position NOT LIKE '%Conductor%'"
+            query += " AND position NOT LIKE ? AND position NOT LIKE ?"
+            params.append("%Driver%")
+            params.append("%Conductor%")
         
         if search_name:
             query += " AND full_name LIKE ?"
