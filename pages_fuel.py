@@ -476,11 +476,34 @@ def fuel_entry_page():
         if not can_edit and not can_delete:
             st.warning("You don't have permission to edit or delete fuel records")
         else:
-            # Get recent records
-            recent_records = get_fuel_records(start_date=str(datetime.now().date() - timedelta(days=30)))
+            # Add filter options like History tab
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                buses = get_active_buses()
+                bus_options = ["All Buses"] + [get_bus_display_option(bus) for bus in buses]
+                edit_filter_bus = st.selectbox("Filter by Bus", bus_options, key="edit_bus")
+            
+            with col2:
+                edit_filter_start = st.date_input("From Date", value=datetime.now().date() - timedelta(days=90), key="edit_start")
+            
+            with col3:
+                edit_filter_end = st.date_input("To Date", value=datetime.now().date(), key="edit_end")
+            
+            # Get bus number for filter
+            edit_bus_number = None
+            if edit_filter_bus != "All Buses":
+                edit_bus_number = extract_bus_from_option(edit_filter_bus, buses)
+            
+            # Get recent records with filters
+            recent_records = get_fuel_records(
+                bus_number=edit_bus_number,
+                start_date=str(edit_filter_start),
+                end_date=str(edit_filter_end)
+            )
             
             if recent_records.empty:
-                st.info("No recent fuel records to edit")
+                st.info("No fuel records found for the selected filters")
             else:
                 # Create selection options
                 record_options = {}
