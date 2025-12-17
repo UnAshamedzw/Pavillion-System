@@ -1434,8 +1434,7 @@ PAGE_PERMISSIONS = {
     '🏠 Home': [],  # Everyone can access their landing page
     '📈 Operations Dashboard': ['view_dashboard'],  # Full dashboard - restricted
     '🔔 Alerts': ['view_dashboard'],  # Alerts for authorized users
-    '📊 Income Entry': ['view_income', 'add_income'],
-    '🚌 Trip Entry': ['view_trips', 'add_trip'],
+    '🚌 Trip & Income Entry': ['view_income', 'add_income'],  # Combined entry
     '🔧 Maintenance Entry': ['view_maintenance', 'add_maintenance'],
     '⛽ Fuel Entry': ['view_fuel', 'add_fuel'],
     '💸 General Expenses': ['view_expenses', 'add_expense'],

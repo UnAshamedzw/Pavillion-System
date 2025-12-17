@@ -193,22 +193,22 @@ def executive_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("📊 Full Dashboard", use_container_width=True):
+        if st.button("📊 Full Dashboard", width="stretch"):
             st.session_state['navigate_to'] = '📈 Operations Dashboard'
             st.rerun()
     
     with col2:
-        if st.button("💰 Profit & Loss", use_container_width=True):
+        if st.button("💰 Profit & Loss", width="stretch"):
             st.session_state['navigate_to'] = '💰 Profit & Loss'
             st.rerun()
     
     with col3:
-        if st.button("👥 HR Overview", use_container_width=True):
+        if st.button("👥 HR Overview", width="stretch"):
             st.session_state['navigate_to'] = '👤 Employee Management'
             st.rerun()
     
     with col4:
-        if st.button("🚨 View Alerts", use_container_width=True):
+        if st.button("🚨 View Alerts", width="stretch"):
             st.session_state['navigate_to'] = '🚨 Alerts Dashboard'
             st.rerun()
     
@@ -281,22 +281,22 @@ def operations_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("➕ Add Income", use_container_width=True):
-            st.session_state['navigate_to'] = '📊 Income Entry'
+        if st.button("➕ Add Income", width="stretch"):
+            st.session_state['navigate_to'] = '🚌 Trip & Income Entry'
             st.rerun()
     
     with col2:
-        if st.button("🔧 Add Maintenance", use_container_width=True):
+        if st.button("🔧 Add Maintenance", width="stretch"):
             st.session_state['navigate_to'] = '🔧 Maintenance Entry'
             st.rerun()
     
     with col3:
-        if st.button("⛽ Add Fuel", use_container_width=True):
+        if st.button("⛽ Add Fuel", width="stretch"):
             st.session_state['navigate_to'] = '⛽ Fuel Entry'
             st.rerun()
     
     with col4:
-        if st.button("🚌 Fleet Status", use_container_width=True):
+        if st.button("🚌 Fleet Status", width="stretch"):
             st.session_state['navigate_to'] = '🚌 Fleet Management'
             st.rerun()
     
@@ -375,22 +375,22 @@ def hr_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("➕ Add Employee", use_container_width=True):
+        if st.button("➕ Add Employee", width="stretch"):
             st.session_state['navigate_to'] = '👤 Employee Management'
             st.rerun()
     
     with col2:
-        if st.button("📅 Leave Requests", use_container_width=True):
+        if st.button("📅 Leave Requests", width="stretch"):
             st.session_state['navigate_to'] = '📅 Leave Management'
             st.rerun()
     
     with col3:
-        if st.button("📝 Contracts", use_container_width=True):
+        if st.button("📝 Contracts", width="stretch"):
             st.session_state['navigate_to'] = '📝 Contract Generator'
             st.rerun()
     
     with col4:
-        if st.button("💰 Payroll", use_container_width=True):
+        if st.button("💰 Payroll", width="stretch"):
             st.session_state['navigate_to'] = '💰 Payroll Management'
             st.rerun()
     
@@ -486,22 +486,22 @@ def finance_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("💰 Profit & Loss", use_container_width=True):
+        if st.button("💰 Profit & Loss", width="stretch"):
             st.session_state['navigate_to'] = '💰 Profit & Loss'
             st.rerun()
     
     with col2:
-        if st.button("💸 Expenses", use_container_width=True):
+        if st.button("💸 Expenses", width="stretch"):
             st.session_state['navigate_to'] = '💸 General Expenses'
             st.rerun()
     
     with col3:
-        if st.button("💰 Payroll", use_container_width=True):
+        if st.button("💰 Payroll", width="stretch"):
             st.session_state['navigate_to'] = '💰 Payroll Management'
             st.rerun()
     
     with col4:
-        if st.button("📊 Revenue History", use_container_width=True):
+        if st.button("📊 Revenue History", width="stretch"):
             st.session_state['navigate_to'] = '💰 Revenue History'
             st.rerun()
 
@@ -561,17 +561,17 @@ def supervisor_dashboard():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("➕ Record Income", use_container_width=True, type="primary"):
-            st.session_state['navigate_to'] = '📊 Income Entry'
+        if st.button("➕ Record Income", width="stretch", type="primary"):
+            st.session_state['navigate_to'] = '🚌 Trip & Income Entry'
             st.rerun()
     
     with col2:
-        if st.button("📋 Assignments", use_container_width=True):
+        if st.button("📋 Assignments", width="stretch"):
             st.session_state['navigate_to'] = '🛣️ Routes & Assignments'
             st.rerun()
     
     with col3:
-        if st.button("⛽ Fuel Entry", use_container_width=True):
+        if st.button("⛽ Fuel Entry", width="stretch"):
             st.session_state['navigate_to'] = '⛽ Fuel Entry'
             st.rerun()
 
@@ -626,17 +626,17 @@ def workshop_dashboard():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("➕ Add Maintenance", use_container_width=True, type="primary"):
+        if st.button("➕ Add Maintenance", width="stretch", type="primary"):
             st.session_state['navigate_to'] = '🔧 Maintenance Entry'
             st.rerun()
     
     with col2:
-        if st.button("📦 Inventory", use_container_width=True):
+        if st.button("📦 Inventory", width="stretch"):
             st.session_state['navigate_to'] = '📦 Inventory'
             st.rerun()
     
     with col3:
-        if st.button("🚌 Fleet Status", use_container_width=True):
+        if st.button("🚌 Fleet Status", width="stretch"):
             st.session_state['navigate_to'] = '🚌 Fleet Management'
             st.rerun()
 
@@ -719,17 +719,17 @@ def stores_dashboard():
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        if st.button("📦 Manage Inventory", use_container_width=True, type="primary"):
+        if st.button("📦 Manage Inventory", width="stretch", type="primary"):
             st.session_state['navigate_to'] = '📦 Inventory'
             st.rerun()
     
     with col2:
-        if st.button("➕ Add Stock", use_container_width=True):
+        if st.button("➕ Add Stock", width="stretch"):
             st.session_state['navigate_to'] = '📦 Inventory'
             st.rerun()
     
     with col3:
-        if st.button("📄 View Documents", use_container_width=True):
+        if st.button("📄 View Documents", width="stretch"):
             st.session_state['navigate_to'] = '📄 Documents'
             st.rerun()
     
@@ -759,25 +759,25 @@ def clerk_dashboard():
     
     with col1:
         st.subheader("📊 Data Entry")
-        if st.button("➕ Add Income Record", use_container_width=True, type="primary"):
-            st.session_state['navigate_to'] = '📊 Income Entry'
+        if st.button("➕ Add Income Record", width="stretch", type="primary"):
+            st.session_state['navigate_to'] = '🚌 Trip & Income Entry'
             st.rerun()
         
-        if st.button("🔧 Add Maintenance", use_container_width=True):
+        if st.button("🔧 Add Maintenance", width="stretch"):
             st.session_state['navigate_to'] = '🔧 Maintenance Entry'
             st.rerun()
         
-        if st.button("⛽ Add Fuel Record", use_container_width=True):
+        if st.button("⛽ Add Fuel Record", width="stretch"):
             st.session_state['navigate_to'] = '⛽ Fuel Entry'
             st.rerun()
     
     with col2:
         st.subheader("📋 View Records")
-        if st.button("💰 View Revenue History", use_container_width=True):
+        if st.button("💰 View Revenue History", width="stretch"):
             st.session_state['navigate_to'] = '💰 Revenue History'
             st.rerun()
         
-        if st.button("🚌 View Fleet", use_container_width=True):
+        if st.button("🚌 View Fleet", width="stretch"):
             st.session_state['navigate_to'] = '🚌 Fleet Management'
             st.rerun()
 
@@ -821,12 +821,12 @@ def payroll_dashboard():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("💰 Process Payroll", use_container_width=True, type="primary"):
+        if st.button("💰 Process Payroll", width="stretch", type="primary"):
             st.session_state['navigate_to'] = '💰 Payroll Management'
             st.rerun()
     
     with col2:
-        if st.button("👥 View Employees", use_container_width=True):
+        if st.button("👥 View Employees", width="stretch"):
             st.session_state['navigate_to'] = '👤 Employee Management'
             st.rerun()
 
@@ -850,12 +850,12 @@ def viewer_dashboard():
     col1, col2 = st.columns(2)
     
     with col1:
-        if st.button("🚌 View Fleet", use_container_width=True):
+        if st.button("🚌 View Fleet", width="stretch"):
             st.session_state['navigate_to'] = '🚌 Fleet Management'
             st.rerun()
     
     with col2:
-        if st.button("👥 View Employees", use_container_width=True):
+        if st.button("👥 View Employees", width="stretch"):
             st.session_state['navigate_to'] = '👤 Employee Management'
             st.rerun()
 
@@ -917,22 +917,22 @@ def admin_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("📈 Full Dashboard", use_container_width=True):
+        if st.button("📈 Full Dashboard", width="stretch"):
             st.session_state['navigate_to'] = '📈 Operations Dashboard'
             st.rerun()
     
     with col2:
-        if st.button("👥 User Management", use_container_width=True):
+        if st.button("👥 User Management", width="stretch"):
             st.session_state['navigate_to'] = '👥 User Management'
             st.rerun()
     
     with col3:
-        if st.button("🔐 Roles", use_container_width=True):
+        if st.button("🔐 Roles", width="stretch"):
             st.session_state['navigate_to'] = '🔐 Role Management'
             st.rerun()
     
     with col4:
-        if st.button("📜 Audit Logs", use_container_width=True):
+        if st.button("📜 Audit Logs", width="stretch"):
             st.session_state['navigate_to'] = '📜 Activity Log'
             st.rerun()
     
@@ -1039,7 +1039,7 @@ def show_hr_alerts():
         if not emp_docs.empty:
             st.warning(f"⚠️ {len(emp_docs)} employee(s) have documents expiring within 30 days")
             with st.expander("View Details"):
-                st.dataframe(emp_docs, use_container_width=True)
+                st.dataframe(emp_docs, width="stretch")
         else:
             st.success("✅ No employee documents expiring in the next 30 days")
         
@@ -1064,7 +1064,7 @@ def show_inventory_alerts():
         if not out_df.empty:
             st.error(f"🚫 {len(out_df)} item(s) are OUT OF STOCK")
             with st.expander("View Out of Stock Items"):
-                st.dataframe(out_df, use_container_width=True)
+                st.dataframe(out_df, width="stretch")
         
         # Low stock items
         low_df = pd.read_sql_query("""
@@ -1076,7 +1076,7 @@ def show_inventory_alerts():
         if not low_df.empty:
             st.warning(f"⚠️ {len(low_df)} item(s) are LOW IN STOCK")
             with st.expander("View Low Stock Items"):
-                st.dataframe(low_df, use_container_width=True)
+                st.dataframe(low_df, width="stretch")
         
         if out_df.empty and low_df.empty:
             st.success("✅ All inventory levels are healthy")

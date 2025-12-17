@@ -35,7 +35,7 @@ from pages_performance_metrics import performance_metrics_page
 from fleet_management_page import fleet_management_page, show_expiry_alerts
 from pages_fuel import fuel_entry_page, fuel_analysis_page
 from pages_backup import backup_export_page
-from pages_trips import trip_entry_page, trip_analysis_page
+from pages_trips import trip_analysis_page
 from pages_route_profitability import route_profitability_page
 from pages_driver_performance import driver_scoring_page
 from pages_documents import document_management_page
@@ -225,8 +225,7 @@ def main():
     
     operations_items.extend([
         "🔔 Alerts",
-        "📊 Income Entry",
-        "🚌 Trip Entry",
+        "🚌 Trip & Income Entry",
         "👥 Customers & Bookings",
         "🔧 Maintenance Entry",
         "⛽ Fuel Entry",
@@ -377,7 +376,7 @@ def main():
         st.markdown("---")
     
     # Route to appropriate page with permission check
-    if page == "📊 Income Entry":
+    if page == "🚌 Trip & Income Entry":
         if can_access_page(page):
             income_entry_page()
         else:
@@ -486,11 +485,6 @@ def main():
     elif page == "👥 Customers & Bookings":
         if can_access_page(page):
             customer_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "🚌 Trip Entry":
-        if can_access_page(page):
-            trip_entry_page()
         else:
             show_access_denied(page)
     elif page == "🚌 Trip Analysis":

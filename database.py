@@ -1073,6 +1073,42 @@ def migrate_database():
         print(f"Migration note: {e}")
     finally:
         conn.close()
+    
+    # Second migration batch - add trip fields to income table
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            # Add trip-related columns to income table
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS passengers INTEGER DEFAULT 0")
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS trip_type TEXT DEFAULT 'Scheduled'")
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS departure_time TEXT")
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS arrival_time TEXT")
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS revenue_per_passenger REAL")
+        else:
+            # SQLite
+            cursor.execute("PRAGMA table_info(income)")
+            columns = [col[1] for col in cursor.fetchall()]
+            
+            if 'passengers' not in columns:
+                cursor.execute("ALTER TABLE income ADD COLUMN passengers INTEGER DEFAULT 0")
+            if 'trip_type' not in columns:
+                cursor.execute("ALTER TABLE income ADD COLUMN trip_type TEXT DEFAULT 'Scheduled'")
+            if 'departure_time' not in columns:
+                cursor.execute("ALTER TABLE income ADD COLUMN departure_time TEXT")
+            if 'arrival_time' not in columns:
+                cursor.execute("ALTER TABLE income ADD COLUMN arrival_time TEXT")
+            if 'revenue_per_passenger' not in columns:
+                cursor.execute("ALTER TABLE income ADD COLUMN revenue_per_passenger REAL")
+        
+        conn.commit()
+        print("✅ Trip fields added to income table")
+    except Exception as e:
+        conn.rollback()
+        print(f"Trip migration note: {e}")
+    finally:
+        conn.close()
 
 
 def verify_database():
@@ -1428,28 +1464,36 @@ def get_active_mechanics():
 
 def add_income_record(bus_number, route, date, amount, driver_name=None, conductor_name=None,
                       hire_destination=None, notes=None, created_by=None,
-                      driver_employee_id=None, conductor_employee_id=None):
-    """Add new income record"""
+                      driver_employee_id=None, conductor_employee_id=None,
+                      passengers=0, trip_type='Scheduled', departure_time=None, arrival_time=None):
+    """Add new income/trip record"""
     conn = get_connection()
     cursor = conn.cursor()
+    
+    # Calculate revenue per passenger
+    revenue_per_passenger = amount / passengers if passengers and passengers > 0 else None
     
     try:
         if USE_POSTGRES:
             cursor.execute('''
                 INSERT INTO income (bus_number, route, hire_destination, driver_employee_id, driver_name,
-                                   conductor_employee_id, conductor_name, date, amount, notes, created_by)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                                   conductor_employee_id, conductor_name, date, amount, notes, created_by,
+                                   passengers, trip_type, departure_time, arrival_time, revenue_per_passenger)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
             ''', (bus_number, route, hire_destination, driver_employee_id, driver_name,
-                  conductor_employee_id, conductor_name, date, amount, notes, created_by))
+                  conductor_employee_id, conductor_name, date, amount, notes, created_by,
+                  passengers, trip_type, departure_time, arrival_time, revenue_per_passenger))
             result = cursor.fetchone()
             record_id = result['id'] if result else None
         else:
             cursor.execute('''
                 INSERT INTO income (bus_number, route, hire_destination, driver_employee_id, driver_name,
-                                   conductor_employee_id, conductor_name, date, amount, notes, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   conductor_employee_id, conductor_name, date, amount, notes, created_by,
+                                   passengers, trip_type, departure_time, arrival_time, revenue_per_passenger)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (bus_number, route, hire_destination, driver_employee_id, driver_name,
-                  conductor_employee_id, conductor_name, date, amount, notes, created_by))
+                  conductor_employee_id, conductor_name, date, amount, notes, created_by,
+                  passengers, trip_type, departure_time, arrival_time, revenue_per_passenger))
             record_id = cursor.lastrowid
         
         conn.commit()

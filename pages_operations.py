@@ -32,6 +32,29 @@ from database import (
     log_audit_trail
 )
 
+# Import fuel function
+from pages_fuel import add_fuel_record
+
+
+def add_fuel_record_from_trip(bus_number, date, liters, cost_per_liter, total_cost,
+                               odometer_reading=None, fuel_station=None, filled_by=None,
+                               notes=None, created_by=None):
+    """Wrapper to add fuel record from trip entry page"""
+    return add_fuel_record(
+        bus_number=bus_number,
+        date=date,
+        liters=liters,
+        cost_per_liter=cost_per_liter,
+        total_cost=total_cost,
+        odometer_reading=odometer_reading,
+        fuel_station=fuel_station,
+        payment_method='Cash',  # Default
+        receipt_number=None,
+        filled_by=filled_by,
+        notes=notes,
+        created_by=created_by
+    )
+
 
 # ============================================================================
 # HELPER FUNCTIONS - Using database abstraction
@@ -415,10 +438,10 @@ def routes_assignments_page():
 # ============================================================================
 
 def income_entry_page():
-    """Income entry page with dropdown selections - FIXED VERSION using database abstraction"""
+    """Combined Trip/Income/Fuel entry page - Records bus trips with revenue and optional fuel"""
     
-    st.header("📊 Income Entry")
-    st.markdown("Record daily bus revenue with dropdown selections")
+    st.header("🚌 Trip & Income Entry")
+    st.markdown("Record bus trips, passengers, revenue, and fuel in one place")
     st.markdown("---")
     
     # Get active buses
@@ -442,27 +465,20 @@ def income_entry_page():
         st.warning("⚠️ No active conductors found. Please add conductors in HR > Employee Management first.")
         return
     
-    # Add Income Form
-    with st.form("income_form"):
-        col1, col2 = st.columns(2)
+    # Trip types
+    trip_types = ["Scheduled", "Charter/Hire", "Express", "School Run", "Contract", "Other"]
+    
+    # Add Trip/Income Form
+    with st.form("trip_income_form"):
+        st.subheader("📝 Trip Details")
+        
+        col1, col2, col3 = st.columns(3)
         
         with col1:
-            # Bus dropdown - using registration number as identifier
+            # Bus dropdown
             bus_options = [get_bus_display_option(bus) for bus in buses]
-            selected_bus = st.selectbox("🚌 Select Bus (Registration)*", bus_options)
+            selected_bus = st.selectbox("🚌 Select Bus*", bus_options)
             registration_number = extract_registration_from_option(selected_bus)
-            
-            # Route dropdown
-            route_options = ["Hire"] + [route['name'] for route in routes]
-            selected_route = st.selectbox("🛣️ Route*", route_options)
-            
-            # Hire destination field
-            hire_destination = ""
-            if selected_route == "Hire":
-                hire_destination = st.text_input(
-                    "📍 Hire Destination/Description*",
-                    placeholder="e.g., Wedding at Lake Chivero, Corporate trip to Nyanga"
-                )
             
             # Driver selection
             driver_options = [format_employee_option(d) for d in drivers]
@@ -471,8 +487,9 @@ def income_entry_page():
             driver_name = extract_employee_name_from_option(selected_driver)
         
         with col2:
-            date = st.date_input("📅 Date*", datetime.now())
-            amount = st.number_input("💰 Amount*", min_value=0.0, step=0.01, format="%.2f")
+            # Route dropdown
+            route_options = ["-- Select Route --"] + [route['name'] for route in routes] + ["Charter/Hire"]
+            selected_route = st.selectbox("🛣️ Route*", route_options)
             
             # Conductor selection
             conductor_options = [format_employee_option(c) for c in conductors]
@@ -480,44 +497,162 @@ def income_entry_page():
             conductor_employee_id = extract_employee_id_from_option(selected_conductor)
             conductor_name = extract_employee_name_from_option(selected_conductor)
         
-        notes = st.text_area("📝 Notes", placeholder="Optional notes...")
+        with col3:
+            # Date and Trip Type
+            trip_date = st.date_input("📅 Date*", datetime.now())
+            trip_type = st.selectbox("🏷️ Trip Type", trip_types)
         
-        submitted = st.form_submit_button("➕ Add Income Record", width="stretch", type="primary")
+        # Hire/Charter destination (conditional)
+        hire_destination = ""
+        if selected_route == "Charter/Hire" or trip_type == "Charter/Hire":
+            hire_destination = st.text_input(
+                "📍 Hire Destination/Description*",
+                placeholder="e.g., Wedding at Lake Chivero, Corporate trip to Nyanga"
+            )
+        
+        st.markdown("---")
+        st.subheader("💰 Revenue & Passengers")
+        
+        col4, col5, col6 = st.columns(3)
+        
+        with col4:
+            amount = st.number_input("💵 Revenue ($)*", min_value=0.0, step=10.0, format="%.2f")
+        
+        with col5:
+            passengers = st.number_input("👥 Passengers", min_value=0, step=1, value=0, 
+                                         help="Number of passengers on this trip")
+        
+        with col6:
+            # Show calculated revenue per passenger
+            if passengers > 0 and amount > 0:
+                rev_per_passenger = amount / passengers
+                st.metric("📊 Rev/Passenger", f"${rev_per_passenger:.2f}")
+            else:
+                st.metric("📊 Rev/Passenger", "N/A")
+        
+        # Optional: Time tracking
+        with st.expander("⏰ Trip Times (Optional)", expanded=False):
+            time_col1, time_col2 = st.columns(2)
+            with time_col1:
+                departure_time = st.time_input("Departure Time", value=None)
+            with time_col2:
+                arrival_time = st.time_input("Arrival Time", value=None)
+        
+        # Optional: Fuel Entry
+        st.markdown("---")
+        add_fuel = st.checkbox("⛽ Add Fuel Record for this trip", value=False, 
+                               help="Check this to record fuel purchased during this trip")
+        
+        fuel_liters = 0.0
+        fuel_cost_per_liter = 0.0
+        fuel_total_cost = 0.0
+        fuel_odometer = None
+        fuel_station = ""
+        
+        if add_fuel:
+            st.subheader("⛽ Fuel Details")
+            fuel_col1, fuel_col2, fuel_col3 = st.columns(3)
+            
+            with fuel_col1:
+                fuel_liters = st.number_input("🛢️ Liters*", min_value=0.0, step=1.0, format="%.2f",
+                                              help="Amount of fuel in liters")
+                fuel_station = st.text_input("🏪 Fuel Station", placeholder="e.g., Zuva Service Station")
+            
+            with fuel_col2:
+                fuel_cost_per_liter = st.number_input("💲 Cost per Liter ($)*", min_value=0.0, 
+                                                       step=0.01, format="%.2f", value=1.50)
+                fuel_odometer = st.number_input("📏 Odometer Reading", min_value=0, step=1, value=0,
+                                                help="Current odometer reading (optional, for efficiency calc)")
+                if fuel_odometer == 0:
+                    fuel_odometer = None
+            
+            with fuel_col3:
+                # Auto-calculate total
+                if fuel_liters > 0 and fuel_cost_per_liter > 0:
+                    fuel_total_cost = fuel_liters * fuel_cost_per_liter
+                    st.metric("💰 Total Fuel Cost", f"${fuel_total_cost:.2f}")
+                else:
+                    st.metric("💰 Total Fuel Cost", "$0.00")
+        
+        notes = st.text_area("📝 Notes", placeholder="Optional notes about this trip...")
+        
+        submitted = st.form_submit_button("✅ Save Trip & Income", use_container_width=True, type="primary")
         
         if submitted:
             # Validation
-            if not all([registration_number, selected_route, amount > 0, driver_name, conductor_name]):
-                st.error("⚠️ Please fill in all required fields")
-            elif selected_route == "Hire" and not hire_destination.strip():
-                st.error("⚠️ Please describe the hire destination")
+            if selected_route == "-- Select Route --":
+                st.error("⚠️ Please select a route")
+            elif not amount or amount <= 0:
+                st.error("⚠️ Please enter a valid revenue amount")
+            elif (selected_route == "Charter/Hire" or trip_type == "Charter/Hire") and not hire_destination.strip():
+                st.error("⚠️ Please describe the hire/charter destination")
+            elif add_fuel and (fuel_liters <= 0 or fuel_cost_per_liter <= 0):
+                st.error("⚠️ Please enter valid fuel details (liters and cost per liter)")
             else:
-                # Insert using database abstraction - store registration_number in bus_number field
+                # Format times
+                dep_time_str = departure_time.strftime("%H:%M") if departure_time else None
+                arr_time_str = arrival_time.strftime("%H:%M") if arrival_time else None
+                
+                # Determine route name
+                route_name = hire_destination if selected_route == "Charter/Hire" else selected_route
+                
+                # Insert income/trip record
                 record_id = add_income_record(
-                    bus_number=registration_number,  # Using registration as identifier
-                    route=selected_route,
-                    hire_destination=hire_destination if selected_route == "Hire" else None,
+                    bus_number=registration_number,
+                    route=route_name,
+                    hire_destination=hire_destination if selected_route == "Charter/Hire" else None,
                     driver_name=driver_name,
                     conductor_name=conductor_name,
-                    date=date.strftime("%Y-%m-%d"),
+                    date=trip_date.strftime("%Y-%m-%d"),
                     amount=amount,
                     notes=notes,
                     created_by=st.session_state['user']['username'],
                     driver_employee_id=driver_employee_id,
-                    conductor_employee_id=conductor_employee_id
+                    conductor_employee_id=conductor_employee_id,
+                    passengers=passengers,
+                    trip_type=trip_type,
+                    departure_time=dep_time_str,
+                    arrival_time=arr_time_str
                 )
                 
                 if record_id:
                     AuditLogger.log_income_add(
                         bus_number=registration_number,
-                        route=selected_route,
+                        route=route_name,
                         amount=amount,
-                        date=date.strftime("%Y-%m-%d")
+                        date=trip_date.strftime("%Y-%m-%d")
                     )
-                    st.success(f"✅ Income record added successfully! (ID: {record_id})")
+                    st.success(f"✅ Trip recorded successfully! (ID: {record_id})")
+                    if passengers > 0:
+                        st.info(f"📊 Revenue per passenger: ${amount/passengers:.2f}")
+                    
+                    # Add fuel record if checkbox was checked
+                    if add_fuel and fuel_liters > 0:
+                        fuel_record_id = add_fuel_record_from_trip(
+                            bus_number=registration_number,
+                            date=trip_date.strftime("%Y-%m-%d"),
+                            liters=fuel_liters,
+                            cost_per_liter=fuel_cost_per_liter,
+                            total_cost=fuel_total_cost,
+                            odometer_reading=fuel_odometer,
+                            fuel_station=fuel_station,
+                            filled_by=driver_name,
+                            notes=f"Fuel for trip ID: {record_id}" + (f" - {notes}" if notes else ""),
+                            created_by=st.session_state['user']['username']
+                        )
+                        
+                        if fuel_record_id:
+                            st.success(f"⛽ Fuel record added! (ID: {fuel_record_id}) - ${fuel_total_cost:.2f} for {fuel_liters:.1f}L")
+                        else:
+                            st.warning("⚠️ Trip saved but fuel record failed to save")
+                    
                     st.balloons()
                 else:
-                    st.error("❌ Error adding income record")
+                    st.error("❌ Error saving trip record")
     
+    # Recent Entries Section
+    st.markdown("---")
+    st.subheader("📋 Recent Trips Today")
     st.markdown("---")
     
     # Recent Income Records with Edit/Delete
