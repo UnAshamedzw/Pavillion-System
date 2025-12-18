@@ -247,7 +247,7 @@ def get_booking_by_id(booking_id):
         WHERE b.id = {ph}
     """
     
-    df = pd.read_sql_query(query, get_engine(), params=[booking_id])
+    df = pd.read_sql_query(query, get_engine(), params=(booking_id,))
     conn.close()
     
     if not df.empty:
@@ -928,7 +928,7 @@ def customer_management_page():
                             pdf_buffer = generate_quotation_pdf(booking_data)
                             
                             st.download_button(
-                                label="⬇️ Download Quotation PDF",
+                                label=⬇️ Download Quotation PDF",
                                 data=pdf_buffer,
                                 file_name=f"Quotation_{booking_data.get('booking_ref', 'QT')}.pdf",
                                 mime="application/pdf"
