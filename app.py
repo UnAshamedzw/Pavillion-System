@@ -48,6 +48,8 @@ from pages_contracts import contract_generator_page
 from pages_notifications import notification_settings_page
 from pages_landing import show_landing_page, can_see_full_dashboard, FULL_DASHBOARD_ROLES
 from pages_payroll import payroll_processing_page
+from pages_reconciliation import daily_reconciliation_page
+from pages_employee_portal import employee_portal_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -89,6 +91,19 @@ def main():
     
     # Try to restore session from query params (persistent login)
     restore_session()
+    
+    # Check if employee portal mode is requested
+    if st.session_state.get('show_employee_portal', False):
+        employee_portal_page()
+        
+        # Add back button to return to main login
+        st.markdown("---")
+        if st.button("← Back to Main Login"):
+            st.session_state['show_employee_portal'] = False
+            if 'portal_employee' in st.session_state:
+                del st.session_state['portal_employee']
+            st.rerun()
+        return
     
     # Check authentication
     if not st.session_state.get('authenticated', False):
@@ -227,6 +242,7 @@ def main():
     operations_items.extend([
         "🔔 Alerts",
         "🚌 Trip & Income Entry",
+        "📋 Daily Reconciliation",
         "👥 Customers & Bookings",
         "🔧 Maintenance Entry",
         "⛽ Fuel Entry",
@@ -380,6 +396,11 @@ def main():
     if page == "🚌 Trip & Income Entry":
         if can_access_page(page):
             income_entry_page()
+        else:
+            show_access_denied(page)
+    elif page == "📋 Daily Reconciliation":
+        if can_access_page(page):
+            daily_reconciliation_page()
         else:
             show_access_denied(page)
     elif page == "🔧 Maintenance Entry":

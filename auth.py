@@ -376,6 +376,10 @@ PREDEFINED_ROLES = {
             'view_documents', 'add_documents',
             'view_expenses', 'add_expense', 'edit_expense',
             'view_employees', 'view_performance',
+            # Reconciliation & Red Tickets
+            'view_reconciliation', 'add_reconciliation', 'edit_reconciliation',
+            'view_red_tickets', 'add_red_ticket', 'edit_red_ticket',
+            'view_deductions', 'add_deduction',
             'view_dashboard', 'view_bus_analysis', 'view_performance_metrics', 
             'view_revenue_history', 'view_profit_loss', 'view_route_profitability',
             'view_driver_scoring', 'view_alerts', 'generate_reports',
@@ -1481,6 +1485,7 @@ PAGE_PERMISSIONS = {
     '📈 Operations Dashboard': ['view_dashboard'],  # Full dashboard - restricted
     '🔔 Alerts': ['view_dashboard'],  # Alerts for authorized users
     '🚌 Trip & Income Entry': ['view_income', 'add_income'],  # Combined entry
+    '📋 Daily Reconciliation': ['view_reconciliation', 'add_reconciliation'],  # Cash reconciliation & red tickets
     '🔧 Maintenance Entry': ['view_maintenance', 'add_maintenance'],
     '⛽ Fuel Entry': ['view_fuel', 'add_fuel'],
     '💸 General Expenses': ['view_expenses', 'add_expense'],
@@ -1551,7 +1556,7 @@ def login_page():
         col_a, col_b = st.columns(2)
         
         with col_a:
-            if st.button("🔓 Login", width="stretch"):
+            if st.button("🔓 Login", use_container_width=True):
                 if username and password:
                     user = authenticate_user(username, password)
                     if user:
@@ -1574,7 +1579,7 @@ def login_page():
                     st.warning("Please enter both username and password")
         
         with col_b:
-            if st.button("ℹ️ Help", width="stretch"):
+            if st.button("ℹ️ Help", use_container_width=True):
                 st.info("""
                 **Default Admin Account:**
                 - Username: `admin`
@@ -1582,7 +1587,21 @@ def login_page():
                 
                 Please change the default password after first login.
                 """)
-
+        
+        # Employee Portal Link
+        st.markdown("---")
+        st.markdown("""
+        <div style="text-align: center; padding: 15px; background: #f0f8ff; border-radius: 8px; margin-top: 10px;">
+            <p style="margin: 0; color: #666;">Are you an employee?</p>
+            <p style="margin: 5px 0 0 0; font-size: 14px;">
+                Access the <strong>Employee Self-Service Portal</strong> to view payslips, trips, and submit requests.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        if st.button("👤 Employee Portal Login", use_container_width=True, type="secondary"):
+            st.session_state['show_employee_portal'] = True
+            st.rerun()
 
 def logout():
     """Logout current user and invalidate session"""
