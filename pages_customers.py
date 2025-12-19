@@ -297,35 +297,59 @@ def get_active_buses():
 # PDF GENERATION FUNCTIONS
 # =============================================================================
 
-def generate_quotation_pdf(booking_data):
-    """Generate a quotation PDF using reportlab"""
+def generate_quotation_pdf(booking_data, company_info=None):
+    """Generate a quotation PDF using reportlab with logo and editable company info"""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import inch, mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
+    import os
+    
+    # Default company info if not provided
+    if company_info is None:
+        company_info = {
+            'name': 'PAVILLION COACHES',
+            'tagline': 'Premium Bus Charter Services',
+            'cell': '0772 679 680',
+            'work': '+263 24 2770931',
+            'email': 'info@pavillioncoaches.co.zw',
+            'address': 'Harare, Zimbabwe'
+        }
     
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=20*mm)
     
     styles = getSampleStyleSheet()
     
     # Custom styles
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], 
-                                  fontSize=24, alignment=TA_CENTER, spaceAfter=20)
+                                  fontSize=24, alignment=TA_CENTER, spaceAfter=5)
     header_style = ParagraphStyle('Header', parent=styles['Normal'],
-                                   fontSize=12, alignment=TA_CENTER)
+                                   fontSize=10, alignment=TA_CENTER)
     normal_style = styles['Normal']
     bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontName='Helvetica-Bold')
     
     story = []
     
+    # Try to add logo
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        try:
+            logo = Image(logo_path, width=60*mm, height=30*mm)
+            logo.hAlign = 'CENTER'
+            story.append(logo)
+            story.append(Spacer(1, 5))
+        except:
+            pass
+    
     # Company Header
-    story.append(Paragraph("PAVILLION COACHES", title_style))
-    story.append(Paragraph("Premium Bus Charter Services", header_style))
-    story.append(Paragraph("Tel: +263 772 679 680 | Email: info@pavillioncoaches.co.zw", header_style))
-    story.append(Spacer(1, 20))
+    story.append(Paragraph(company_info['name'], title_style))
+    story.append(Paragraph(company_info['tagline'], header_style))
+    story.append(Paragraph(f"Cell: {company_info['cell']} | Work: {company_info['work']}", header_style))
+    story.append(Paragraph(f"Email: {company_info['email']}", header_style))
+    story.append(Spacer(1, 15))
     
     # Quotation Title
     story.append(Paragraph("QUOTATION", ParagraphStyle('QuoteTitle', parent=styles['Heading1'],
@@ -387,6 +411,10 @@ def generate_quotation_pdf(booking_data):
         ['Est. Distance:', f"{booking_data.get('distance_km', 0)} km"],
         ['Est. Duration:', f"{booking_data.get('duration_hours', 0)} hours"],
     ]
+    
+    # Add special requirements if present
+    if booking_data.get('special_requirements'):
+        trip_data.append(['Special Requirements:', booking_data.get('special_requirements')])
     
     trip_table = Table(trip_data, colWidths=[100, 350])
     trip_table.setStyle(TableStyle([
@@ -456,34 +484,58 @@ def generate_quotation_pdf(booking_data):
     return buffer
 
 
-def generate_invoice_pdf(booking_data):
-    """Generate an invoice PDF using reportlab"""
+def generate_invoice_pdf(booking_data, company_info=None):
+    """Generate an invoice PDF using reportlab with logo and editable company info"""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import inch, mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    import os
+    
+    # Default company info if not provided
+    if company_info is None:
+        company_info = {
+            'name': 'PAVILLION COACHES',
+            'tagline': 'Premium Bus Charter Services',
+            'cell': '0772 679 680',
+            'work': '+263 24 2770931',
+            'email': 'info@pavillioncoaches.co.zw',
+            'address': 'Harare, Zimbabwe'
+        }
     
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=20*mm, bottomMargin=20*mm)
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=15*mm, bottomMargin=20*mm)
     
     styles = getSampleStyleSheet()
     
     title_style = ParagraphStyle('Title', parent=styles['Heading1'], 
-                                  fontSize=24, alignment=TA_CENTER, spaceAfter=20)
+                                  fontSize=24, alignment=TA_CENTER, spaceAfter=5)
     header_style = ParagraphStyle('Header', parent=styles['Normal'],
-                                   fontSize=12, alignment=TA_CENTER)
+                                   fontSize=10, alignment=TA_CENTER)
     normal_style = styles['Normal']
     bold_style = ParagraphStyle('Bold', parent=styles['Normal'], fontName='Helvetica-Bold')
     
     story = []
     
+    # Try to add logo
+    logo_path = "logo.png"
+    if os.path.exists(logo_path):
+        try:
+            logo = Image(logo_path, width=60*mm, height=30*mm)
+            logo.hAlign = 'CENTER'
+            story.append(logo)
+            story.append(Spacer(1, 5))
+        except:
+            pass
+    
     # Company Header
-    story.append(Paragraph("PAVILLION COACHES", title_style))
-    story.append(Paragraph("Premium Bus Charter Services", header_style))
-    story.append(Paragraph("Tel: +263 XXX XXX XXX | Email: info@pavillioncoaches.co.zw", header_style))
-    story.append(Spacer(1, 20))
+    story.append(Paragraph(company_info['name'], title_style))
+    story.append(Paragraph(company_info['tagline'], header_style))
+    story.append(Paragraph(f"Cell: {company_info['cell']} | Work: {company_info['work']}", header_style))
+    story.append(Paragraph(f"Email: {company_info['email']}", header_style))
+    story.append(Spacer(1, 15))
     
     # Invoice Title
     story.append(Paragraph("TAX INVOICE", ParagraphStyle('InvTitle', parent=styles['Heading1'],
@@ -906,26 +958,77 @@ def customer_management_page():
                 booking_data = get_booking_by_id(booking_id)
                 
                 if booking_data:
-                    # Show preview
-                    st.markdown("### Quotation Preview")
+                    # Editable Company Info
+                    st.markdown("### 🏢 Company Details (Editable)")
+                    with st.expander("Edit Company Information", expanded=False):
+                        comp_col1, comp_col2 = st.columns(2)
+                        with comp_col1:
+                            company_name = st.text_input("Company Name", value="PAVILLION COACHES", key="qt_comp_name")
+                            company_cell = st.text_input("Cell Phone", value="0772 679 680", key="qt_cell")
+                            company_email = st.text_input("Email", value="info@pavillioncoaches.co.zw", key="qt_email")
+                        with comp_col2:
+                            company_tagline = st.text_input("Tagline", value="Premium Bus Charter Services", key="qt_tagline")
+                            company_work = st.text_input("Work Phone", value="+263 24 2770931", key="qt_work")
+                            company_address = st.text_input("Address", value="Harare, Zimbabwe", key="qt_address")
                     
-                    col1, col2 = st.columns(2)
+                    company_info = {
+                        'name': company_name,
+                        'tagline': company_tagline,
+                        'cell': company_cell,
+                        'work': company_work,
+                        'email': company_email,
+                        'address': company_address
+                    }
                     
-                    with col1:
-                        st.markdown(f"**Customer:** {booking_data.get('customer_name')}")
-                        st.markdown(f"**Trip Date:** {booking_data.get('trip_date')}")
-                        st.markdown(f"**Route:** {booking_data.get('pickup_location')} → {booking_data.get('dropoff_location')}")
+                    # Editable Booking Details
+                    st.markdown("### 📝 Booking Details (Editable)")
+                    with st.expander("Edit Booking Details for Quotation", expanded=True):
+                        edit_col1, edit_col2 = st.columns(2)
+                        
+                        with edit_col1:
+                            edit_customer = st.text_input("Customer Name", value=booking_data.get('customer_name', ''), key="qt_cust")
+                            edit_pickup = st.text_input("Pickup Location", value=booking_data.get('pickup_location', ''), key="qt_pickup")
+                            edit_dropoff = st.text_input("Dropoff Location", value=booking_data.get('dropoff_location', ''), key="qt_dropoff")
+                            edit_passengers = st.number_input("Passengers", value=int(booking_data.get('num_passengers', 0)), key="qt_pass")
+                            edit_bus_type = st.text_input("Bus Type", value=booking_data.get('bus_type', ''), key="qt_bus")
+                        
+                        with edit_col2:
+                            edit_trip_date = st.text_input("Trip Date", value=str(booking_data.get('trip_date', '')), key="qt_date")
+                            edit_pickup_time = st.text_input("Pickup Time", value=str(booking_data.get('pickup_time', '')), key="qt_time")
+                            edit_total = st.number_input("Total Amount ($)", value=float(booking_data.get('total_amount', 0)), key="qt_total")
+                            edit_deposit = st.number_input("Deposit Amount ($)", value=float(booking_data.get('deposit_amount', 0)), key="qt_deposit")
+                            edit_special = st.text_area("Special Requirements", value=booking_data.get('special_requirements', '') or '', key="qt_special")
                     
-                    with col2:
-                        st.markdown(f"**Passengers:** {booking_data.get('num_passengers')}")
-                        st.markdown(f"**Total:** ${float(booking_data.get('total_amount', 0)):,.2f}")
-                        st.markdown(f"**Deposit:** ${float(booking_data.get('deposit_amount', 0)):,.2f}")
+                    # Update booking_data with edited values
+                    edited_booking = booking_data.copy()
+                    edited_booking['customer_name'] = edit_customer
+                    edited_booking['pickup_location'] = edit_pickup
+                    edited_booking['dropoff_location'] = edit_dropoff
+                    edited_booking['num_passengers'] = edit_passengers
+                    edited_booking['bus_type'] = edit_bus_type
+                    edited_booking['trip_date'] = edit_trip_date
+                    edited_booking['pickup_time'] = edit_pickup_time
+                    edited_booking['total_amount'] = edit_total
+                    edited_booking['deposit_amount'] = edit_deposit
+                    edited_booking['special_requirements'] = edit_special
                     
                     st.markdown("---")
                     
-                    if st.button("📄 Generate Quotation PDF", type="primary"):
+                    # Preview
+                    st.markdown("### 📄 Preview")
+                    prev_col1, prev_col2 = st.columns(2)
+                    with prev_col1:
+                        st.markdown(f"**Customer:** {edit_customer}")
+                        st.markdown(f"**Route:** {edit_pickup} → {edit_dropoff}")
+                    with prev_col2:
+                        st.markdown(f"**Total:** ${edit_total:,.2f}")
+                        st.markdown(f"**Deposit:** ${edit_deposit:,.2f}")
+                    
+                    st.markdown("---")
+                    
+                    if st.button("📄 Generate Quotation PDF", type="primary", key="gen_quote"):
                         with st.spinner("Generating PDF..."):
-                            pdf_buffer = generate_quotation_pdf(booking_data)
+                            pdf_buffer = generate_quotation_pdf(edited_booking, company_info)
                             
                             st.download_button(
                                 label="⬇️ Download Quotation PDF",
@@ -960,30 +1063,74 @@ def customer_management_page():
                 booking_data = get_booking_by_id(booking_id)
                 
                 if booking_data:
-                    # Show preview
-                    st.markdown("### Invoice Preview")
+                    # Editable Company Info
+                    st.markdown("### 🏢 Company Details (Editable)")
+                    with st.expander("Edit Company Information", expanded=False):
+                        comp_col1, comp_col2 = st.columns(2)
+                        with comp_col1:
+                            inv_company_name = st.text_input("Company Name", value="PAVILLION COACHES", key="inv_comp_name")
+                            inv_company_cell = st.text_input("Cell Phone", value="0772 679 680", key="inv_cell")
+                            inv_company_email = st.text_input("Email", value="info@pavillioncoaches.co.zw", key="inv_email")
+                        with comp_col2:
+                            inv_company_tagline = st.text_input("Tagline", value="Premium Bus Charter Services", key="inv_tagline")
+                            inv_company_work = st.text_input("Work Phone", value="+263 24 2770931", key="inv_work")
+                            inv_company_address = st.text_input("Address", value="Harare, Zimbabwe", key="inv_address")
                     
-                    total = float(booking_data.get('total_amount', 0))
-                    deposit = float(booking_data.get('deposit_amount', 0))
-                    balance = total - deposit
+                    inv_company_info = {
+                        'name': inv_company_name,
+                        'tagline': inv_company_tagline,
+                        'cell': inv_company_cell,
+                        'work': inv_company_work,
+                        'email': inv_company_email,
+                        'address': inv_company_address
+                    }
                     
-                    col1, col2 = st.columns(2)
+                    # Editable Invoice Details
+                    st.markdown("### 📝 Invoice Details (Editable)")
+                    with st.expander("Edit Invoice Details", expanded=True):
+                        inv_col1, inv_col2 = st.columns(2)
+                        
+                        with inv_col1:
+                            inv_customer = st.text_input("Customer Name", value=booking_data.get('customer_name', ''), key="inv_cust")
+                            inv_pickup = st.text_input("Pickup Location", value=booking_data.get('pickup_location', ''), key="inv_pickup")
+                            inv_dropoff = st.text_input("Dropoff Location", value=booking_data.get('dropoff_location', ''), key="inv_dropoff")
+                            inv_passengers = st.number_input("Passengers", value=int(booking_data.get('num_passengers', 0)), key="inv_pass")
+                        
+                        with inv_col2:
+                            inv_trip_date = st.text_input("Trip Date", value=str(booking_data.get('trip_date', '')), key="inv_date")
+                            inv_total = st.number_input("Total Amount ($)", value=float(booking_data.get('total_amount', 0)), key="inv_total")
+                            inv_deposit = st.number_input("Deposit Paid ($)", value=float(booking_data.get('deposit_amount', 0)), key="inv_deposit")
+                            inv_special = st.text_area("Description/Notes", value=booking_data.get('special_requirements', '') or '', key="inv_special")
                     
-                    with col1:
-                        st.markdown(f"**Customer:** {booking_data.get('customer_name')}")
-                        st.markdown(f"**Trip Date:** {booking_data.get('trip_date')}")
-                        st.markdown(f"**Route:** {booking_data.get('pickup_location')} → {booking_data.get('dropoff_location')}")
+                    # Update booking_data with edited values
+                    edited_invoice = booking_data.copy()
+                    edited_invoice['customer_name'] = inv_customer
+                    edited_invoice['pickup_location'] = inv_pickup
+                    edited_invoice['dropoff_location'] = inv_dropoff
+                    edited_invoice['num_passengers'] = inv_passengers
+                    edited_invoice['trip_date'] = inv_trip_date
+                    edited_invoice['total_amount'] = inv_total
+                    edited_invoice['deposit_amount'] = inv_deposit
+                    edited_invoice['special_requirements'] = inv_special
                     
-                    with col2:
-                        st.markdown(f"**Total Amount:** ${total:,.2f}")
-                        st.markdown(f"**Deposit Paid:** ${deposit:,.2f}")
+                    # Preview
+                    st.markdown("### 📄 Preview")
+                    balance = inv_total - inv_deposit
+                    
+                    prev_col1, prev_col2 = st.columns(2)
+                    with prev_col1:
+                        st.markdown(f"**Customer:** {inv_customer}")
+                        st.markdown(f"**Route:** {inv_pickup} → {inv_dropoff}")
+                    with prev_col2:
+                        st.markdown(f"**Total:** ${inv_total:,.2f}")
+                        st.markdown(f"**Deposit:** ${inv_deposit:,.2f}")
                         st.markdown(f"**Balance Due:** ${balance:,.2f}")
                     
                     st.markdown("---")
                     
-                    if st.button("🧾 Generate Invoice PDF", type="primary"):
+                    if st.button("🧾 Generate Invoice PDF", type="primary", key="gen_inv"):
                         with st.spinner("Generating PDF..."):
-                            pdf_buffer = generate_invoice_pdf(booking_data)
+                            pdf_buffer = generate_invoice_pdf(edited_invoice, inv_company_info)
                             
                             st.download_button(
                                 label="⬇️ Download Invoice PDF",
