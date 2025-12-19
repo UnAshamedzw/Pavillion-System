@@ -593,6 +593,27 @@ def income_entry_page():
             with time_col2:
                 arrival_time = st.time_input("Arrival Time", value=None)
         
+        # Optional: Bonus Entry
+        st.markdown("---")
+        add_bonus = st.checkbox("🎁 Add Bonus for this trip", value=False,
+                                help="Check if driver/conductor earned a bonus on this trip")
+        
+        driver_bonus = 0.0
+        conductor_bonus = 0.0
+        bonus_reason = ""
+        
+        if add_bonus:
+            st.subheader("🎁 Bonus Details")
+            bonus_col1, bonus_col2 = st.columns(2)
+            
+            with bonus_col1:
+                driver_bonus = st.number_input("💰 Driver Bonus ($)", min_value=0.0, step=5.0, format="%.2f")
+            
+            with bonus_col2:
+                conductor_bonus = st.number_input("💰 Conductor Bonus ($)", min_value=0.0, step=5.0, format="%.2f")
+            
+            bonus_reason = st.text_input("📝 Bonus Reason", placeholder="e.g., Exceeded revenue target, Good performance")
+        
         # Optional: Fuel Entry
         st.markdown("---")
         add_fuel = st.checkbox("⛽ Add Fuel Record for this trip", value=False, 
@@ -667,7 +688,10 @@ def income_entry_page():
                     passengers=passengers,
                     trip_type=trip_type,
                     departure_time=dep_time_str,
-                    arrival_time=arr_time_str
+                    arrival_time=arr_time_str,
+                    driver_bonus=driver_bonus if add_bonus else 0,
+                    conductor_bonus=conductor_bonus if add_bonus else 0,
+                    bonus_reason=bonus_reason if add_bonus else None
                 )
                 
                 if record_id:
@@ -680,6 +704,15 @@ def income_entry_page():
                     st.success(f"✅ Trip recorded successfully! (ID: {record_id})")
                     if passengers > 0:
                         st.info(f"📊 Revenue per passenger: ${amount/passengers:.2f}")
+                    
+                    # Show bonus info if added
+                    if add_bonus and (driver_bonus > 0 or conductor_bonus > 0):
+                        bonus_msg = []
+                        if driver_bonus > 0:
+                            bonus_msg.append(f"Driver: ${driver_bonus:.2f}")
+                        if conductor_bonus > 0:
+                            bonus_msg.append(f"Conductor: ${conductor_bonus:.2f}")
+                        st.success(f"🎁 Bonuses recorded: {', '.join(bonus_msg)}")
                     
                     # Add fuel record if checkbox was checked
                     if add_fuel and fuel_total_cost > 0:

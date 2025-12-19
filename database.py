@@ -1109,6 +1109,683 @@ def migrate_database():
         print(f"Trip migration note: {e}")
     finally:
         conn.close()
+    
+    # ==========================================================================
+    # PAYROLL SYSTEM MIGRATIONS - Phase 1
+    # ==========================================================================
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        print("🔄 Running payroll system migrations...")
+        
+        if USE_POSTGRES:
+            # Add bonus fields to income table
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS driver_bonus REAL DEFAULT 0")
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS conductor_bonus REAL DEFAULT 0")
+            cursor.execute("ALTER TABLE income ADD COLUMN IF NOT EXISTS bonus_reason TEXT")
+            
+            # Add self-service login fields to employees
+            cursor.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS can_login BOOLEAN DEFAULT FALSE")
+            cursor.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS last_login TIMESTAMP")
+            cursor.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS base_salary REAL DEFAULT 0")
+            cursor.execute("ALTER TABLE employees ADD COLUMN IF NOT EXISTS pay_frequency TEXT DEFAULT 'monthly'")
+            
+            # PAYROLL_PERIODS TABLE - Defines pay periods
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payroll_periods (
+                    id SERIAL PRIMARY KEY,
+                    period_name TEXT NOT NULL,
+                    period_type TEXT NOT NULL,
+                    start_date DATE NOT NULL,
+                    end_date DATE NOT NULL,
+                    status TEXT DEFAULT 'draft',
+                    currency TEXT DEFAULT 'USD',
+                    driver_commission_rate REAL DEFAULT 8.0,
+                    conductor_commission_rate REAL DEFAULT 5.0,
+                    notes TEXT,
+                    created_by TEXT,
+                    processed_by TEXT,
+                    processed_at TIMESTAMP,
+                    approved_by TEXT,
+                    approved_at TIMESTAMP,
+                    paid_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # PAYROLL_RECORDS TABLE - Individual payroll per employee
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payroll_records (
+                    id SERIAL PRIMARY KEY,
+                    payroll_period_id INTEGER REFERENCES payroll_periods(id),
+                    employee_id INTEGER NOT NULL,
+                    employee_name TEXT NOT NULL,
+                    employee_role TEXT NOT NULL,
+                    department TEXT,
+                    
+                    total_trips INTEGER DEFAULT 0,
+                    total_days_worked INTEGER DEFAULT 0,
+                    total_revenue_handled REAL DEFAULT 0,
+                    total_passengers INTEGER DEFAULT 0,
+                    
+                    base_salary REAL DEFAULT 0,
+                    commission_rate REAL DEFAULT 0,
+                    commission_amount REAL DEFAULT 0,
+                    bonuses REAL DEFAULT 0,
+                    overtime_pay REAL DEFAULT 0,
+                    other_allowances REAL DEFAULT 0,
+                    gross_earnings REAL DEFAULT 0,
+                    
+                    paye_tax REAL DEFAULT 0,
+                    nssa_employee REAL DEFAULT 0,
+                    nssa_employer REAL DEFAULT 0,
+                    loan_deductions REAL DEFAULT 0,
+                    penalty_deductions REAL DEFAULT 0,
+                    other_deductions REAL DEFAULT 0,
+                    total_deductions REAL DEFAULT 0,
+                    
+                    net_pay REAL DEFAULT 0,
+                    currency TEXT DEFAULT 'USD',
+                    
+                    calculation_details TEXT,
+                    notes TEXT,
+                    status TEXT DEFAULT 'draft',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # PAY_RULES TABLE - Configurable pay rules
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS pay_rules (
+                    id SERIAL PRIMARY KEY,
+                    rule_name TEXT NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    applies_to TEXT,
+                    calculation_method TEXT NOT NULL,
+                    value REAL,
+                    percentage REAL,
+                    min_threshold REAL,
+                    max_cap REAL,
+                    is_active BOOLEAN DEFAULT TRUE,
+                    effective_from DATE,
+                    effective_to DATE,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # TAX_BRACKETS TABLE - PAYE tax brackets
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tax_brackets (
+                    id SERIAL PRIMARY KEY,
+                    bracket_name TEXT NOT NULL,
+                    min_amount REAL NOT NULL,
+                    max_amount REAL,
+                    tax_rate REAL NOT NULL,
+                    fixed_amount REAL DEFAULT 0,
+                    currency TEXT DEFAULT 'USD',
+                    is_active BOOLEAN DEFAULT TRUE,
+                    effective_from DATE,
+                    effective_to DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # EMPLOYEE_DEDUCTIONS TABLE - Track all deductions
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_deductions (
+                    id SERIAL PRIMARY KEY,
+                    employee_id INTEGER NOT NULL,
+                    deduction_type TEXT NOT NULL,
+                    description TEXT,
+                    amount REAL NOT NULL,
+                    date_incurred DATE NOT NULL,
+                    is_recurring BOOLEAN DEFAULT FALSE,
+                    applied_to_payroll_id INTEGER,
+                    status TEXT DEFAULT 'pending',
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # LOANS TABLE - Track employee loans
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_loans (
+                    id SERIAL PRIMARY KEY,
+                    employee_id INTEGER NOT NULL,
+                    loan_type TEXT NOT NULL,
+                    principal_amount REAL NOT NULL,
+                    amount_paid REAL DEFAULT 0,
+                    balance REAL NOT NULL,
+                    monthly_deduction REAL,
+                    date_issued DATE NOT NULL,
+                    expected_end_date DATE,
+                    status TEXT DEFAULT 'active',
+                    approved_by TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # LOAN_PAYMENTS TABLE - Track loan repayments
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS loan_payments (
+                    id SERIAL PRIMARY KEY,
+                    loan_id INTEGER REFERENCES employee_loans(id),
+                    employee_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    payment_date DATE NOT NULL,
+                    payment_method TEXT DEFAULT 'payroll',
+                    payroll_record_id INTEGER,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # RED_TICKETS TABLE - Inspector-issued tickets
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS red_tickets (
+                    id SERIAL PRIMARY KEY,
+                    ticket_date DATE NOT NULL,
+                    conductor_id INTEGER NOT NULL,
+                    conductor_name TEXT,
+                    inspector_id INTEGER NOT NULL,
+                    inspector_name TEXT,
+                    bus_number TEXT,
+                    route TEXT,
+                    trip_id INTEGER,
+                    amount REAL NOT NULL,
+                    passenger_count INTEGER DEFAULT 1,
+                    description TEXT,
+                    status TEXT DEFAULT 'pending',
+                    applied_to_payroll_id INTEGER,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # DAILY_RECONCILIATION TABLE - Daily shortfalls and issues
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS daily_reconciliation (
+                    id SERIAL PRIMARY KEY,
+                    reconciliation_date DATE NOT NULL,
+                    employee_id INTEGER NOT NULL,
+                    employee_name TEXT,
+                    employee_role TEXT,
+                    bus_number TEXT,
+                    route TEXT,
+                    
+                    expected_amount REAL DEFAULT 0,
+                    actual_amount REAL DEFAULT 0,
+                    shortage_amount REAL DEFAULT 0,
+                    overage_amount REAL DEFAULT 0,
+                    
+                    fuel_expected REAL DEFAULT 0,
+                    fuel_actual REAL DEFAULT 0,
+                    fuel_overuse REAL DEFAULT 0,
+                    fuel_overuse_cost REAL DEFAULT 0,
+                    
+                    damage_amount REAL DEFAULT 0,
+                    damage_description TEXT,
+                    
+                    other_deductions REAL DEFAULT 0,
+                    other_deductions_description TEXT,
+                    
+                    notes TEXT,
+                    status TEXT DEFAULT 'pending',
+                    applied_to_payroll_id INTEGER,
+                    reconciled_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # PAYSLIPS TABLE - Generated payslips
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payslips (
+                    id SERIAL PRIMARY KEY,
+                    payslip_number TEXT UNIQUE,
+                    payroll_record_id INTEGER REFERENCES payroll_records(id),
+                    employee_id INTEGER NOT NULL,
+                    period_name TEXT,
+                    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    pdf_data BYTEA,
+                    emailed_at TIMESTAMP,
+                    downloaded_at TIMESTAMP,
+                    created_by TEXT
+                )
+            ''')
+            
+            # EMPLOYEE_REQUESTS TABLE - Leave, loan requests from self-service
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_requests (
+                    id SERIAL PRIMARY KEY,
+                    employee_id INTEGER NOT NULL,
+                    request_type TEXT NOT NULL,
+                    request_details TEXT,
+                    amount REAL,
+                    start_date DATE,
+                    end_date DATE,
+                    status TEXT DEFAULT 'pending',
+                    reviewed_by TEXT,
+                    reviewed_at TIMESTAMP,
+                    review_notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # EMPLOYEE_COMPLAINTS TABLE - Complaints from self-service
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_complaints (
+                    id SERIAL PRIMARY KEY,
+                    employee_id INTEGER NOT NULL,
+                    subject TEXT NOT NULL,
+                    description TEXT,
+                    category TEXT,
+                    priority TEXT DEFAULT 'normal',
+                    status TEXT DEFAULT 'open',
+                    assigned_to TEXT,
+                    resolved_by TEXT,
+                    resolved_at TIMESTAMP,
+                    resolution_notes TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # SYSTEM_SETTINGS TABLE - Configurable settings
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    id SERIAL PRIMARY KEY,
+                    setting_key TEXT UNIQUE NOT NULL,
+                    setting_value TEXT,
+                    setting_type TEXT DEFAULT 'text',
+                    category TEXT,
+                    description TEXT,
+                    updated_by TEXT,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+        else:
+            # SQLite versions
+            cursor.execute("PRAGMA table_info(income)")
+            income_cols = [col[1] for col in cursor.fetchall()]
+            if 'driver_bonus' not in income_cols:
+                cursor.execute("ALTER TABLE income ADD COLUMN driver_bonus REAL DEFAULT 0")
+            if 'conductor_bonus' not in income_cols:
+                cursor.execute("ALTER TABLE income ADD COLUMN conductor_bonus REAL DEFAULT 0")
+            if 'bonus_reason' not in income_cols:
+                cursor.execute("ALTER TABLE income ADD COLUMN bonus_reason TEXT")
+            
+            cursor.execute("PRAGMA table_info(employees)")
+            emp_cols = [col[1] for col in cursor.fetchall()]
+            if 'can_login' not in emp_cols:
+                cursor.execute("ALTER TABLE employees ADD COLUMN can_login INTEGER DEFAULT 0")
+            if 'last_login' not in emp_cols:
+                cursor.execute("ALTER TABLE employees ADD COLUMN last_login TEXT")
+            if 'base_salary' not in emp_cols:
+                cursor.execute("ALTER TABLE employees ADD COLUMN base_salary REAL DEFAULT 0")
+            if 'pay_frequency' not in emp_cols:
+                cursor.execute("ALTER TABLE employees ADD COLUMN pay_frequency TEXT DEFAULT 'monthly'")
+            
+            # Create new tables for SQLite
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payroll_periods (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    period_name TEXT NOT NULL,
+                    period_type TEXT NOT NULL,
+                    start_date TEXT NOT NULL,
+                    end_date TEXT NOT NULL,
+                    status TEXT DEFAULT 'draft',
+                    currency TEXT DEFAULT 'USD',
+                    driver_commission_rate REAL DEFAULT 8.0,
+                    conductor_commission_rate REAL DEFAULT 5.0,
+                    notes TEXT,
+                    created_by TEXT,
+                    processed_by TEXT,
+                    processed_at TEXT,
+                    approved_by TEXT,
+                    approved_at TEXT,
+                    paid_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payroll_records (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    payroll_period_id INTEGER,
+                    employee_id INTEGER NOT NULL,
+                    employee_name TEXT NOT NULL,
+                    employee_role TEXT NOT NULL,
+                    department TEXT,
+                    total_trips INTEGER DEFAULT 0,
+                    total_days_worked INTEGER DEFAULT 0,
+                    total_revenue_handled REAL DEFAULT 0,
+                    total_passengers INTEGER DEFAULT 0,
+                    base_salary REAL DEFAULT 0,
+                    commission_rate REAL DEFAULT 0,
+                    commission_amount REAL DEFAULT 0,
+                    bonuses REAL DEFAULT 0,
+                    overtime_pay REAL DEFAULT 0,
+                    other_allowances REAL DEFAULT 0,
+                    gross_earnings REAL DEFAULT 0,
+                    paye_tax REAL DEFAULT 0,
+                    nssa_employee REAL DEFAULT 0,
+                    nssa_employer REAL DEFAULT 0,
+                    loan_deductions REAL DEFAULT 0,
+                    penalty_deductions REAL DEFAULT 0,
+                    other_deductions REAL DEFAULT 0,
+                    total_deductions REAL DEFAULT 0,
+                    net_pay REAL DEFAULT 0,
+                    currency TEXT DEFAULT 'USD',
+                    calculation_details TEXT,
+                    notes TEXT,
+                    status TEXT DEFAULT 'draft',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS pay_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    rule_name TEXT NOT NULL,
+                    rule_type TEXT NOT NULL,
+                    applies_to TEXT,
+                    calculation_method TEXT NOT NULL,
+                    value REAL,
+                    percentage REAL,
+                    min_threshold REAL,
+                    max_cap REAL,
+                    is_active INTEGER DEFAULT 1,
+                    effective_from TEXT,
+                    effective_to TEXT,
+                    created_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS tax_brackets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bracket_name TEXT NOT NULL,
+                    min_amount REAL NOT NULL,
+                    max_amount REAL,
+                    tax_rate REAL NOT NULL,
+                    fixed_amount REAL DEFAULT 0,
+                    currency TEXT DEFAULT 'USD',
+                    is_active INTEGER DEFAULT 1,
+                    effective_from TEXT,
+                    effective_to TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_deductions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    employee_id INTEGER NOT NULL,
+                    deduction_type TEXT NOT NULL,
+                    description TEXT,
+                    amount REAL NOT NULL,
+                    date_incurred TEXT NOT NULL,
+                    is_recurring INTEGER DEFAULT 0,
+                    applied_to_payroll_id INTEGER,
+                    status TEXT DEFAULT 'pending',
+                    created_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_loans (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    employee_id INTEGER NOT NULL,
+                    loan_type TEXT NOT NULL,
+                    principal_amount REAL NOT NULL,
+                    amount_paid REAL DEFAULT 0,
+                    balance REAL NOT NULL,
+                    monthly_deduction REAL,
+                    date_issued TEXT NOT NULL,
+                    expected_end_date TEXT,
+                    status TEXT DEFAULT 'active',
+                    approved_by TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS loan_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    loan_id INTEGER,
+                    employee_id INTEGER NOT NULL,
+                    amount REAL NOT NULL,
+                    payment_date TEXT NOT NULL,
+                    payment_method TEXT DEFAULT 'payroll',
+                    payroll_record_id INTEGER,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS red_tickets (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    ticket_date TEXT NOT NULL,
+                    conductor_id INTEGER NOT NULL,
+                    conductor_name TEXT,
+                    inspector_id INTEGER NOT NULL,
+                    inspector_name TEXT,
+                    bus_number TEXT,
+                    route TEXT,
+                    trip_id INTEGER,
+                    amount REAL NOT NULL,
+                    passenger_count INTEGER DEFAULT 1,
+                    description TEXT,
+                    status TEXT DEFAULT 'pending',
+                    applied_to_payroll_id INTEGER,
+                    created_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS daily_reconciliation (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    reconciliation_date TEXT NOT NULL,
+                    employee_id INTEGER NOT NULL,
+                    employee_name TEXT,
+                    employee_role TEXT,
+                    bus_number TEXT,
+                    route TEXT,
+                    expected_amount REAL DEFAULT 0,
+                    actual_amount REAL DEFAULT 0,
+                    shortage_amount REAL DEFAULT 0,
+                    overage_amount REAL DEFAULT 0,
+                    fuel_expected REAL DEFAULT 0,
+                    fuel_actual REAL DEFAULT 0,
+                    fuel_overuse REAL DEFAULT 0,
+                    fuel_overuse_cost REAL DEFAULT 0,
+                    damage_amount REAL DEFAULT 0,
+                    damage_description TEXT,
+                    other_deductions REAL DEFAULT 0,
+                    other_deductions_description TEXT,
+                    notes TEXT,
+                    status TEXT DEFAULT 'pending',
+                    applied_to_payroll_id INTEGER,
+                    reconciled_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS payslips (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    payslip_number TEXT UNIQUE,
+                    payroll_record_id INTEGER,
+                    employee_id INTEGER NOT NULL,
+                    period_name TEXT,
+                    generated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    pdf_data BLOB,
+                    emailed_at TEXT,
+                    downloaded_at TEXT,
+                    created_by TEXT
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    employee_id INTEGER NOT NULL,
+                    request_type TEXT NOT NULL,
+                    request_details TEXT,
+                    amount REAL,
+                    start_date TEXT,
+                    end_date TEXT,
+                    status TEXT DEFAULT 'pending',
+                    reviewed_by TEXT,
+                    reviewed_at TEXT,
+                    review_notes TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS employee_complaints (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    employee_id INTEGER NOT NULL,
+                    subject TEXT NOT NULL,
+                    description TEXT,
+                    category TEXT,
+                    priority TEXT DEFAULT 'normal',
+                    status TEXT DEFAULT 'open',
+                    assigned_to TEXT,
+                    resolved_by TEXT,
+                    resolved_at TEXT,
+                    resolution_notes TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS system_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    setting_key TEXT UNIQUE NOT NULL,
+                    setting_value TEXT,
+                    setting_type TEXT DEFAULT 'text',
+                    category TEXT,
+                    description TEXT,
+                    updated_by TEXT,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+        
+        conn.commit()
+        print("✅ Payroll system tables created")
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Payroll migration error: {e}")
+    finally:
+        conn.close()
+    
+    # Insert default tax brackets and settings
+    _insert_default_payroll_settings()
+
+
+def _insert_default_payroll_settings():
+    """Insert default tax brackets and system settings for payroll"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        ph = '%s' if USE_POSTGRES else '?'
+        
+        # Check if tax brackets already exist
+        cursor.execute("SELECT COUNT(*) FROM tax_brackets")
+        result = cursor.fetchone()
+        count = result[0] if isinstance(result, tuple) else result.get('count', 0)
+        
+        if count == 0:
+            # Insert Zimbabwe PAYE tax brackets (USD)
+            tax_brackets = [
+                ('Bracket 1 - Tax Free', 0, 100, 0, 0, 'USD'),
+                ('Bracket 2 - 20%', 100.01, 300, 20, 0, 'USD'),
+                ('Bracket 3 - 25%', 300.01, 500, 25, 40, 'USD'),
+                ('Bracket 4 - 30%', 500.01, 1000, 30, 90, 'USD'),
+                ('Bracket 5 - 35%', 1000.01, 2000, 35, 240, 'USD'),
+                ('Bracket 6 - 40%', 2000.01, None, 40, 590, 'USD'),
+            ]
+            
+            for bracket in tax_brackets:
+                if USE_POSTGRES:
+                    cursor.execute(f'''
+                        INSERT INTO tax_brackets (bracket_name, min_amount, max_amount, tax_rate, fixed_amount, currency, is_active)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, TRUE)
+                        ON CONFLICT DO NOTHING
+                    ''', bracket)
+                else:
+                    cursor.execute(f'''
+                        INSERT OR IGNORE INTO tax_brackets (bracket_name, min_amount, max_amount, tax_rate, fixed_amount, currency, is_active)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, {ph}, {ph}, 1)
+                    ''', bracket)
+            
+            print("✅ Default tax brackets inserted")
+        
+        # Check if system settings already exist
+        cursor.execute("SELECT COUNT(*) FROM system_settings")
+        result = cursor.fetchone()
+        count = result[0] if isinstance(result, tuple) else result.get('count', 0)
+        
+        if count == 0:
+            # Insert default settings
+            settings = [
+                ('nssa_employee_rate', '4.5', 'number', 'payroll', 'NSSA employee contribution rate (%)'),
+                ('nssa_employer_rate', '4.5', 'number', 'payroll', 'NSSA employer contribution rate (%)'),
+                ('default_driver_commission', '8.0', 'number', 'payroll', 'Default driver commission rate (%)'),
+                ('default_conductor_commission', '5.0', 'number', 'payroll', 'Default conductor commission rate (%)'),
+                ('default_currency', 'USD', 'text', 'payroll', 'Default currency for payroll'),
+                ('company_name', 'PAVILLION COACHES', 'text', 'company', 'Company name for documents'),
+                ('company_cell', '0772 679 680', 'text', 'company', 'Company cell phone'),
+                ('company_work', '+263 24 2770931', 'text', 'company', 'Company work phone'),
+                ('company_email', 'info@pavillioncoaches.co.zw', 'text', 'company', 'Company email'),
+                ('company_address', 'Harare, Zimbabwe', 'text', 'company', 'Company address'),
+            ]
+            
+            for setting in settings:
+                if USE_POSTGRES:
+                    cursor.execute(f'''
+                        INSERT INTO system_settings (setting_key, setting_value, setting_type, category, description)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+                        ON CONFLICT (setting_key) DO NOTHING
+                    ''', setting)
+                else:
+                    cursor.execute(f'''
+                        INSERT OR IGNORE INTO system_settings (setting_key, setting_value, setting_type, category, description)
+                        VALUES ({ph}, {ph}, {ph}, {ph}, {ph})
+                    ''', setting)
+            
+            print("✅ Default system settings inserted")
+        
+        conn.commit()
+        
+    except Exception as e:
+        conn.rollback()
+        print(f"Default settings error: {e}")
+    finally:
+        conn.close()
 
 
 def verify_database():
@@ -1465,8 +2142,9 @@ def get_active_mechanics():
 def add_income_record(bus_number, route, date, amount, driver_name=None, conductor_name=None,
                       hire_destination=None, notes=None, created_by=None,
                       driver_employee_id=None, conductor_employee_id=None,
-                      passengers=0, trip_type='Scheduled', departure_time=None, arrival_time=None):
-    """Add new income/trip record"""
+                      passengers=0, trip_type='Scheduled', departure_time=None, arrival_time=None,
+                      driver_bonus=0, conductor_bonus=0, bonus_reason=None):
+    """Add new income/trip record with optional bonus"""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -1478,22 +2156,26 @@ def add_income_record(bus_number, route, date, amount, driver_name=None, conduct
             cursor.execute('''
                 INSERT INTO income (bus_number, route, hire_destination, driver_employee_id, driver_name,
                                    conductor_employee_id, conductor_name, date, amount, notes, created_by,
-                                   passengers, trip_type, departure_time, arrival_time, revenue_per_passenger)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+                                   passengers, trip_type, departure_time, arrival_time, revenue_per_passenger,
+                                   driver_bonus, conductor_bonus, bonus_reason)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
             ''', (bus_number, route, hire_destination, driver_employee_id, driver_name,
                   conductor_employee_id, conductor_name, date, amount, notes, created_by,
-                  passengers, trip_type, departure_time, arrival_time, revenue_per_passenger))
+                  passengers, trip_type, departure_time, arrival_time, revenue_per_passenger,
+                  driver_bonus or 0, conductor_bonus or 0, bonus_reason))
             result = cursor.fetchone()
             record_id = result['id'] if result else None
         else:
             cursor.execute('''
                 INSERT INTO income (bus_number, route, hire_destination, driver_employee_id, driver_name,
                                    conductor_employee_id, conductor_name, date, amount, notes, created_by,
-                                   passengers, trip_type, departure_time, arrival_time, revenue_per_passenger)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                   passengers, trip_type, departure_time, arrival_time, revenue_per_passenger,
+                                   driver_bonus, conductor_bonus, bonus_reason)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (bus_number, route, hire_destination, driver_employee_id, driver_name,
                   conductor_employee_id, conductor_name, date, amount, notes, created_by,
-                  passengers, trip_type, departure_time, arrival_time, revenue_per_passenger))
+                  passengers, trip_type, departure_time, arrival_time, revenue_per_passenger,
+                  driver_bonus or 0, conductor_bonus or 0, bonus_reason))
             record_id = cursor.lastrowid
         
         conn.commit()

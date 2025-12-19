@@ -47,6 +47,7 @@ from pages_profit_loss import profit_loss_page
 from pages_contracts import contract_generator_page
 from pages_notifications import notification_settings_page
 from pages_landing import show_landing_page, can_see_full_dashboard, FULL_DASHBOARD_ROLES
+from pages_payroll import payroll_processing_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -434,7 +435,7 @@ def main():
             show_access_denied(page)
     elif page == "💰 Payroll & Payslips":
         if can_access_page(page):
-            payroll_management_page()
+            payroll_processing_page()
         else:
             show_access_denied(page)
     elif page == "📅 Leave Management":

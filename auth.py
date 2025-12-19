@@ -145,6 +145,33 @@ ALL_PERMISSIONS = {
     'manage_payroll': 'Manage payroll (add, edit, process)',
     'approve_payroll': 'Approve payroll for payment',
     'export_payroll': 'Export payroll reports',
+    'view_payslips': 'View payslips',
+    'generate_payslips': 'Generate payslips',
+    
+    # ----- LOANS & DEDUCTIONS -----
+    'view_loans': 'View employee loans',
+    'manage_loans': 'Manage employee loans (approve, edit)',
+    'view_deductions': 'View employee deductions',
+    'add_deduction': 'Add employee deductions/penalties',
+    'edit_deduction': 'Edit deductions',
+    
+    # ----- RED TICKETS -----
+    'view_red_tickets': 'View red tickets',
+    'add_red_ticket': 'Issue red tickets',
+    'edit_red_ticket': 'Edit red tickets',
+    'delete_red_ticket': 'Delete red tickets',
+    
+    # ----- DAILY RECONCILIATION -----
+    'view_reconciliation': 'View daily reconciliation',
+    'add_reconciliation': 'Add daily reconciliation entries',
+    'edit_reconciliation': 'Edit reconciliation entries',
+    
+    # ----- EMPLOYEE SELF-SERVICE -----
+    'view_own_payslips': 'View own payslips',
+    'view_own_loans': 'View own loans',
+    'request_leave': 'Request leave',
+    'request_loan': 'Request loan',
+    'submit_complaint': 'Submit complaints',
     
     # ----- ANALYTICS / REPORTS -----
     'view_dashboard': 'View main dashboard',
@@ -286,8 +313,12 @@ PREDEFINED_ROLES = {
             'view_leave', 'approve_leave', 'manage_leave',
             'view_disciplinary', 'add_disciplinary', 'edit_disciplinary',
             'view_contracts', 'generate_contracts', 'edit_contract_templates',
-            # Payroll
+            # Payroll - Full control including approval
             'view_payroll', 'manage_payroll', 'approve_payroll', 'export_payroll',
+            'view_payslips', 'generate_payslips',
+            'view_loans', 'manage_loans', 'view_deductions', 'add_deduction', 'edit_deduction',
+            'view_red_tickets', 'add_red_ticket', 'edit_red_ticket', 'delete_red_ticket',
+            'view_reconciliation', 'add_reconciliation', 'edit_reconciliation',
             # Analytics
             'view_dashboard', 'view_bus_analysis', 'view_performance_metrics', 
             'view_revenue_history', 'view_profit_loss', 'view_route_profitability',
@@ -299,17 +330,32 @@ PREDEFINED_ROLES = {
         'can_be_modified': False
     },
     
+    'Administration Manager': {
+        'description': 'Full administrative control - monitors entire admin operations',
+        'permissions': list(ALL_PERMISSIONS.keys()),  # All permissions like System Admin
+        'is_system_role': True,
+        'can_be_modified': False
+    },
+    
     'HR Manager': {
-        'description': 'Full HR functionality',
+        'description': 'Full HR functionality including payroll processing',
         'permissions': [
             'view_employees', 'add_employee', 'edit_employee', 'delete_employee', 'manage_employee_documents',
             'view_performance', 'add_performance', 'edit_performance',
             'view_leave', 'approve_leave', 'manage_leave',
             'view_disciplinary', 'add_disciplinary', 'edit_disciplinary',
             'view_contracts', 'generate_contracts', 'edit_contract_templates',
+            # Payroll - Process but not final approve
             'view_payroll', 'manage_payroll', 'export_payroll',
+            'view_payslips', 'generate_payslips',
+            'view_loans', 'manage_loans', 'view_deductions', 'add_deduction', 'edit_deduction',
+            'view_red_tickets', 'add_red_ticket', 'edit_red_ticket',
+            'view_reconciliation', 'add_reconciliation', 'edit_reconciliation',
+            # View operations
             'view_fleet', 'view_routes', 'view_assignments',
+            'view_income', 'view_fuel', 'view_trips',
             'view_dashboard', 'view_performance_metrics', 'view_driver_scoring', 'generate_reports',
+            'export_data',
         ],
         'is_system_role': False,
         'can_be_modified': True
