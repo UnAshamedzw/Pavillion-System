@@ -324,7 +324,7 @@ def generate_quotation_pdf(booking_data):
     # Company Header
     story.append(Paragraph("PAVILLION COACHES", title_style))
     story.append(Paragraph("Premium Bus Charter Services", header_style))
-    story.append(Paragraph("Tel: +263 XXX XXX XXX | Email: info@pavillioncoaches.co.zw", header_style))
+    story.append(Paragraph("Tel: +263 772 679 680 | Email: info@pavillioncoaches.co.zw", header_style))
     story.append(Spacer(1, 20))
     
     # Quotation Title
