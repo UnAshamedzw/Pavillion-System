@@ -112,12 +112,24 @@ def executive_dashboard():
         month_start = today.replace(day=1)
         last_month_start = (month_start - timedelta(days=1)).replace(day=1)
         
-        # This month's revenue
+        # This month's route revenue
         revenue_df = pd.read_sql_query(f"""
             SELECT COALESCE(SUM(amount), 0) as total
             FROM income WHERE date >= '{month_start}'
         """, get_engine())
-        month_revenue = float(revenue_df['total'].iloc[0]) if not revenue_df.empty else 0
+        route_revenue = float(revenue_df['total'].iloc[0]) if not revenue_df.empty else 0
+        
+        # This month's booking/hire revenue
+        try:
+            booking_df = pd.read_sql_query(f"""
+                SELECT COALESCE(SUM(total_amount), 0) as total
+                FROM bookings WHERE trip_date >= '{month_start}' AND status IN ('Confirmed', 'Completed')
+            """, get_engine())
+            booking_revenue = float(booking_df['total'].iloc[0]) if not booking_df.empty else 0
+        except:
+            booking_revenue = 0
+        
+        month_revenue = route_revenue + booking_revenue
         
         # This month's expenses (maintenance + general)
         maint_df = pd.read_sql_query(f"""
@@ -151,19 +163,19 @@ def executive_dashboard():
         active_employees = int(emp_df['count'].iloc[0]) if not emp_df.empty else 0
         
     except Exception as e:
-        month_revenue = month_profit = total_expenses = 0
+        month_revenue = route_revenue = booking_revenue = month_profit = total_expenses = 0
         active_buses = active_employees = 0
     finally:
         conn.close()
     
-    # KPI Cards
+    # KPI Cards - Row 1: Overall
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.metric(
             "📈 Month Revenue",
             f"${month_revenue:,.0f}",
-            help="Total revenue this month"
+            help="Total revenue this month (routes + bookings)"
         )
     
     with col2:
@@ -186,6 +198,19 @@ def executive_dashboard():
             f"{active_employees}"
         )
     
+    # Revenue Breakdown Row
+    st.markdown("##### 💵 Revenue Breakdown")
+    rev_col1, rev_col2, rev_col3 = st.columns(3)
+    
+    with rev_col1:
+        st.metric("🚌 Route Income", f"${route_revenue:,.0f}", help="Regular route operations")
+    
+    with rev_col2:
+        st.metric("🎫 Booking/Hire Income", f"${booking_revenue:,.0f}", help="Private hires & charters")
+    
+    with rev_col3:
+        st.metric("🔧 Total Expenses", f"${total_expenses:,.0f}", help="Maintenance + General expenses")
+    
     st.markdown("---")
     
     # Quick Actions
@@ -199,12 +224,12 @@ def executive_dashboard():
     
     with col2:
         if st.button("💰 Profit & Loss", width="stretch"):
-            st.session_state['navigate_to'] = '💰 Profit & Loss'
+            st.session_state['navigate_to'] = '📊 Profit & Loss'
             st.rerun()
     
     with col3:
         if st.button("👥 HR Overview", width="stretch"):
-            st.session_state['navigate_to'] = '👤 Employee Management'
+            st.session_state['navigate_to'] = '👥 Employee Management'
             st.rerun()
     
     with col4:
@@ -417,12 +442,24 @@ def finance_dashboard():
         today = datetime.now().date()
         month_start = today.replace(day=1)
         
-        # This month's revenue
+        # This month's route revenue
         revenue_df = pd.read_sql_query(f"""
             SELECT COALESCE(SUM(amount), 0) as total
             FROM income WHERE date >= '{month_start}'
         """, get_engine())
-        month_revenue = float(revenue_df['total'].iloc[0]) if not revenue_df.empty else 0
+        route_revenue = float(revenue_df['total'].iloc[0]) if not revenue_df.empty else 0
+        
+        # This month's booking/hire revenue
+        try:
+            booking_df = pd.read_sql_query(f"""
+                SELECT COALESCE(SUM(total_amount), 0) as total
+                FROM bookings WHERE trip_date >= '{month_start}' AND status IN ('Confirmed', 'Completed')
+            """, get_engine())
+            booking_revenue = float(booking_df['total'].iloc[0]) if not booking_df.empty else 0
+        except:
+            booking_revenue = 0
+        
+        month_revenue = route_revenue + booking_revenue
         
         # This month's expenses
         maint_df = pd.read_sql_query(f"""
@@ -455,16 +492,16 @@ def finance_dashboard():
         month_profit = month_revenue - total_expenses
         
     except:
-        month_revenue = month_maintenance = month_expenses = month_profit = 0
+        month_revenue = route_revenue = booking_revenue = month_maintenance = month_expenses = month_profit = 0
         unpaid_count = unpaid_total = 0
     finally:
         conn.close()
     
-    # KPI Cards
+    # KPI Cards - Row 1: Overall
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("📈 Month Revenue", f"${month_revenue:,.0f}")
+        st.metric("📈 Month Revenue", f"${month_revenue:,.0f}", help="Routes + Bookings")
     
     with col2:
         st.metric("📉 Month Expenses", f"${total_expenses:,.0f}")
@@ -479,6 +516,20 @@ def finance_dashboard():
     with col4:
         st.metric("⚠️ Unpaid Expenses", f"{unpaid_count} (${unpaid_total:,.0f})")
     
+    # Revenue Breakdown Row
+    st.markdown("##### 💵 Revenue Breakdown")
+    rev_col1, rev_col2, rev_col3 = st.columns(3)
+    
+    with rev_col1:
+        st.metric("🚌 Route Income", f"${route_revenue:,.0f}", help="Regular route operations")
+    
+    with rev_col2:
+        st.metric("🎫 Booking/Hire Income", f"${booking_revenue:,.0f}", help="Private hires & charters")
+    
+    with rev_col3:
+        booking_pct = (booking_revenue / month_revenue * 100) if month_revenue > 0 else 0
+        st.metric("📊 Booking %", f"{booking_pct:.1f}%", help="Bookings as % of total revenue")
+    
     st.markdown("---")
     
     # Quick Actions
@@ -487,7 +538,7 @@ def finance_dashboard():
     
     with col1:
         if st.button("💰 Profit & Loss", width="stretch"):
-            st.session_state['navigate_to'] = '💰 Profit & Loss'
+            st.session_state['navigate_to'] = '📊 Profit & Loss'
             st.rerun()
     
     with col2:
@@ -497,7 +548,7 @@ def finance_dashboard():
     
     with col3:
         if st.button("💰 Payroll", width="stretch"):
-            st.session_state['navigate_to'] = '💰 Payroll Management'
+            st.session_state['navigate_to'] = '💰 Payroll & Payslips'
             st.rerun()
     
     with col4:

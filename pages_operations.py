@@ -1889,8 +1889,10 @@ def dashboard_page():
     if USE_POSTGRES:
         income_query = "SELECT * FROM income WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
         maint_query = "SELECT * FROM maintenance WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
+        booking_query = "SELECT * FROM bookings WHERE trip_date::DATE >= (CURRENT_DATE - INTERVAL '%s days') AND status IN ('Confirmed', 'Completed')" % days_back
         income_df = pd.read_sql_query(income_query, get_engine())
         maint_df = pd.read_sql_query(maint_query, get_engine())
+        booking_df = pd.read_sql_query(booking_query, get_engine())
     else:
         income_df = pd.read_sql_query(
             "SELECT * FROM income WHERE date >= date('now', '-' || ? || ' days')",
@@ -1900,34 +1902,57 @@ def dashboard_page():
             "SELECT * FROM maintenance WHERE date >= date('now', '-' || ? || ' days')",
             get_engine(), params=(days_back,)
         )
+        booking_df = pd.read_sql_query(
+            "SELECT * FROM bookings WHERE trip_date >= date('now', '-' || ? || ' days') AND status IN ('Confirmed', 'Completed')",
+            get_engine(), params=(days_back,)
+        )
     
     # Convert amount and cost to numeric
     if 'amount' in income_df.columns:
         income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
     if 'cost' in maint_df.columns:
         maint_df['cost'] = pd.to_numeric(maint_df['cost'], errors='coerce')
+    if 'total_amount' in booking_df.columns:
+        booking_df['total_amount'] = pd.to_numeric(booking_df['total_amount'], errors='coerce')
     
     conn.close()
     
-    # KPIs
-    total_revenue = income_df['amount'].sum() if not income_df.empty else 0
+    # Calculate revenues separately
+    route_revenue = income_df['amount'].sum() if not income_df.empty else 0
+    booking_revenue = booking_df['total_amount'].sum() if not booking_df.empty else 0
+    total_revenue = route_revenue + booking_revenue
     total_expenses = maint_df['cost'].sum() if not maint_df.empty else 0
     net_profit = total_revenue - total_expenses
-    num_records = len(income_df)
+    num_trips = len(income_df)
+    num_bookings = len(booking_df)
     num_buses = income_df['bus_number'].nunique() if not income_df.empty else 0
     
-    col_kpi1, col_kpi2, col_kpi3, col_kpi4, col_kpi5 = st.columns(5)
+    # KPIs Row 1 - Overall Performance
+    st.subheader("📊 Overall Performance")
+    col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
     
     with col_kpi1:
-        st.metric("💰 Revenue", f"${total_revenue:,.2f}")
+        st.metric("💰 Total Revenue", f"${total_revenue:,.2f}")
     with col_kpi2:
         st.metric("🔧 Expenses", f"${total_expenses:,.2f}")
     with col_kpi3:
-        st.metric("💵 Profit", f"${net_profit:,.2f}")
+        st.metric("💵 Net Profit", f"${net_profit:,.2f}")
     with col_kpi4:
-        st.metric("🚌 Records", num_records)
-    with col_kpi5:
-        st.metric("🚗 Active Buses", num_buses)
+        profit_margin = (net_profit / total_revenue * 100) if total_revenue > 0 else 0
+        st.metric("📈 Profit Margin", f"{profit_margin:.1f}%")
+    
+    # KPIs Row 2 - Revenue Breakdown
+    st.subheader("💵 Revenue Breakdown")
+    col_rev1, col_rev2, col_rev3, col_rev4 = st.columns(4)
+    
+    with col_rev1:
+        st.metric("🚌 Route Income", f"${route_revenue:,.2f}", help="Income from regular routes")
+    with col_rev2:
+        st.metric("🎫 Booking/Hire Income", f"${booking_revenue:,.2f}", help="Income from private hires & bookings")
+    with col_rev3:
+        st.metric("🛣️ Trip Records", num_trips)
+    with col_rev4:
+        st.metric("📋 Bookings", num_bookings)
     
     st.markdown("---")
     
