@@ -554,8 +554,8 @@ def income_entry_page():
             fuel_col1, fuel_col2, fuel_col3 = st.columns(3)
             
             with fuel_col1:
-                fuel_liters = st.number_input("🛢️ Liters*", min_value=0.0, step=1.0, format="%.2f",
-                                              help="Amount of fuel in liters")
+                fuel_total_cost = st.number_input("💵 Amount Paid ($)*", min_value=0.0, step=10.0, format="%.2f",
+                                              help="Total amount paid for fuel")
                 fuel_station = st.text_input("🏪 Fuel Station", placeholder="e.g., Zuva Service Station")
             
             with fuel_col2:
@@ -567,12 +567,12 @@ def income_entry_page():
                     fuel_odometer = None
             
             with fuel_col3:
-                # Auto-calculate total
-                if fuel_liters > 0 and fuel_cost_per_liter > 0:
-                    fuel_total_cost = fuel_liters * fuel_cost_per_liter
-                    st.metric("💰 Total Fuel Cost", f"${fuel_total_cost:.2f}")
+                # Auto-calculate liters from amount
+                if fuel_total_cost > 0 and fuel_cost_per_liter > 0:
+                    fuel_liters = fuel_total_cost / fuel_cost_per_liter
+                    st.metric("🛢️ Liters Purchased", f"{fuel_liters:.2f} L")
                 else:
-                    st.metric("💰 Total Fuel Cost", "$0.00")
+                    st.metric("🛢️ Liters Purchased", "0.00 L")
         
         notes = st.text_area("📝 Notes", placeholder="Optional notes about this trip...")
         
@@ -586,8 +586,8 @@ def income_entry_page():
                 st.error("⚠️ Please enter a valid revenue amount")
             elif (selected_route == "Charter/Hire" or trip_type == "Charter/Hire") and not hire_destination.strip():
                 st.error("⚠️ Please describe the hire/charter destination")
-            elif add_fuel and (fuel_liters <= 0 or fuel_cost_per_liter <= 0):
-                st.error("⚠️ Please enter valid fuel details (liters and cost per liter)")
+            elif add_fuel and (fuel_total_cost <= 0 or fuel_cost_per_liter <= 0):
+                st.error("⚠️ Please enter valid fuel details (amount paid and cost per liter)")
             else:
                 # Format times
                 dep_time_str = departure_time.strftime("%H:%M") if departure_time else None
@@ -627,7 +627,10 @@ def income_entry_page():
                         st.info(f"📊 Revenue per passenger: ${amount/passengers:.2f}")
                     
                     # Add fuel record if checkbox was checked
-                    if add_fuel and fuel_liters > 0:
+                    if add_fuel and fuel_total_cost > 0:
+                        # Calculate liters from amount paid
+                        fuel_liters = fuel_total_cost / fuel_cost_per_liter if fuel_cost_per_liter > 0 else 0
+                        
                         fuel_record_id = add_fuel_record_from_trip(
                             bus_number=registration_number,
                             date=trip_date.strftime("%Y-%m-%d"),
@@ -642,7 +645,7 @@ def income_entry_page():
                         )
                         
                         if fuel_record_id:
-                            st.success(f"⛽ Fuel record added! (ID: {fuel_record_id}) - ${fuel_total_cost:.2f} for {fuel_liters:.1f}L")
+                            st.success(f"⛽ Fuel record added! (ID: {fuel_record_id}) - ${fuel_total_cost:.2f} for {fuel_liters:.2f}L")
                         else:
                             st.warning("⚠️ Trip saved but fuel record failed to save")
                     

@@ -327,12 +327,17 @@ def fuel_entry_page():
                     with col1:
                         selected_bus_option = st.selectbox("Select Bus (Registration)*", bus_options)
                         fuel_date = st.date_input("Date*", value=datetime.now().date())
-                        liters = st.number_input("Liters*", min_value=0.0, step=1.0, format="%.2f")
-                        cost_per_liter = st.number_input("Cost per Liter ($)*", min_value=0.0, step=0.01, format="%.2f")
+                        total_cost = st.number_input("Amount Paid ($)*", min_value=0.0, step=10.0, format="%.2f",
+                                                     help="Total amount paid for fuel")
+                        cost_per_liter = st.number_input("Cost per Liter ($)*", min_value=0.0, step=0.01, format="%.2f", value=1.50)
                         
-                        # Auto-calculate total
-                        total_cost = liters * cost_per_liter
-                        st.metric("Total Cost", f"${total_cost:.2f}")
+                        # Auto-calculate liters from amount and cost per liter
+                        if cost_per_liter > 0:
+                            liters = total_cost / cost_per_liter
+                            st.metric("Liters Purchased", f"{liters:.2f} L")
+                        else:
+                            liters = 0.0
+                            st.metric("Liters Purchased", "Enter cost/L")
                     
                     with col2:
                         # Get last odometer for selected bus
@@ -362,9 +367,12 @@ def fuel_entry_page():
                     submitted = st.form_submit_button("⛽ Save Fuel Record", type="primary", use_container_width=True)
                     
                     if submitted:
-                        if not selected_bus or liters <= 0 or cost_per_liter <= 0:
-                            st.error("Please fill in all required fields (Bus, Liters, Cost per Liter)")
+                        if not selected_bus or total_cost <= 0 or cost_per_liter <= 0:
+                            st.error("Please fill in all required fields (Bus, Amount Paid, Cost per Liter)")
                         else:
+                            # Calculate liters from amount
+                            liters = total_cost / cost_per_liter
+                            
                             # Set odometer to None if 0
                             odo = odometer_reading if odometer_reading > 0 else None
                             
@@ -386,9 +394,9 @@ def fuel_entry_page():
                             if record_id:
                                 AuditLogger.log_action(
                                     "Create", "Fuel",
-                                    f"Added fuel record: {selected_bus} - {liters}L @ ${cost_per_liter}/L = ${total_cost:.2f}"
+                                    f"Added fuel record: {selected_bus} - {liters:.2f}L @ ${cost_per_liter}/L = ${total_cost:.2f}"
                                 )
-                                st.success(f"✅ Fuel record saved! (ID: {record_id})")
+                                st.success(f"✅ Fuel record saved! (ID: {record_id}) - {liters:.2f} liters")
                                 
                                 # Show efficiency if calculated
                                 if odo and get_last_odometer(selected_bus):
