@@ -56,6 +56,61 @@ def add_fuel_record_from_trip(bus_number, date, liters, cost_per_liter, total_co
     )
 
 
+def add_employee_from_import(employee_id, full_name, department, position, phone='', email='',
+                              hire_date=None, salary=0, status='Active', address='',
+                              emergency_contact='', emergency_phone='', national_id='', created_by=None):
+    """Add employee from import - wrapper for database function"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    try:
+        if USE_POSTGRES:
+            cursor.execute('''
+                INSERT INTO employees (employee_id, full_name, department, position, phone, email,
+                                       hire_date, salary, status, address, emergency_contact, 
+                                       emergency_phone, national_id, created_by)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (employee_id) DO UPDATE SET
+                    full_name = EXCLUDED.full_name,
+                    department = EXCLUDED.department,
+                    position = EXCLUDED.position,
+                    phone = EXCLUDED.phone,
+                    email = EXCLUDED.email,
+                    hire_date = EXCLUDED.hire_date,
+                    salary = EXCLUDED.salary,
+                    status = EXCLUDED.status,
+                    address = EXCLUDED.address,
+                    emergency_contact = EXCLUDED.emergency_contact,
+                    emergency_phone = EXCLUDED.emergency_phone,
+                    national_id = EXCLUDED.national_id
+                RETURNING id
+            ''', (employee_id, full_name, department, position, phone, email,
+                  hire_date, salary, status, address, emergency_contact, 
+                  emergency_phone, national_id, created_by))
+            result = cursor.fetchone()
+            record_id = result['id'] if result else None
+        else:
+            # SQLite - use INSERT OR REPLACE
+            cursor.execute('''
+                INSERT OR REPLACE INTO employees (employee_id, full_name, department, position, phone, email,
+                                                  hire_date, salary, status, address, emergency_contact,
+                                                  emergency_phone, national_id, created_by)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (employee_id, full_name, department, position, phone, email,
+                  hire_date, salary, status, address, emergency_contact,
+                  emergency_phone, national_id, created_by))
+            record_id = cursor.lastrowid
+        
+        conn.commit()
+        return record_id
+    except Exception as e:
+        print(f"Error adding employee: {e}")
+        conn.rollback()
+        return None
+    finally:
+        conn.close()
+
+
 # ============================================================================
 # HELPER FUNCTIONS - Using database abstraction
 # ============================================================================
@@ -1431,7 +1486,7 @@ def import_data_page():
     """Import data from Excel files"""
     
     st.header("📥 Import from Excel")
-    st.markdown("Bulk import income and maintenance records")
+    st.markdown("Bulk import income, maintenance, fuel, and employee records")
     st.markdown("---")
     
     # Instructions
@@ -1440,76 +1495,179 @@ def import_data_page():
         ### How to Import Data:
         
         1. **Download the template** below for the type of data you want to import
-        2. **Fill in your data** in the Excel file
+        2. **Fill in your data** in the Excel/CSV file
         3. **Upload the file** using the upload button
         4. **Review the preview** and click Import
         
-        ### Required Columns:
-        
-        **Income Data:**
-        - `registration_number` - Bus registration (e.g., ABC-1234)
-        - `route` - Route name or "Hire" for private hire
-        - `driver_name` - Name of the driver
-        - `conductor_name` - Name of the conductor
-        - `date` - Date in YYYY-MM-DD format
-        - `amount` - Income amount
-        - Optional: `hire_destination` (required if route = "Hire"), `notes`
-        
-        **Maintenance Data:**
-        - `registration_number` - Bus registration (e.g., ABC-1234)
-        - `maintenance_type` - Type of maintenance
-        - `date` - Date in YYYY-MM-DD format
-        - `cost` - Maintenance cost
-        - Optional: `mechanic_name`, `status`, `description`, `parts_used`
-        
-        **Date Format:** YYYY-MM-DD (e.g., 2025-10-15)
+        ### Date Format: YYYY-MM-DD (e.g., 2025-10-15)
+        ### Time Format: HH:MM (e.g., 06:30 or 14:45)
         """)
     
     # Download templates
     st.subheader("📄 Download Templates")
     
-    col_temp1, col_temp2 = st.columns(2)
+    tab_t1, tab_t2, tab_t3, tab_t4 = st.tabs(["💰 Income", "🔧 Maintenance", "⛽ Fuel", "👥 Employees"])
     
-    with col_temp1:
+    with tab_t1:
+        st.markdown("""
+        **Income Template Columns:**
+        - `registration_number`* - Bus registration (e.g., ABC-1234)
+        - `route`* - Route name or "Charter/Hire" for private hire
+        - `driver_name`* - Name of the driver
+        - `conductor_name`* - Name of the conductor
+        - `date`* - Date in YYYY-MM-DD format
+        - `amount`* - Income amount in USD
+        - `passengers` - Number of passengers (optional)
+        - `trip_type` - Scheduled, Charter/Hire, Express, School Run, Contract (optional)
+        - `departure_time` - Departure time HH:MM (optional)
+        - `arrival_time` - Arrival time HH:MM (optional)
+        - `hire_destination` - Required if route is "Charter/Hire"
+        - `notes` - Additional notes (optional)
+        
+        *Required fields
+        """)
+        
         income_template = pd.DataFrame({
-            'registration_number': ['ABC-1234', 'DEF-5678', 'GHI-9012'],
-            'route': ['Harare-Mutare', 'Hire', 'Harare-Bulawayo'],
-            'hire_destination': ['', 'Wedding at Lake Chivero', ''],
-            'driver_name': ['John Doe', 'Jane Smith', 'Bob Wilson'],
-            'conductor_name': ['Mike Johnson', 'Sarah Williams', 'Tom Brown'],
-            'date': ['2025-10-15', '2025-10-15', '2025-10-15'],
-            'amount': [500.00, 1200.00, 450.00],
-            'notes': ['Regular run', 'Private hire', 'Express service']
+            'registration_number': ['ABC-1234', 'DEF-5678', 'GHI-9012', 'ABC-1234', 'DEF-5678'],
+            'route': ['Harare-Mutare', 'Charter/Hire', 'Harare-Bulawayo', 'Harare-Masvingo', 'Charter/Hire'],
+            'driver_name': ['John Doe', 'Jane Smith', 'Bob Wilson', 'John Doe', 'Jane Smith'],
+            'conductor_name': ['Mike Johnson', 'Sarah Williams', 'Tom Brown', 'Mike Johnson', 'Sarah Williams'],
+            'date': ['2025-01-15', '2025-01-15', '2025-01-16', '2025-01-16', '2025-01-17'],
+            'amount': [500.00, 1200.00, 450.00, 380.00, 2500.00],
+            'passengers': [45, 50, 38, 42, 60],
+            'trip_type': ['Scheduled', 'Charter/Hire', 'Express', 'Scheduled', 'Charter/Hire'],
+            'departure_time': ['06:00', '08:00', '14:00', '05:30', '07:00'],
+            'arrival_time': ['12:00', '18:00', '20:00', '11:30', '19:00'],
+            'hire_destination': ['', 'Wedding at Lake Chivero', '', '', 'Corporate Event Nyanga'],
+            'notes': ['Regular run', 'Private hire - full day', 'Express service', 'Morning run', 'Corporate booking']
         })
         
         csv_income = income_template.to_csv(index=False)
         st.download_button(
-            label="📊 Download Income Template",
+            label="📊 Download Income Template (CSV)",
             data=csv_income,
-            file_name="income_template.csv",
+            file_name="income_import_template.csv",
             mime="text/csv",
-            width="stretch"
+            use_container_width=True
         )
     
-    with col_temp2:
+    with tab_t2:
+        st.markdown("""
+        **Maintenance Template Columns:**
+        - `registration_number`* - Bus registration (e.g., ABC-1234)
+        - `maintenance_type`* - Type of maintenance
+        - `date`* - Date in YYYY-MM-DD format
+        - `cost`* - Maintenance cost in USD
+        - `mechanic_name` - Name of mechanic (optional)
+        - `status` - Completed, In Progress, Scheduled (optional, defaults to Completed)
+        - `description` - Description of work done (optional)
+        - `parts_used` - Parts used (optional)
+        
+        *Required fields
+        """)
+        
         maint_template = pd.DataFrame({
-            'registration_number': ['ABC-1234', 'DEF-5678'],
-            'maintenance_type': ['Oil Change', 'Tire Replacement'],
-            'mechanic_name': ['Mike Smith', 'Tom Brown'],
-            'date': ['2025-10-15', '2025-10-15'],
-            'cost': [50.00, 200.00],
-            'status': ['Completed', 'Completed'],
-            'description': ['Regular oil change', 'Replaced front tires'],
-            'parts_used': ['Oil filter, 5L oil', '2x Front tires']
+            'registration_number': ['ABC-1234', 'DEF-5678', 'GHI-9012'],
+            'maintenance_type': ['Oil Change', 'Tire Replacement', 'Brake Service'],
+            'mechanic_name': ['Mike Smith', 'Tom Brown', 'James Wilson'],
+            'date': ['2025-01-15', '2025-01-16', '2025-01-17'],
+            'cost': [50.00, 400.00, 150.00],
+            'status': ['Completed', 'Completed', 'Completed'],
+            'description': ['Regular oil change and filter', 'Replaced all 6 tires', 'Brake pads and fluid change'],
+            'parts_used': ['Oil filter, 10L oil', '6x Continental tires', 'Brake pads x4, brake fluid 2L']
         })
         
         csv_maint = maint_template.to_csv(index=False)
         st.download_button(
-            label="🔧 Download Maintenance Template",
+            label="🔧 Download Maintenance Template (CSV)",
             data=csv_maint,
-            file_name="maintenance_template.csv",
+            file_name="maintenance_import_template.csv",
             mime="text/csv",
-            width="stretch"
+            use_container_width=True
+        )
+    
+    with tab_t3:
+        st.markdown("""
+        **Fuel Template Columns:**
+        - `registration_number`* - Bus registration (e.g., ABC-1234)
+        - `date`* - Date in YYYY-MM-DD format
+        - `total_cost`* - Total amount paid for fuel in USD
+        - `cost_per_liter`* - Cost per liter in USD
+        - `liters` - Liters purchased (auto-calculated if empty)
+        - `fuel_station` - Name of fuel station (optional)
+        - `odometer_reading` - Odometer reading in km (optional)
+        - `payment_method` - Cash, Fuel Card, EcoCash, etc. (optional)
+        - `filled_by` - Person who filled (optional)
+        - `notes` - Additional notes (optional)
+        
+        *Required fields
+        """)
+        
+        fuel_template = pd.DataFrame({
+            'registration_number': ['ABC-1234', 'DEF-5678', 'GHI-9012', 'ABC-1234'],
+            'date': ['2025-01-15', '2025-01-15', '2025-01-16', '2025-01-17'],
+            'total_cost': [150.00, 200.00, 175.00, 180.00],
+            'cost_per_liter': [1.50, 1.50, 1.50, 1.52],
+            'liters': [100.00, 133.33, 116.67, 118.42],
+            'fuel_station': ['Zuva Msasa', 'Puma Borrowdale', 'Total Avondale', 'Zuva Msasa'],
+            'odometer_reading': [125000, 98000, 145000, 125450],
+            'payment_method': ['Cash', 'Fuel Card', 'EcoCash', 'Cash'],
+            'filled_by': ['John Driver', 'Jane Driver', 'Bob Driver', 'John Driver'],
+            'notes': ['Full tank', 'Full tank', 'Half tank', 'Full tank before Mutare trip']
+        })
+        
+        csv_fuel = fuel_template.to_csv(index=False)
+        st.download_button(
+            label="⛽ Download Fuel Template (CSV)",
+            data=csv_fuel,
+            file_name="fuel_import_template.csv",
+            mime="text/csv",
+            use_container_width=True
+        )
+    
+    with tab_t4:
+        st.markdown("""
+        **Employee Template Columns:**
+        - `employee_id`* - Unique employee ID (e.g., EMP001)
+        - `full_name`* - Full name of employee
+        - `department`* - Drivers, Conductors, Mechanics, Admin, etc.
+        - `position`* - Job title (e.g., Driver, Senior Conductor)
+        - `phone` - Phone number (optional)
+        - `email` - Email address (optional)
+        - `hire_date` - Date hired YYYY-MM-DD (optional)
+        - `salary` - Monthly salary in USD (optional)
+        - `status` - Active, On Leave, Terminated (optional, defaults to Active)
+        - `address` - Home address (optional)
+        - `emergency_contact` - Emergency contact name (optional)
+        - `emergency_phone` - Emergency contact phone (optional)
+        - `national_id` - National ID number (optional)
+        
+        *Required fields
+        """)
+        
+        emp_template = pd.DataFrame({
+            'employee_id': ['EMP001', 'EMP002', 'EMP003', 'EMP004'],
+            'full_name': ['John Moyo', 'Jane Ndlovu', 'Robert Chikwanha', 'Mary Dube'],
+            'department': ['Drivers', 'Conductors', 'Mechanics', 'Admin'],
+            'position': ['Senior Driver', 'Conductor', 'Head Mechanic', 'Accountant'],
+            'phone': ['0771234567', '0772345678', '0773456789', '0774567890'],
+            'email': ['john@example.com', 'jane@example.com', 'robert@example.com', 'mary@example.com'],
+            'hire_date': ['2020-01-15', '2021-03-20', '2019-06-10', '2022-02-01'],
+            'salary': [450.00, 300.00, 500.00, 600.00],
+            'status': ['Active', 'Active', 'Active', 'Active'],
+            'address': ['123 Main St, Harare', '456 Second Ave, Harare', '789 Third Rd, Harare', '321 Fourth St, Harare'],
+            'emergency_contact': ['Sarah Moyo', 'Peter Ndlovu', 'Grace Chikwanha', 'Tom Dube'],
+            'emergency_phone': ['0775111222', '0775222333', '0775333444', '0775444555'],
+            'national_id': ['63-123456-A-77', '63-234567-B-77', '63-345678-C-77', '63-456789-D-77']
+        })
+        
+        csv_emp = emp_template.to_csv(index=False)
+        st.download_button(
+            label="👥 Download Employee Template (CSV)",
+            data=csv_emp,
+            file_name="employee_import_template.csv",
+            mime="text/csv",
+            use_container_width=True
         )
     
     st.markdown("---")
@@ -1517,7 +1675,11 @@ def import_data_page():
     # Import section
     st.subheader("📤 Upload and Import")
     
-    import_type = st.radio("Select import type:", ["💰 Income Data", "🔧 Maintenance Data"], horizontal=True)
+    import_type = st.radio(
+        "Select import type:", 
+        ["💰 Income Data", "🔧 Maintenance Data", "⛽ Fuel Data", "👥 Employee Data"], 
+        horizontal=True
+    )
     
     uploaded_file = st.file_uploader(
         "Choose a CSV or Excel file",
@@ -1537,17 +1699,23 @@ def import_data_page():
             
             # Preview data
             st.subheader("👀 Data Preview")
-            st.dataframe(df.head(10), width="stretch")
+            st.dataframe(df.head(10), use_container_width=True)
             
             # Validation
             st.subheader("✓ Validation")
             
             if import_type == "💰 Income Data":
                 required_cols = ['registration_number', 'route', 'driver_name', 'conductor_name', 'date', 'amount']
-                optional_cols = ['hire_destination', 'notes']
-            else:  # Maintenance
+                optional_cols = ['hire_destination', 'notes', 'passengers', 'trip_type', 'departure_time', 'arrival_time']
+            elif import_type == "🔧 Maintenance Data":
                 required_cols = ['registration_number', 'maintenance_type', 'date', 'cost']
                 optional_cols = ['mechanic_name', 'status', 'description', 'parts_used']
+            elif import_type == "⛽ Fuel Data":
+                required_cols = ['registration_number', 'date', 'total_cost', 'cost_per_liter']
+                optional_cols = ['liters', 'fuel_station', 'odometer_reading', 'payment_method', 'filled_by', 'notes']
+            else:  # Employee Data
+                required_cols = ['employee_id', 'full_name', 'department', 'position']
+                optional_cols = ['phone', 'email', 'hire_date', 'salary', 'status', 'address', 'emergency_contact', 'emergency_phone', 'national_id']
             
             # Support backward compatibility - rename bus_number to registration_number if present
             if 'bus_number' in df.columns and 'registration_number' not in df.columns:
@@ -1565,12 +1733,24 @@ def import_data_page():
                 for col in optional_cols:
                     if col not in df.columns:
                         if col == 'status':
-                            df[col] = 'Completed'
+                            df[col] = 'Completed' if import_type == "🔧 Maintenance Data" else 'Active'
+                        elif col == 'passengers':
+                            df[col] = 0
+                        elif col == 'trip_type':
+                            df[col] = 'Scheduled'
+                        elif col == 'payment_method':
+                            df[col] = 'Cash'
                         else:
                             df[col] = ''
                 
+                # Show column mapping
+                with st.expander("📋 Column Mapping"):
+                    st.write("**Required columns found:**", required_cols)
+                    present_optional = [col for col in optional_cols if col in df.columns]
+                    st.write("**Optional columns found:**", present_optional if present_optional else "None")
+                
                 # Import button
-                if st.button("🚀 Import Data", type="primary", width="stretch"):
+                if st.button("🚀 Import Data", type="primary", use_container_width=True):
                     success_count = 0
                     error_count = 0
                     errors = []
@@ -1580,30 +1760,82 @@ def import_data_page():
                             try:
                                 if import_type == "💰 Income Data":
                                     # Validate hire destination for Hire routes
-                                    if row['route'] == 'Hire' and not str(row.get('hire_destination', '')).strip():
-                                        raise ValueError("Hire destination required for Hire routes")
+                                    route_val = str(row['route']).strip()
+                                    if route_val.lower() in ['hire', 'charter/hire', 'charter', 'private hire']:
+                                        if not str(row.get('hire_destination', '')).strip():
+                                            raise ValueError("Hire destination required for Hire/Charter routes")
+                                    
+                                    # Parse passengers
+                                    passengers = int(row.get('passengers', 0)) if pd.notna(row.get('passengers')) else 0
                                     
                                     record_id = add_income_record(
-                                        bus_number=row['registration_number'],  # Store registration in bus_number field
-                                        route=row['route'],
-                                        hire_destination=row.get('hire_destination', ''),
+                                        bus_number=row['registration_number'],
+                                        route=route_val,
+                                        hire_destination=str(row.get('hire_destination', '')).strip() if pd.notna(row.get('hire_destination')) else None,
                                         driver_name=row['driver_name'],
                                         conductor_name=row['conductor_name'],
                                         date=str(row['date']),
-                                        amount=row['amount'],
-                                        notes=row.get('notes', ''),
+                                        amount=float(row['amount']),
+                                        notes=str(row.get('notes', '')) if pd.notna(row.get('notes')) else '',
+                                        created_by=st.session_state['user']['username'],
+                                        passengers=passengers,
+                                        trip_type=str(row.get('trip_type', 'Scheduled')) if pd.notna(row.get('trip_type')) else 'Scheduled',
+                                        departure_time=str(row.get('departure_time', '')) if pd.notna(row.get('departure_time')) else None,
+                                        arrival_time=str(row.get('arrival_time', '')) if pd.notna(row.get('arrival_time')) else None
+                                    )
+                                    
+                                elif import_type == "🔧 Maintenance Data":
+                                    record_id = add_maintenance_record(
+                                        bus_number=row['registration_number'],
+                                        maintenance_type=row['maintenance_type'],
+                                        mechanic_name=str(row.get('mechanic_name', '')) if pd.notna(row.get('mechanic_name')) else '',
+                                        date=str(row['date']),
+                                        cost=float(row['cost']),
+                                        status=str(row.get('status', 'Completed')) if pd.notna(row.get('status')) else 'Completed',
+                                        description=str(row.get('description', '')) if pd.notna(row.get('description')) else '',
+                                        parts_used=str(row.get('parts_used', '')) if pd.notna(row.get('parts_used')) else '',
                                         created_by=st.session_state['user']['username']
                                     )
-                                else:  # Maintenance
-                                    record_id = add_maintenance_record(
-                                        bus_number=row['registration_number'],  # Store registration in bus_number field
-                                        maintenance_type=row['maintenance_type'],
-                                        mechanic_name=row.get('mechanic_name', ''),
+                                    
+                                elif import_type == "⛽ Fuel Data":
+                                    # Calculate liters if not provided
+                                    total_cost = float(row['total_cost'])
+                                    cost_per_liter = float(row['cost_per_liter'])
+                                    if pd.notna(row.get('liters')) and float(row.get('liters', 0)) > 0:
+                                        liters = float(row['liters'])
+                                    else:
+                                        liters = total_cost / cost_per_liter if cost_per_liter > 0 else 0
+                                    
+                                    odometer = int(row.get('odometer_reading', 0)) if pd.notna(row.get('odometer_reading')) and row.get('odometer_reading') else None
+                                    
+                                    record_id = add_fuel_record_from_trip(
+                                        bus_number=row['registration_number'],
                                         date=str(row['date']),
-                                        cost=row['cost'],
-                                        status=row.get('status', 'Completed'),
-                                        description=row.get('description', ''),
-                                        parts_used=row.get('parts_used', ''),
+                                        liters=liters,
+                                        cost_per_liter=cost_per_liter,
+                                        total_cost=total_cost,
+                                        odometer_reading=odometer,
+                                        fuel_station=str(row.get('fuel_station', '')) if pd.notna(row.get('fuel_station')) else '',
+                                        filled_by=str(row.get('filled_by', '')) if pd.notna(row.get('filled_by')) else '',
+                                        notes=str(row.get('notes', '')) if pd.notna(row.get('notes')) else '',
+                                        created_by=st.session_state['user']['username']
+                                    )
+                                    
+                                else:  # Employee Data
+                                    record_id = add_employee_from_import(
+                                        employee_id=row['employee_id'],
+                                        full_name=row['full_name'],
+                                        department=row['department'],
+                                        position=row['position'],
+                                        phone=str(row.get('phone', '')) if pd.notna(row.get('phone')) else '',
+                                        email=str(row.get('email', '')) if pd.notna(row.get('email')) else '',
+                                        hire_date=str(row.get('hire_date', '')) if pd.notna(row.get('hire_date')) else None,
+                                        salary=float(row.get('salary', 0)) if pd.notna(row.get('salary')) else 0,
+                                        status=str(row.get('status', 'Active')) if pd.notna(row.get('status')) else 'Active',
+                                        address=str(row.get('address', '')) if pd.notna(row.get('address')) else '',
+                                        emergency_contact=str(row.get('emergency_contact', '')) if pd.notna(row.get('emergency_contact')) else '',
+                                        emergency_phone=str(row.get('emergency_phone', '')) if pd.notna(row.get('emergency_phone')) else '',
+                                        national_id=str(row.get('national_id', '')) if pd.notna(row.get('national_id')) else '',
                                         created_by=st.session_state['user']['username']
                                     )
                                 
@@ -1614,12 +1846,17 @@ def import_data_page():
                                 
                             except Exception as e:
                                 error_count += 1
-                                errors.append(f"Row {idx + 1}: {str(e)}")
+                                errors.append(f"Row {idx + 2}: {str(e)}")
                     
                     # Audit logging
-                    module = "Income" if import_type == "💰 Income Data" else "Maintenance"
+                    module_map = {
+                        "💰 Income Data": "Income",
+                        "🔧 Maintenance Data": "Maintenance", 
+                        "⛽ Fuel Data": "Fuel",
+                        "👥 Employee Data": "Employees"
+                    }
                     AuditLogger.log_data_import(
-                        module=module,
+                        module=module_map.get(import_type, "Data"),
                         record_count=success_count,
                         file_name=uploaded_file.name
                     )
