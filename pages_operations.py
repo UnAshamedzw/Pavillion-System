@@ -2138,11 +2138,283 @@ def revenue_history_page():
 # ============================================================================
 
 def dashboard_page():
-    """Main operations dashboard with charts and KPIs"""
+    """Main operations dashboard with daily summary, charts and KPIs"""
     
     st.header("📈 Operations Dashboard")
-    st.markdown("Real-time business intelligence and analytics")
+    st.markdown("Real-time business intelligence and daily operations summary")
+    
+    # =========================================================================
+    # TODAY'S QUICK SUMMARY - Always visible at top
+    # =========================================================================
     st.markdown("---")
+    st.subheader("📅 Today's Summary")
+    
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+    last_week_same_day = today - timedelta(days=7)
+    
+    conn = get_connection()
+    
+    # Get today's data
+    if USE_POSTGRES:
+        today_income = pd.read_sql_query(
+            "SELECT * FROM income WHERE date::DATE = CURRENT_DATE", get_engine())
+        today_expenses = pd.read_sql_query(
+            "SELECT * FROM expenses WHERE expense_date::DATE = CURRENT_DATE", get_engine())
+        today_fuel = pd.read_sql_query(
+            "SELECT * FROM fuel_records WHERE date::DATE = CURRENT_DATE", get_engine())
+        today_maintenance = pd.read_sql_query(
+            "SELECT * FROM maintenance WHERE date::DATE = CURRENT_DATE", get_engine())
+        yesterday_income = pd.read_sql_query(
+            "SELECT SUM(amount) as total FROM income WHERE date::DATE = CURRENT_DATE - INTERVAL '1 day'", get_engine())
+        last_week_income = pd.read_sql_query(
+            "SELECT SUM(amount) as total FROM income WHERE date::DATE = CURRENT_DATE - INTERVAL '7 days'", get_engine())
+    else:
+        today_income = pd.read_sql_query(
+            f"SELECT * FROM income WHERE date = '{today}'", get_engine())
+        today_expenses = pd.read_sql_query(
+            f"SELECT * FROM expenses WHERE expense_date = '{today}'", get_engine())
+        today_fuel = pd.read_sql_query(
+            f"SELECT * FROM fuel_records WHERE date = '{today}'", get_engine())
+        today_maintenance = pd.read_sql_query(
+            f"SELECT * FROM maintenance WHERE date = '{today}'", get_engine())
+        yesterday_income = pd.read_sql_query(
+            f"SELECT SUM(amount) as total FROM income WHERE date = '{yesterday}'", get_engine())
+        last_week_income = pd.read_sql_query(
+            f"SELECT SUM(amount) as total FROM income WHERE date = '{last_week_same_day}'", get_engine())
+    
+    # Calculate today's numbers
+    today_revenue = today_income['amount'].sum() if not today_income.empty and 'amount' in today_income.columns else 0
+    today_trips = len(today_income)
+    today_passengers = today_income['passengers'].sum() if not today_income.empty and 'passengers' in today_income.columns else 0
+    
+    today_fuel_cost = today_fuel['total_cost'].sum() if not today_fuel.empty and 'total_cost' in today_fuel.columns else 0
+    today_maint_cost = today_maintenance['cost'].sum() if not today_maintenance.empty and 'cost' in today_maintenance.columns else 0
+    today_expense_cost = today_expenses['amount'].sum() if not today_expenses.empty and 'amount' in today_expenses.columns else 0
+    today_total_expenses = today_fuel_cost + today_maint_cost + today_expense_cost
+    
+    today_profit = today_revenue - today_total_expenses
+    
+    # Comparison values
+    yesterday_total = yesterday_income['total'].iloc[0] if not yesterday_income.empty and yesterday_income['total'].iloc[0] else 0
+    last_week_total = last_week_income['total'].iloc[0] if not last_week_income.empty and last_week_income['total'].iloc[0] else 0
+    
+    # Calculate deltas
+    vs_yesterday = ((today_revenue - yesterday_total) / yesterday_total * 100) if yesterday_total > 0 else 0
+    vs_last_week = ((today_revenue - last_week_total) / last_week_total * 100) if last_week_total > 0 else 0
+    
+    # TODAY'S METRICS ROW
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "💰 Today's Revenue", 
+            f"${today_revenue:,.2f}",
+            delta=f"{vs_yesterday:+.1f}% vs yesterday" if yesterday_total > 0 else None
+        )
+    
+    with col2:
+        st.metric(
+            "💸 Today's Expenses",
+            f"${today_total_expenses:,.2f}",
+            help=f"Fuel: ${today_fuel_cost:,.2f} | Maint: ${today_maint_cost:,.2f} | Other: ${today_expense_cost:,.2f}"
+        )
+    
+    with col3:
+        profit_color = "normal" if today_profit >= 0 else "inverse"
+        st.metric(
+            "📊 Today's Profit",
+            f"${today_profit:,.2f}",
+            delta_color=profit_color
+        )
+    
+    with col4:
+        st.metric(
+            "🚌 Today's Trips",
+            today_trips,
+            delta=f"{today_passengers} passengers" if today_passengers > 0 else None
+        )
+    
+    # COMPARISON ROW
+    comp_col1, comp_col2, comp_col3, comp_col4 = st.columns(4)
+    
+    with comp_col1:
+        st.caption(f"Yesterday: ${yesterday_total:,.2f}")
+    
+    with comp_col2:
+        st.caption(f"Same day last week: ${last_week_total:,.2f}")
+    
+    with comp_col3:
+        if today_revenue > 0:
+            margin = (today_profit / today_revenue * 100)
+            st.caption(f"Margin: {margin:.1f}%")
+    
+    with comp_col4:
+        if today_trips > 0 and today_revenue > 0:
+            avg_per_trip = today_revenue / today_trips
+            st.caption(f"Avg/trip: ${avg_per_trip:.2f}")
+    
+    # =========================================================================
+    # FLEET STATUS
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("🚌 Fleet Status")
+    
+    # Get fleet data
+    if USE_POSTGRES:
+        buses_df = pd.read_sql_query("SELECT * FROM buses", get_engine())
+        active_drivers = pd.read_sql_query(
+            "SELECT DISTINCT driver_name FROM income WHERE date::DATE = CURRENT_DATE AND driver_name IS NOT NULL", 
+            get_engine())
+        active_conductors = pd.read_sql_query(
+            "SELECT DISTINCT conductor_name FROM income WHERE date::DATE = CURRENT_DATE AND conductor_name IS NOT NULL", 
+            get_engine())
+    else:
+        buses_df = pd.read_sql_query("SELECT * FROM buses", get_engine())
+        active_drivers = pd.read_sql_query(
+            f"SELECT DISTINCT driver_name FROM income WHERE date = '{today}' AND driver_name IS NOT NULL", 
+            get_engine())
+        active_conductors = pd.read_sql_query(
+            f"SELECT DISTINCT conductor_name FROM income WHERE date = '{today}' AND conductor_name IS NOT NULL", 
+            get_engine())
+    
+    total_buses = len(buses_df) if not buses_df.empty else 0
+    active_buses = len(buses_df[buses_df['status'] == 'Active']) if not buses_df.empty and 'status' in buses_df.columns else 0
+    in_maintenance = len(buses_df[buses_df['status'] == 'In Maintenance']) if not buses_df.empty and 'status' in buses_df.columns else 0
+    
+    fleet_col1, fleet_col2, fleet_col3, fleet_col4 = st.columns(4)
+    
+    with fleet_col1:
+        st.metric("🚌 Total Fleet", total_buses)
+    
+    with fleet_col2:
+        st.metric("✅ Active Buses", active_buses)
+    
+    with fleet_col3:
+        st.metric("🔧 In Maintenance", in_maintenance)
+    
+    with fleet_col4:
+        staff_on_duty = len(active_drivers) + len(active_conductors)
+        st.metric("👥 Staff on Duty", staff_on_duty, help=f"Drivers: {len(active_drivers)} | Conductors: {len(active_conductors)}")
+    
+    # =========================================================================
+    # ALERTS SECTION
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("🚨 Alerts & Notifications")
+    
+    alert_col1, alert_col2 = st.columns(2)
+    
+    with alert_col1:
+        # Get pending deductions
+        try:
+            if USE_POSTGRES:
+                red_tickets = pd.read_sql_query(
+                    "SELECT COUNT(*) as count, SUM(amount) as total FROM red_tickets WHERE status = 'pending'", 
+                    get_engine())
+                shortfalls = pd.read_sql_query(
+                    "SELECT COUNT(*) as count, SUM(shortage_amount) as total FROM daily_reconciliation WHERE status = 'pending'", 
+                    get_engine())
+            else:
+                red_tickets = pd.read_sql_query(
+                    "SELECT COUNT(*) as count, SUM(amount) as total FROM red_tickets WHERE status = 'pending'", 
+                    get_engine())
+                shortfalls = pd.read_sql_query(
+                    "SELECT COUNT(*) as count, SUM(shortage_amount) as total FROM daily_reconciliation WHERE status = 'pending'", 
+                    get_engine())
+            
+            rt_count = int(red_tickets['count'].iloc[0]) if not red_tickets.empty else 0
+            rt_total = red_tickets['total'].iloc[0] if not red_tickets.empty and red_tickets['total'].iloc[0] else 0
+            sf_count = int(shortfalls['count'].iloc[0]) if not shortfalls.empty else 0
+            sf_total = shortfalls['total'].iloc[0] if not shortfalls.empty and shortfalls['total'].iloc[0] else 0
+            
+            if rt_count > 0:
+                st.warning(f"🎫 **{rt_count} Red Tickets** pending (${rt_total:,.2f})")
+            
+            if sf_count > 0:
+                st.warning(f"💵 **{sf_count} Cash Shortfalls** pending (${sf_total:,.2f})")
+            
+            if rt_count == 0 and sf_count == 0:
+                st.success("✅ No pending deductions")
+        except Exception as e:
+            st.info("📊 Reconciliation data not available")
+    
+    with alert_col2:
+        # Document expiry alerts
+        try:
+            if USE_POSTGRES:
+                expiring_docs = pd.read_sql_query("""
+                    SELECT COUNT(*) as count FROM buses 
+                    WHERE fitness_expiry::DATE <= CURRENT_DATE + INTERVAL '30 days'
+                       OR insurance_expiry::DATE <= CURRENT_DATE + INTERVAL '30 days'
+                """, get_engine())
+            else:
+                expiring_docs = pd.read_sql_query(f"""
+                    SELECT COUNT(*) as count FROM buses 
+                    WHERE fitness_expiry <= date('now', '+30 days')
+                       OR insurance_expiry <= date('now', '+30 days')
+                """, get_engine())
+            
+            exp_count = int(expiring_docs['count'].iloc[0]) if not expiring_docs.empty else 0
+            
+            if exp_count > 0:
+                st.warning(f"📄 **{exp_count} documents** expiring within 30 days")
+            else:
+                st.success("✅ All documents current")
+        except:
+            st.info("📄 Document data not available")
+        
+        # Pending payroll
+        try:
+            if USE_POSTGRES:
+                pending_payroll = pd.read_sql_query(
+                    "SELECT COUNT(*) as count FROM payroll_periods WHERE status IN ('draft', 'processing')", 
+                    get_engine())
+            else:
+                pending_payroll = pd.read_sql_query(
+                    "SELECT COUNT(*) as count FROM payroll_periods WHERE status IN ('draft', 'processing')", 
+                    get_engine())
+            
+            pp_count = int(pending_payroll['count'].iloc[0]) if not pending_payroll.empty else 0
+            
+            if pp_count > 0:
+                st.info(f"💰 **{pp_count} payroll periods** awaiting approval")
+        except:
+            pass
+    
+    # =========================================================================
+    # QUICK ACTIONS
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("⚡ Quick Actions")
+    
+    action_col1, action_col2, action_col3, action_col4 = st.columns(4)
+    
+    with action_col1:
+        if st.button("➕ Add Trip", use_container_width=True):
+            st.session_state['selected_page'] = "🚌 Trip & Income Entry"
+            st.rerun()
+    
+    with action_col2:
+        if st.button("📋 Reconciliation", use_container_width=True):
+            st.session_state['selected_page'] = "📋 Daily Reconciliation"
+            st.rerun()
+    
+    with action_col3:
+        if st.button("💰 Process Payroll", use_container_width=True):
+            st.session_state['selected_page'] = "💰 Payroll & Payslips"
+            st.rerun()
+    
+    with action_col4:
+        if st.button("🔔 View All Alerts", use_container_width=True):
+            st.session_state['selected_page'] = "🔔 Alerts"
+            st.rerun()
+    
+    # =========================================================================
+    # PERIOD ANALYTICS (existing dashboard content)
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("📊 Period Analytics")
     
     # Date range
     col1, col2 = st.columns(2)
@@ -2154,8 +2426,6 @@ def dashboard_page():
         st.info(f"📅 {start_date.strftime('%Y-%m-%d')} to {end_date.strftime('%Y-%m-%d')}")
     
     # Fetch data using database abstraction
-    conn = get_connection()
-    
     if USE_POSTGRES:
         income_query = "SELECT * FROM income WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
         maint_query = "SELECT * FROM maintenance WHERE date::DATE >= (CURRENT_DATE - INTERVAL '%s days')" % days_back
@@ -2177,6 +2447,8 @@ def dashboard_page():
             get_engine(), params=(days_back,)
         )
     
+    conn.close()
+    
     # Convert amount and cost to numeric
     if 'amount' in income_df.columns:
         income_df['amount'] = pd.to_numeric(income_df['amount'], errors='coerce')
@@ -2184,8 +2456,6 @@ def dashboard_page():
         maint_df['cost'] = pd.to_numeric(maint_df['cost'], errors='coerce')
     if 'total_amount' in booking_df.columns:
         booking_df['total_amount'] = pd.to_numeric(booking_df['total_amount'], errors='coerce')
-    
-    conn.close()
     
     # Calculate revenues separately
     route_revenue = income_df['amount'].sum() if not income_df.empty else 0
@@ -2198,7 +2468,7 @@ def dashboard_page():
     num_buses = income_df['bus_number'].nunique() if not income_df.empty else 0
     
     # KPIs Row 1 - Overall Performance
-    st.subheader("📊 Overall Performance")
+    st.markdown("#### 📈 Overall Performance")
     col_kpi1, col_kpi2, col_kpi3, col_kpi4 = st.columns(4)
     
     with col_kpi1:
@@ -2212,7 +2482,7 @@ def dashboard_page():
         st.metric("📈 Profit Margin", f"{profit_margin:.1f}%")
     
     # KPIs Row 2 - Revenue Breakdown
-    st.subheader("💵 Revenue Breakdown")
+    st.markdown("#### 💵 Revenue Breakdown")
     col_rev1, col_rev2, col_rev3, col_rev4 = st.columns(4)
     
     with col_rev1:
@@ -2228,9 +2498,8 @@ def dashboard_page():
     
     # Charts
     if not income_df.empty or not maint_df.empty:
-        
         # Revenue vs Expenses Chart
-        st.subheader("📊 Revenue vs Expenses Trend")
+        st.markdown("#### 📊 Revenue vs Expenses Trend")
         
         if not income_df.empty:
             income_daily = income_df.groupby('date')['amount'].sum().reset_index()
@@ -2247,7 +2516,6 @@ def dashboard_page():
         if not income_daily.empty or not maint_daily.empty:
             combined = pd.merge(income_daily, maint_daily, on='date', how='outer')
             combined = combined.fillna(0)
-            # Ensure numeric columns are proper types
             combined['revenue'] = pd.to_numeric(combined['revenue'], errors='coerce').fillna(0)
             combined['expenses'] = pd.to_numeric(combined['expenses'], errors='coerce').fillna(0)
             combined['profit'] = combined['revenue'] - combined['expenses']

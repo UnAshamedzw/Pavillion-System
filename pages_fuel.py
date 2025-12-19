@@ -964,41 +964,175 @@ def fuel_analysis_page():
         if summary_df.empty:
             st.info("No data for alerts")
         else:
-            # Buses without odometer readings
-            st.markdown("### 📝 Missing Odometer Data")
+            # Calculate thresholds
+            avg_cost = summary_df['total_cost'].mean()
+            avg_efficiency = summary_df['avg_efficiency'].dropna().mean() if not summary_df['avg_efficiency'].dropna().empty else 0
+            
+            # =====================================================
+            # FUEL FLAG LEGEND
+            # =====================================================
+            st.markdown("### 🏷️ Flag Legend")
+            flag_col1, flag_col2 = st.columns(2)
+            with flag_col1:
+                st.markdown("""
+                - 🔴 **Critical**: >30% above route/bus average
+                - 🟠 **Warning**: >20% above route/bus average
+                """)
+            with flag_col2:
+                st.markdown("""
+                - 🟡 **Watch**: >15% above average
+                - 📊 **Pattern**: Consistently high over 3+ months
+                """)
+            
+            st.markdown("---")
+            
+            # =====================================================
+            # CRITICAL FLAGS - >30% above average
+            # =====================================================
+            st.markdown("### 🔴 Critical Flags (>30% Above Average)")
+            
+            critical_buses = summary_df[summary_df['total_cost'] > avg_cost * 1.3].copy()
+            
+            if not critical_buses.empty:
+                critical_buses['variance'] = ((critical_buses['total_cost'] - avg_cost) / avg_cost * 100).round(1)
+                critical_buses = critical_buses.sort_values('variance', ascending=False)
+                
+                for _, row in critical_buses.iterrows():
+                    col1, col2, col3 = st.columns([2, 1, 1])
+                    with col1:
+                        st.error(f"🔴 **{row['bus_number']}** - ${row['total_cost']:,.2f}")
+                    with col2:
+                        st.write(f"+{row['variance']:.1f}% over avg")
+                    with col3:
+                        if pd.notna(row.get('avg_efficiency')):
+                            st.write(f"{row['avg_efficiency']:.1f} km/L")
+                        else:
+                            st.write("No efficiency data")
+                
+                st.warning(f"⚠️ {len(critical_buses)} buses require immediate attention!")
+            else:
+                st.success("✅ No critical fuel alerts")
+            
+            st.markdown("---")
+            
+            # =====================================================
+            # WARNING FLAGS - >20% above average
+            # =====================================================
+            st.markdown("### 🟠 Warning Flags (20-30% Above Average)")
+            
+            warning_buses = summary_df[
+                (summary_df['total_cost'] > avg_cost * 1.2) & 
+                (summary_df['total_cost'] <= avg_cost * 1.3)
+            ].copy()
+            
+            if not warning_buses.empty:
+                warning_buses['variance'] = ((warning_buses['total_cost'] - avg_cost) / avg_cost * 100).round(1)
+                
+                for _, row in warning_buses.iterrows():
+                    st.warning(f"🟠 **{row['bus_number']}** - ${row['total_cost']:,.2f} (+{row['variance']:.1f}%)")
+            else:
+                st.success("✅ No warning-level alerts")
+            
+            st.markdown("---")
+            
+            # =====================================================
+            # WATCH FLAGS - >15% above average
+            # =====================================================
+            st.markdown("### 🟡 Watch List (15-20% Above Average)")
+            
+            watch_buses = summary_df[
+                (summary_df['total_cost'] > avg_cost * 1.15) & 
+                (summary_df['total_cost'] <= avg_cost * 1.2)
+            ].copy()
+            
+            if not watch_buses.empty:
+                watch_buses['variance'] = ((watch_buses['total_cost'] - avg_cost) / avg_cost * 100).round(1)
+                
+                for _, row in watch_buses.iterrows():
+                    st.info(f"🟡 **{row['bus_number']}** - ${row['total_cost']:,.2f} (+{row['variance']:.1f}%)")
+            else:
+                st.success("✅ No buses on watch list")
+            
+            st.markdown("---")
+            
+            # =====================================================
+            # LOW EFFICIENCY ALERTS
+            # =====================================================
+            st.markdown("### ⚡ Low Efficiency Alerts")
+            
+            eff_df = summary_df[summary_df['avg_efficiency'].notna()].copy()
+            if not eff_df.empty and avg_efficiency > 0:
+                # Critical: <70% of average efficiency
+                low_eff_critical = eff_df[eff_df['avg_efficiency'] < avg_efficiency * 0.7]
+                # Warning: 70-85% of average efficiency  
+                low_eff_warning = eff_df[
+                    (eff_df['avg_efficiency'] >= avg_efficiency * 0.7) &
+                    (eff_df['avg_efficiency'] < avg_efficiency * 0.85)
+                ]
+                
+                if not low_eff_critical.empty:
+                    st.error(f"🔴 **{len(low_eff_critical)} buses with critically low efficiency**")
+                    for _, row in low_eff_critical.iterrows():
+                        diff_pct = ((avg_efficiency - row['avg_efficiency']) / avg_efficiency * 100)
+                        st.write(f"- **{row['bus_number']}**: {row['avg_efficiency']:.1f} km/L ({diff_pct:.0f}% below avg)")
+                    st.info("💡 Check: Engine issues, tire pressure, fuel leaks, driver habits")
+                
+                if not low_eff_warning.empty:
+                    st.warning(f"🟠 **{len(low_eff_warning)} buses with below-average efficiency**")
+                    for _, row in low_eff_warning.iterrows():
+                        diff_pct = ((avg_efficiency - row['avg_efficiency']) / avg_efficiency * 100)
+                        st.write(f"- **{row['bus_number']}**: {row['avg_efficiency']:.1f} km/L ({diff_pct:.0f}% below avg)")
+                
+                if low_eff_critical.empty and low_eff_warning.empty:
+                    st.success("✅ All buses operating at acceptable efficiency")
+            else:
+                st.info("📊 Insufficient efficiency data for analysis")
+            
+            st.markdown("---")
+            
+            # =====================================================
+            # MISSING DATA ALERTS
+            # =====================================================
+            st.markdown("### 📝 Data Quality Alerts")
+            
             no_odo = summary_df[summary_df['avg_efficiency'].isna()]
             if not no_odo.empty:
                 st.warning(f"⚠️ {len(no_odo)} buses have no efficiency data (missing odometer readings)")
-                st.dataframe(no_odo[['bus_number', 'fill_count', 'total_cost']], hide_index=True)
+                for _, row in no_odo.iterrows():
+                    st.write(f"- **{row['bus_number']}**: {int(row['fill_count'])} fill-ups, ${row['total_cost']:,.2f} - No odometer!")
+                st.info("💡 Ensure odometer readings are recorded with each fuel entry")
             else:
                 st.success("✅ All buses have odometer data")
             
             st.markdown("---")
             
-            # High fuel consumption buses
-            st.markdown("### 🔴 High Fuel Cost Buses")
-            avg_cost = summary_df['total_cost'].mean()
-            high_cost = summary_df[summary_df['total_cost'] > avg_cost * 1.5]
+            # =====================================================
+            # SUMMARY TABLE WITH FLAGS
+            # =====================================================
+            st.markdown("### 📊 Complete Fleet Fuel Summary")
             
-            if not high_cost.empty:
-                st.warning(f"⚠️ {len(high_cost)} buses have fuel costs 50% above average")
-                for _, row in high_cost.iterrows():
-                    st.write(f"- **{row['bus_number']}**: ${row['total_cost']:,.2f} (Avg: ${avg_cost:,.2f})")
-            else:
-                st.success("✅ No buses with abnormally high fuel costs")
-            
-            # Low efficiency buses
-            eff_df = summary_df[summary_df['avg_efficiency'].notna()].copy()
-            if not eff_df.empty:
-                st.markdown("---")
-                st.markdown("### ⚠️ Low Efficiency Buses")
-                avg_eff = eff_df['avg_efficiency'].mean()
-                low_eff = eff_df[eff_df['avg_efficiency'] < avg_eff * 0.7]
-                
-                if not low_eff.empty:
-                    st.warning(f"⚠️ {len(low_eff)} buses have efficiency 30% below average")
-                    for _, row in low_eff.iterrows():
-                        st.write(f"- **{row['bus_number']}**: {row['avg_efficiency']:.1f} km/L (Avg: {avg_eff:.1f} km/L)")
-                    st.info("💡 Consider checking these buses for engine issues, tire pressure, or driving habits")
+            # Add flag column
+            def get_flag(row):
+                if row['total_cost'] > avg_cost * 1.3:
+                    return "🔴 Critical"
+                elif row['total_cost'] > avg_cost * 1.2:
+                    return "🟠 Warning"
+                elif row['total_cost'] > avg_cost * 1.15:
+                    return "🟡 Watch"
                 else:
-                    st.success("✅ No buses with abnormally low efficiency")
+                    return "✅ Normal"
+            
+            display_summary = summary_df.copy()
+            display_summary['Flag'] = display_summary.apply(get_flag, axis=1)
+            display_summary['Variance'] = ((display_summary['total_cost'] - avg_cost) / avg_cost * 100).round(1)
+            display_summary['Variance'] = display_summary['Variance'].apply(lambda x: f"{x:+.1f}%")
+            
+            display_cols = ['bus_number', 'Flag', 'total_cost', 'total_liters', 'avg_efficiency', 'fill_count', 'Variance']
+            display_df = display_summary[display_cols].copy()
+            display_df.columns = ['Bus', 'Status', 'Total Cost', 'Liters', 'Efficiency', 'Fill-ups', 'vs Avg']
+            
+            display_df['Total Cost'] = display_df['Total Cost'].apply(lambda x: f"${x:,.2f}")
+            display_df['Liters'] = display_df['Liters'].apply(lambda x: f"{x:,.0f}")
+            display_df['Efficiency'] = display_df['Efficiency'].apply(lambda x: f"{x:.1f} km/L" if pd.notna(x) else "N/A")
+            
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
