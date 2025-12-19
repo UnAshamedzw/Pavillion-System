@@ -1087,55 +1087,215 @@ def employee_management_page():
     
     with tab3:
         st.subheader("📊 Export Employee Reports")
-        st.write("Generate and download employee reports in PDF or Excel format")
+        st.write("Generate and download employee reports with advanced filtering")
         
         # Report type selection
         report_type = st.selectbox(
             "Select Report Type",
-            ["Employee Directory", "Active Employees", "Department Summary", "Salary Report"]
+            ["Employee Directory", "Active Employees", "Drivers Only", "Conductors Only", 
+             "Inspectors/Risk Management", "Department Summary", "Salary Report", 
+             "Document Expiry Report", "New Hires Report"]
         )
         
-        # Filters for export
-        col_exp1, col_exp2 = st.columns(2)
+        st.markdown("---")
+        st.markdown("### 🔍 Filter Options")
         
-        with col_exp1:
-            exp_dept = st.selectbox("Department Filter", ["All", "Operations", "Maintenance", "Administration", "HR"], key="exp_dept")
+        # Row 1: Job Title and Department
+        col_f1, col_f2 = st.columns(2)
         
-        with col_exp2:
-            exp_status = st.selectbox("Status Filter", ["All", "Active", "On Leave", "Terminated"], key="exp_status")
+        with col_f1:
+            # Get unique job titles from database
+            conn = get_connection()
+            try:
+                job_titles_df = pd.read_sql_query(
+                    "SELECT DISTINCT position FROM employees WHERE position IS NOT NULL ORDER BY position",
+                    get_engine()
+                )
+                job_title_options = ["All Job Titles"] + job_titles_df['position'].tolist()
+            except:
+                job_title_options = ["All Job Titles", "Driver", "Conductor", "Inspector", "Mechanic", 
+                                    "Clerk", "Manager", "Administrator"]
+            
+            exp_job_title = st.selectbox("Job Title", job_title_options, key="exp_job_title")
         
+        with col_f2:
+            # Get unique departments
+            try:
+                depts_df = pd.read_sql_query(
+                    "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL ORDER BY department",
+                    get_engine()
+                )
+                dept_options = ["All Departments"] + depts_df['department'].tolist()
+            except:
+                dept_options = ["All Departments", "Operations", "Maintenance", "Administration", 
+                               "HR", "Finance", "Risk Management"]
+            
+            exp_dept = st.selectbox("Department", dept_options, key="exp_dept")
+        
+        # Row 2: Status and Date Range
+        col_f3, col_f4 = st.columns(2)
+        
+        with col_f3:
+            exp_status = st.selectbox(
+                "Employment Status", 
+                ["All Statuses", "Active", "On Leave", "Suspended", "Terminated"],
+                key="exp_status"
+            )
+        
+        with col_f4:
+            use_date_filter = st.checkbox("Filter by Hire Date Range", value=False)
+        
+        # Date range if enabled
+        if use_date_filter:
+            date_col1, date_col2 = st.columns(2)
+            with date_col1:
+                hire_from = st.date_input("Hired From", value=datetime.now().date() - timedelta(days=365), key="hire_from")
+            with date_col2:
+                hire_to = st.date_input("Hired To", value=datetime.now().date(), key="hire_to")
+        
+        # Additional quick filters
+        st.markdown("### ⚡ Quick Filters")
+        quick_col1, quick_col2, quick_col3 = st.columns(3)
+        
+        with quick_col1:
+            only_drivers = st.checkbox("🚗 Drivers Only", value=(report_type == "Drivers Only"))
+        
+        with quick_col2:
+            only_conductors = st.checkbox("🎫 Conductors Only", value=(report_type == "Conductors Only"))
+        
+        with quick_col3:
+            only_inspectors = st.checkbox("👮 Inspectors Only", value=(report_type == "Inspectors/Risk Management"))
+        
+        # Build query based on filters
         st.markdown("---")
         
-        # Fetch data for export
-        conn = get_connection()
-        
-        query = "SELECT * FROM employees WHERE 1=1"
+        query = """
+            SELECT id, employee_id, full_name, position as job_title, department, 
+                   hire_date, salary, phone, email, status, national_id,
+                   license_number, license_expiry, defensive_driving_expiry, medical_cert_expiry
+            FROM employees WHERE 1=1
+        """
         params = []
+        ph = get_placeholder()
         
-        if exp_dept != "All":
-            query += f" AND department = {get_placeholder()}"
+        # Apply job title filter
+        if exp_job_title != "All Job Titles":
+            query += f" AND position = {ph}"
+            params.append(exp_job_title)
+        
+        # Apply department filter
+        if exp_dept != "All Departments":
+            query += f" AND department = {ph}"
             params.append(exp_dept)
         
-        if exp_status != "All":
-            query += f" AND status = {get_placeholder()}"
+        # Apply status filter
+        if exp_status != "All Statuses":
+            query += f" AND status = {ph}"
             params.append(exp_status)
+        
+        # Apply date range filter
+        if use_date_filter:
+            query += f" AND hire_date >= {ph} AND hire_date <= {ph}"
+            params.append(str(hire_from))
+            params.append(str(hire_to))
+        
+        # Apply quick filters
+        if only_drivers and not only_conductors and not only_inspectors:
+            query += " AND (position LIKE '%Driver%' OR position LIKE '%driver%')"
+        elif only_conductors and not only_drivers and not only_inspectors:
+            query += " AND (position LIKE '%Conductor%' OR position LIKE '%conductor%')"
+        elif only_inspectors and not only_drivers and not only_conductors:
+            query += " AND (position LIKE '%Inspector%' OR department LIKE '%Risk%')"
+        
+        # Special report types
+        if report_type == "Active Employees":
+            query += " AND status = 'Active'"
+        elif report_type == "Drivers Only":
+            query += " AND (position LIKE '%Driver%' OR position LIKE '%driver%')"
+        elif report_type == "Conductors Only":
+            query += " AND (position LIKE '%Conductor%' OR position LIKE '%conductor%')"
+        elif report_type == "Inspectors/Risk Management":
+            query += " AND (position LIKE '%Inspector%' OR department LIKE '%Risk%')"
+        elif report_type == "New Hires Report":
+            # Last 90 days
+            if USE_POSTGRES:
+                query += " AND hire_date >= CURRENT_DATE - INTERVAL '90 days'"
+            else:
+                query += " AND hire_date >= date('now', '-90 days')"
+        
+        query += " ORDER BY department, full_name"
         
         export_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
         conn.close()
         
+        # Display results
         if not export_df.empty:
-            col_prev, col_pdf, col_excel = st.columns(3)
+            # Summary by job title
+            st.markdown("### 📊 Summary")
             
-            with col_prev:
-                st.metric("📊 Records to Export", len(export_df))
+            summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+            
+            with summary_col1:
+                st.metric("📋 Total Records", len(export_df))
+            
+            with summary_col2:
+                active_count = len(export_df[export_df['status'] == 'Active']) if 'status' in export_df.columns else 0
+                st.metric("✅ Active", active_count)
+            
+            with summary_col3:
+                if 'salary' in export_df.columns:
+                    total_salary = export_df['salary'].sum()
+                    st.metric("💰 Total Salary", f"${total_salary:,.2f}")
+                else:
+                    st.metric("💰 Total Salary", "N/A")
+            
+            with summary_col4:
+                unique_depts = export_df['department'].nunique() if 'department' in export_df.columns else 0
+                st.metric("🏢 Departments", unique_depts)
+            
+            # Job title breakdown
+            if 'job_title' in export_df.columns:
+                st.markdown("#### 👥 By Job Title")
+                job_breakdown = export_df['job_title'].value_counts()
+                breakdown_cols = st.columns(min(len(job_breakdown), 5))
+                for i, (title, count) in enumerate(job_breakdown.head(5).items()):
+                    with breakdown_cols[i]:
+                        st.metric(title or "Unspecified", count)
+            
+            # Department breakdown
+            if 'department' in export_df.columns:
+                st.markdown("#### 🏢 By Department")
+                dept_breakdown = export_df['department'].value_counts()
+                dept_cols = st.columns(min(len(dept_breakdown), 5))
+                for i, (dept, count) in enumerate(dept_breakdown.head(5).items()):
+                    with dept_cols[i]:
+                        st.metric(dept or "Unspecified", count)
+            
+            st.markdown("---")
+            
+            # Export buttons
+            st.markdown("### 📥 Download Options")
+            
+            col_pdf, col_excel, col_csv = st.columns(3)
+            
+            # Build filters description
+            filters_dict = {}
+            if exp_job_title != "All Job Titles":
+                filters_dict['Job Title'] = exp_job_title
+            if exp_dept != "All Departments":
+                filters_dict['Department'] = exp_dept
+            if exp_status != "All Statuses":
+                filters_dict['Status'] = exp_status
+            if use_date_filter:
+                filters_dict['Hire Date'] = f"{hire_from} to {hire_to}"
+            if only_drivers:
+                filters_dict['Filter'] = 'Drivers Only'
+            if only_conductors:
+                filters_dict['Filter'] = 'Conductors Only'
+            if only_inspectors:
+                filters_dict['Filter'] = 'Inspectors Only'
             
             with col_pdf:
-                filters_dict = {}
-                if exp_dept != "All":
-                    filters_dict['Department'] = exp_dept
-                if exp_status != "All":
-                    filters_dict['Status'] = exp_status
-                
                 pdf_buffer = generate_hr_pdf(
                     export_df,
                     f"{report_type}",
@@ -1148,12 +1308,35 @@ def employee_management_page():
                     data=pdf_buffer,
                     file_name=f"employee_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf",
                     mime="application/pdf",
-                    width="stretch"
+                    use_container_width=True
                 )
             
             with col_excel:
                 excel_buffer = io.BytesIO()
-                export_df.to_excel(excel_buffer, sheet_name='Employees', index=False)
+                
+                # Create Excel with multiple sheets
+                with pd.ExcelWriter(excel_buffer, engine='openpyxl') as writer:
+                    # Main data
+                    export_df.to_excel(writer, sheet_name='Employees', index=False)
+                    
+                    # Summary by job title
+                    if 'job_title' in export_df.columns:
+                        job_summary = export_df.groupby('job_title').agg({
+                            'id': 'count',
+                            'salary': 'sum'
+                        }).reset_index()
+                        job_summary.columns = ['Job Title', 'Count', 'Total Salary']
+                        job_summary.to_excel(writer, sheet_name='By Job Title', index=False)
+                    
+                    # Summary by department
+                    if 'department' in export_df.columns:
+                        dept_summary = export_df.groupby('department').agg({
+                            'id': 'count',
+                            'salary': 'sum'
+                        }).reset_index()
+                        dept_summary.columns = ['Department', 'Count', 'Total Salary']
+                        dept_summary.to_excel(writer, sheet_name='By Department', index=False)
+                
                 excel_buffer.seek(0)
                 
                 st.download_button(
@@ -1161,14 +1344,43 @@ def employee_management_page():
                     data=excel_buffer,
                     file_name=f"employee_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    width="stretch"
+                    use_container_width=True
+                )
+            
+            with col_csv:
+                csv_data = export_df.to_csv(index=False)
+                
+                st.download_button(
+                    label="📋 Download CSV",
+                    data=csv_data,
+                    file_name=f"employee_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
                 )
             
             st.markdown("---")
-            st.write("### Preview of Export Data")
-            st.dataframe(export_df, width="stretch", height=300)
+            st.markdown("### 👁️ Preview")
+            
+            # Select columns to display
+            display_cols = ['employee_id', 'full_name', 'job_title', 'department', 'status', 'hire_date', 'salary', 'phone']
+            available_cols = [col for col in display_cols if col in export_df.columns]
+            
+            preview_df = export_df[available_cols].copy()
+            
+            # Format salary if present
+            if 'salary' in preview_df.columns:
+                preview_df['salary'] = preview_df['salary'].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "N/A")
+            
+            st.dataframe(preview_df, use_container_width=True, hide_index=True)
+            
+            # Log export action
+            AuditLogger.log_action(
+                action_type="Export",
+                module="Employee",
+                description=f"Exported {len(export_df)} employee records - {report_type}"
+            )
         else:
-            st.warning("No employees match the selected filters.")
+            st.warning("⚠️ No employees match the selected filters. Try adjusting your filter criteria.")
 
 
 # ============================================================================
