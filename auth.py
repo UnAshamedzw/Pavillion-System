@@ -1496,6 +1496,7 @@ PAGE_PERMISSIONS = {
     '💰 Revenue History': ['view_revenue_history'],
     '🚌 Fleet Management': ['view_fleet'],
     '🛣️ Routes & Assignments': ['view_routes', 'view_assignments'],
+    '✅ Approvals Center': ['approve_payroll', 'approve_leave', 'view_employees'],  # Approvals - HR/Admin
     '👥 Employee Management': ['view_employees'],
     '📝 Contract Generator': ['view_contracts', 'generate_contracts'],
     '📊 Employee Performance': ['view_performance'],

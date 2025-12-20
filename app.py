@@ -50,6 +50,7 @@ from pages_landing import show_landing_page, can_see_full_dashboard, FULL_DASHBO
 from pages_payroll import payroll_processing_page
 from pages_reconciliation import daily_reconciliation_page
 from pages_employee_portal import employee_portal_page
+from pages_approvals import approvals_center_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -256,6 +257,7 @@ def main():
     ])
     
     hr_items = [
+        "✅ Approvals Center",
         "👥 Employee Management",
         "📝 Contract Generator",
         "📊 Employee Performance",
@@ -442,6 +444,11 @@ def main():
     elif page == "👥 Employee Management":
         if can_access_page(page):
             employee_management_page()
+        else:
+            show_access_denied(page)
+    elif page == "✅ Approvals Center":
+        if can_access_page(page):
+            approvals_center_page()
         else:
             show_access_denied(page)
     elif page == "📝 Contract Generator":
