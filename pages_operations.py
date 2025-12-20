@@ -2155,33 +2155,61 @@ def dashboard_page():
     
     conn = get_connection()
     
-    # Get today's data
-    if USE_POSTGRES:
-        today_income = pd.read_sql_query(
-            "SELECT * FROM income WHERE date::DATE = CURRENT_DATE", get_engine())
-        today_expenses = pd.read_sql_query(
-            "SELECT * FROM expenses WHERE expense_date::DATE = CURRENT_DATE", get_engine())
-        today_fuel = pd.read_sql_query(
-            "SELECT * FROM fuel_records WHERE date::DATE = CURRENT_DATE", get_engine())
-        today_maintenance = pd.read_sql_query(
-            "SELECT * FROM maintenance WHERE date::DATE = CURRENT_DATE", get_engine())
-        yesterday_income = pd.read_sql_query(
-            "SELECT SUM(amount) as total FROM income WHERE date::DATE = CURRENT_DATE - INTERVAL '1 day'", get_engine())
-        last_week_income = pd.read_sql_query(
-            "SELECT SUM(amount) as total FROM income WHERE date::DATE = CURRENT_DATE - INTERVAL '7 days'", get_engine())
-    else:
-        today_income = pd.read_sql_query(
-            f"SELECT * FROM income WHERE date = '{today}'", get_engine())
-        today_expenses = pd.read_sql_query(
-            f"SELECT * FROM expenses WHERE expense_date = '{today}'", get_engine())
-        today_fuel = pd.read_sql_query(
-            f"SELECT * FROM fuel_records WHERE date = '{today}'", get_engine())
-        today_maintenance = pd.read_sql_query(
-            f"SELECT * FROM maintenance WHERE date = '{today}'", get_engine())
-        yesterday_income = pd.read_sql_query(
-            f"SELECT SUM(amount) as total FROM income WHERE date = '{yesterday}'", get_engine())
-        last_week_income = pd.read_sql_query(
-            f"SELECT SUM(amount) as total FROM income WHERE date = '{last_week_same_day}'", get_engine())
+    # Get today's data - wrap in try-except to handle missing tables
+    try:
+        if USE_POSTGRES:
+            today_income = pd.read_sql_query(
+                "SELECT * FROM income WHERE date::DATE = CURRENT_DATE", get_engine())
+        else:
+            today_income = pd.read_sql_query(
+                f"SELECT * FROM income WHERE date = '{today}'", get_engine())
+    except:
+        today_income = pd.DataFrame()
+    
+    try:
+        if USE_POSTGRES:
+            today_expenses = pd.read_sql_query(
+                "SELECT * FROM general_expenses WHERE expense_date::DATE = CURRENT_DATE", get_engine())
+        else:
+            today_expenses = pd.read_sql_query(
+                f"SELECT * FROM general_expenses WHERE expense_date = '{today}'", get_engine())
+    except:
+        today_expenses = pd.DataFrame()
+    
+    try:
+        if USE_POSTGRES:
+            today_fuel = pd.read_sql_query(
+                "SELECT * FROM fuel_records WHERE date::DATE = CURRENT_DATE", get_engine())
+        else:
+            today_fuel = pd.read_sql_query(
+                f"SELECT * FROM fuel_records WHERE date = '{today}'", get_engine())
+    except:
+        today_fuel = pd.DataFrame()
+    
+    try:
+        if USE_POSTGRES:
+            today_maintenance = pd.read_sql_query(
+                "SELECT * FROM maintenance WHERE date::DATE = CURRENT_DATE", get_engine())
+        else:
+            today_maintenance = pd.read_sql_query(
+                f"SELECT * FROM maintenance WHERE date = '{today}'", get_engine())
+    except:
+        today_maintenance = pd.DataFrame()
+    
+    try:
+        if USE_POSTGRES:
+            yesterday_income = pd.read_sql_query(
+                "SELECT SUM(amount) as total FROM income WHERE date::DATE = CURRENT_DATE - INTERVAL '1 day'", get_engine())
+            last_week_income = pd.read_sql_query(
+                "SELECT SUM(amount) as total FROM income WHERE date::DATE = CURRENT_DATE - INTERVAL '7 days'", get_engine())
+        else:
+            yesterday_income = pd.read_sql_query(
+                f"SELECT SUM(amount) as total FROM income WHERE date = '{yesterday}'", get_engine())
+            last_week_income = pd.read_sql_query(
+                f"SELECT SUM(amount) as total FROM income WHERE date = '{last_week_same_day}'", get_engine())
+    except:
+        yesterday_income = pd.DataFrame({'total': [0]})
+        last_week_income = pd.DataFrame({'total': [0]})
     
     # Calculate today's numbers
     today_revenue = today_income['amount'].sum() if not today_income.empty and 'amount' in today_income.columns else 0
