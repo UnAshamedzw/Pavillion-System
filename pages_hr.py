@@ -519,11 +519,11 @@ def employee_management_page():
         col_f1, col_f2, col_f3, col_f4 = st.columns(4)
         
         with col_f1:
-            filter_dept = st.selectbox("Department", ["All", "Operations", "Maintenance", "Administration", "HR"])
+            filter_dept = st.selectbox("Department", ["All", "Operations", "Maintenance", "Administration", "HR", "Finance", "Risk Management"])
         with col_f2:
             filter_status = st.selectbox("Status", ["All", "Active", "On Leave", "Terminated"])
         with col_f3:
-            filter_position = st.selectbox("Position Type", ["All", "Drivers", "Conductors", "Other Staff"])
+            filter_position = st.selectbox("Position Type", ["All", "Drivers", "Conductors", "Inspectors", "Other Staff"])
         with col_f4:
             search_name = st.text_input("🔍 Search by name", placeholder="Employee name")
         
@@ -561,10 +561,14 @@ def employee_management_page():
         elif filter_position == "Conductors":
             query += " AND position LIKE ?"
             params.append("%Conductor%")
+        elif filter_position == "Inspectors":
+            query += " AND position LIKE ?"
+            params.append("%Inspector%")
         elif filter_position == "Other Staff":
-            query += " AND position NOT LIKE ? AND position NOT LIKE ?"
+            query += " AND position NOT LIKE ? AND position NOT LIKE ? AND position NOT LIKE ?"
             params.append("%Driver%")
             params.append("%Conductor%")
+            params.append("%Inspector%")
         
         if search_name:
             query += " AND full_name LIKE ?"
@@ -788,17 +792,36 @@ def employee_management_page():
                             with edit_col1:
                                 new_full_name = st.text_input("Full Name", value=full_name)
                                 new_national_id = st.text_input("National ID Number", value=national_id or "", placeholder="e.g., 63-123456-A-42")
-                                new_position = st.text_input("Position", value=position)
+                                new_position = st.selectbox(
+                                    "Position",
+                                    ["Bus Driver", "Conductor", "Inspector", "Mechanic", "Office Staff", "HR Staff", 
+                                     "Supervisor", "Manager", "Accountant", "Clerk", "Other"],
+                                    index=0  # Will be updated below if position matches
+                                )
+                                # Try to match existing position
+                                position_options = ["Bus Driver", "Conductor", "Inspector", "Mechanic", "Office Staff", "HR Staff", 
+                                                   "Supervisor", "Manager", "Accountant", "Clerk", "Other"]
+                                if position in position_options:
+                                    new_position = st.selectbox(
+                                        "Position",
+                                        position_options,
+                                        index=position_options.index(position),
+                                        key=f"edit_pos_{emp_id}"
+                                    )
+                                else:
+                                    new_position = st.text_input("Position", value=position, key=f"edit_pos_txt_{emp_id}")
+                                
+                                dept_options = ["Operations", "Maintenance", "Administration", "HR", "Finance", "Risk Management"]
                                 new_department = st.selectbox(
                                     "Department",
-                                    ["Operations", "Maintenance", "Administration", "HR"],
-                                    index=["Operations", "Maintenance", "Administration", "HR"].index(department) if department in ["Operations", "Maintenance", "Administration", "HR"] else 0
+                                    dept_options,
+                                    index=dept_options.index(department) if department in dept_options else 0
                                 )
                                 new_salary = st.number_input("Salary", value=float(salary))
                                 new_status = st.selectbox(
                                     "Status",
-                                    ["Active", "On Leave", "Terminated"],
-                                    index=["Active", "On Leave", "Terminated"].index(status) if status in ["Active", "On Leave", "Terminated"] else 0
+                                    ["Active", "On Leave", "Suspended", "Terminated"],
+                                    index=["Active", "On Leave", "Suspended", "Terminated"].index(status) if status in ["Active", "On Leave", "Suspended", "Terminated"] else 0
                                 )
                             
                             with edit_col2:
@@ -934,12 +957,15 @@ def employee_management_page():
                 full_name = st.text_input("Full Name*", placeholder="e.g., John Doe")
                 position = st.selectbox(
                     "Position/Role*",
-                    ["Bus Driver", "Conductor", "Mechanic", "Office Staff", "HR Staff", 
-                     "Supervisor", "Manager", "Other"],
-                    index=["Bus Driver", "Conductor", "Mechanic", "Office Staff", "HR Staff", 
-                           "Supervisor", "Manager", "Other"].index(position_preview)
+                    ["Bus Driver", "Conductor", "Inspector", "Mechanic", "Office Staff", "HR Staff", 
+                     "Supervisor", "Manager", "Accountant", "Clerk", "Other"],
+                    index=0 if position_preview not in ["Bus Driver", "Conductor", "Inspector", "Mechanic", "Office Staff", "HR Staff", 
+                                                         "Supervisor", "Manager", "Accountant", "Clerk", "Other"] 
+                          else ["Bus Driver", "Conductor", "Inspector", "Mechanic", "Office Staff", "HR Staff", 
+                                "Supervisor", "Manager", "Accountant", "Clerk", "Other"].index(position_preview)
                 )
-                department = st.selectbox("Department*", ["Operations", "Maintenance", "Administration", "HR"])
+                department = st.selectbox("Department*", 
+                    ["Operations", "Maintenance", "Administration", "HR", "Finance", "Risk Management"])
             
             with col2:
                 national_id = st.text_input("National ID Number*", placeholder="e.g., 63-123456-A-42")

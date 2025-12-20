@@ -29,14 +29,15 @@ def get_conductors():
     ph = get_placeholder()
     try:
         query = f"""
-            SELECT id, employee_id, full_name, job_title 
+            SELECT id, employee_id, full_name, position 
             FROM employees 
             WHERE status = 'Active' 
-              AND (job_title LIKE {ph} OR job_title LIKE {ph})
+              AND (position LIKE {ph} OR position LIKE {ph})
             ORDER BY full_name
         """
         df = pd.read_sql_query(query, get_engine(), params=('%Conductor%', '%conductor%'))
-    except:
+    except Exception as e:
+        print(f"get_conductors error: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
@@ -48,14 +49,15 @@ def get_inspectors():
     ph = get_placeholder()
     try:
         query = f"""
-            SELECT id, employee_id, full_name, job_title, department 
+            SELECT id, employee_id, full_name, position, department 
             FROM employees 
             WHERE status = 'Active' 
-              AND (department LIKE {ph} OR job_title LIKE {ph} OR job_title LIKE {ph})
+              AND (department LIKE {ph} OR position LIKE {ph} OR position LIKE {ph})
             ORDER BY full_name
         """
         df = pd.read_sql_query(query, get_engine(), params=('%Risk%', '%Inspector%', '%inspector%'))
-    except:
+    except Exception as e:
+        print(f"get_inspectors error: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
@@ -67,14 +69,15 @@ def get_drivers():
     ph = get_placeholder()
     try:
         query = f"""
-            SELECT id, employee_id, full_name, job_title 
+            SELECT id, employee_id, full_name, position 
             FROM employees 
             WHERE status = 'Active' 
-              AND (job_title LIKE {ph} OR job_title LIKE {ph})
+              AND (position LIKE {ph} OR position LIKE {ph})
             ORDER BY full_name
         """
         df = pd.read_sql_query(query, get_engine(), params=('%Driver%', '%driver%'))
-    except:
+    except Exception as e:
+        print(f"get_drivers error: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
