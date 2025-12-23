@@ -1131,15 +1131,15 @@ def employee_management_page():
         
         with col_f1:
             # Get unique job titles from database
-            conn = get_connection()
             try:
-                job_titles_df = pd.read_sql_query(
-                    "SELECT DISTINCT position FROM employees WHERE position IS NOT NULL ORDER BY position",
-                    get_engine()
-                )
-                job_title_options = ["All Job Titles"] + job_titles_df['position'].tolist()
-            except:
-                job_title_options = ["All Job Titles", "Driver", "Conductor", "Inspector", "Mechanic", 
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT position FROM employees WHERE position IS NOT NULL ORDER BY position")
+                rows = cursor.fetchall()
+                conn.close()
+                job_title_options = ["All Job Titles"] + [row[0] if isinstance(row, tuple) else row['position'] for row in rows if row]
+            except Exception as e:
+                job_title_options = ["All Job Titles", "Bus Driver", "Conductor", "Inspector", "Mechanic", 
                                     "Clerk", "Manager", "Administrator"]
             
             exp_job_title = st.selectbox("Job Title", job_title_options, key="exp_job_title")
@@ -1147,12 +1147,13 @@ def employee_management_page():
         with col_f2:
             # Get unique departments
             try:
-                depts_df = pd.read_sql_query(
-                    "SELECT DISTINCT department FROM employees WHERE department IS NOT NULL ORDER BY department",
-                    get_engine()
-                )
-                dept_options = ["All Departments"] + depts_df['department'].tolist()
-            except:
+                conn = get_connection()
+                cursor = conn.cursor()
+                cursor.execute("SELECT DISTINCT department FROM employees WHERE department IS NOT NULL ORDER BY department")
+                rows = cursor.fetchall()
+                conn.close()
+                dept_options = ["All Departments"] + [row[0] if isinstance(row, tuple) else row['department'] for row in rows if row]
+            except Exception as e:
                 dept_options = ["All Departments", "Operations", "Maintenance", "Administration", 
                                "HR", "Finance", "Risk Management"]
             
@@ -1172,6 +1173,8 @@ def employee_management_page():
             use_date_filter = st.checkbox("Filter by Hire Date Range", value=False)
         
         # Date range if enabled
+        hire_from = None
+        hire_to = None
         if use_date_filter:
             date_col1, date_col2 = st.columns(2)
             with date_col1:
@@ -1195,13 +1198,11 @@ def employee_management_page():
         # Build query based on filters
         st.markdown("---")
         
-        # Build base query - use direct string substitution for simplicity
-        # We'll sanitize inputs via the selectbox options
+        # Build WHERE clauses
         where_clauses = ["1=1"]
         
         # Apply job title filter
         if exp_job_title != "All Job Titles":
-            # Escape single quotes
             safe_job = exp_job_title.replace("'", "''")
             where_clauses.append(f"position = '{safe_job}'")
         
@@ -1216,29 +1217,28 @@ def employee_management_page():
             where_clauses.append(f"status = '{safe_status}'")
         
         # Apply date range filter
-        if use_date_filter:
+        if use_date_filter and hire_from and hire_to:
             where_clauses.append(f"hire_date >= '{hire_from}'")
             where_clauses.append(f"hire_date <= '{hire_to}'")
         
         # Apply quick filters
         if only_drivers and not only_conductors and not only_inspectors:
-            where_clauses.append("(position LIKE '%Driver%' OR position LIKE '%driver%')")
+            where_clauses.append("(LOWER(position) LIKE '%driver%')")
         elif only_conductors and not only_drivers and not only_inspectors:
-            where_clauses.append("(position LIKE '%Conductor%' OR position LIKE '%conductor%')")
+            where_clauses.append("(LOWER(position) LIKE '%conductor%')")
         elif only_inspectors and not only_drivers and not only_conductors:
-            where_clauses.append("(position LIKE '%Inspector%' OR department LIKE '%Risk%')")
+            where_clauses.append("(LOWER(position) LIKE '%inspector%' OR LOWER(department) LIKE '%risk%')")
         
         # Special report types
         if report_type == "Active Employees":
             where_clauses.append("status = 'Active'")
         elif report_type == "Drivers Only":
-            where_clauses.append("(position LIKE '%Driver%' OR position LIKE '%driver%')")
+            where_clauses.append("(LOWER(position) LIKE '%driver%')")
         elif report_type == "Conductors Only":
-            where_clauses.append("(position LIKE '%Conductor%' OR position LIKE '%conductor%')")
+            where_clauses.append("(LOWER(position) LIKE '%conductor%')")
         elif report_type == "Inspectors/Risk Management":
-            where_clauses.append("(position LIKE '%Inspector%' OR department LIKE '%Risk%')")
+            where_clauses.append("(LOWER(position) LIKE '%inspector%' OR LOWER(department) LIKE '%risk%')")
         elif report_type == "New Hires Report":
-            # Last 90 days
             if USE_POSTGRES:
                 where_clauses.append("hire_date >= CURRENT_DATE - INTERVAL '90 days'")
             else:
@@ -1255,13 +1255,32 @@ def employee_management_page():
             ORDER BY department, full_name
         """
         
+        # Execute query using cursor (not pandas with engine)
         try:
-            export_df = pd.read_sql_query(query, get_engine())
+            conn = get_connection()
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            # Convert to DataFrame
+            if rows:
+                columns = ['id', 'employee_id', 'full_name', 'job_title', 'department', 
+                          'hire_date', 'salary', 'phone', 'email', 'status', 'national_id',
+                          'license_number', 'license_expiry', 'defensive_driving_expiry', 'medical_cert_expiry']
+                
+                if hasattr(rows[0], 'keys'):
+                    # PostgreSQL RealDictRow
+                    export_df = pd.DataFrame([dict(row) for row in rows])
+                else:
+                    # SQLite tuple rows
+                    export_df = pd.DataFrame(rows, columns=columns)
+            else:
+                export_df = pd.DataFrame()
+            
+            conn.close()
         except Exception as e:
             st.error(f"Error loading data: {e}")
             export_df = pd.DataFrame()
-        
-        conn.close()
         
         # Display results
         if not export_df.empty:
