@@ -92,7 +92,7 @@ def update_employee_last_login(employee_id):
             WHERE id = {ph}
         """, (employee_id,))
         conn.commit()
-    except:
+    except Exception as e:
         pass
     finally:
         conn.close()
@@ -131,7 +131,7 @@ def get_employee_trips(employee_id, start_date=None, end_date=None):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -154,7 +154,7 @@ def get_employee_payslips(employee_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -174,7 +174,7 @@ def get_employee_loans(employee_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -194,7 +194,7 @@ def get_employee_deductions(employee_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -214,7 +214,7 @@ def get_employee_red_tickets(employee_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -234,7 +234,7 @@ def get_employee_leave_records(employee_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -254,7 +254,7 @@ def get_employee_requests(employee_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()

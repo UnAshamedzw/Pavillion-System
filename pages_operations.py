@@ -2253,7 +2253,7 @@ def dashboard_page():
         else:
             today_income = pd.read_sql_query(
                 f"SELECT * FROM income WHERE date = '{today}'", get_engine())
-    except:
+    except Exception as e:
         today_income = pd.DataFrame()
     
     try:
@@ -2263,7 +2263,7 @@ def dashboard_page():
         else:
             today_expenses = pd.read_sql_query(
                 f"SELECT * FROM general_expenses WHERE expense_date = '{today}'", get_engine())
-    except:
+    except Exception as e:
         today_expenses = pd.DataFrame()
     
     try:
@@ -2273,7 +2273,7 @@ def dashboard_page():
         else:
             today_fuel = pd.read_sql_query(
                 f"SELECT * FROM fuel_records WHERE date = '{today}'", get_engine())
-    except:
+    except Exception as e:
         today_fuel = pd.DataFrame()
     
     try:
@@ -2283,7 +2283,7 @@ def dashboard_page():
         else:
             today_maintenance = pd.read_sql_query(
                 f"SELECT * FROM maintenance WHERE date = '{today}'", get_engine())
-    except:
+    except Exception as e:
         today_maintenance = pd.DataFrame()
     
     try:
@@ -2297,7 +2297,7 @@ def dashboard_page():
                 f"SELECT SUM(amount) as total FROM income WHERE date = '{yesterday}'", get_engine())
             last_week_income = pd.read_sql_query(
                 f"SELECT SUM(amount) as total FROM income WHERE date = '{last_week_same_day}'", get_engine())
-    except:
+    except Exception as e:
         yesterday_income = pd.DataFrame({'total': [0]})
         last_week_income = pd.DataFrame({'total': [0]})
     
@@ -2479,7 +2479,7 @@ def dashboard_page():
                 st.warning(f"📄 **{exp_count} documents** expiring within 30 days")
             else:
                 st.success("✅ All documents current")
-        except:
+        except Exception as e:
             st.info("📄 Document data not available")
         
         # Pending payroll
@@ -2497,7 +2497,7 @@ def dashboard_page():
             
             if pp_count > 0:
                 st.info(f"💰 **{pp_count} payroll periods** awaiting approval")
-        except:
+        except Exception as e:
             pass
     
     # =========================================================================

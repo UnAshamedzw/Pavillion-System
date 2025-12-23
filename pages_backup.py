@@ -12,6 +12,58 @@ from audit_logger import AuditLogger
 from auth import has_permission
 import io
 import json
+import re
+
+
+# =============================================================================
+# SECURITY: Table Name Validation
+# =============================================================================
+
+# Whitelist of valid table names in the system
+VALID_TABLES = {
+    'users', 'user_sessions', 'roles', 'role_permissions', 'user_permissions',
+    'buses', 'routes', 'employees', 'income', 'maintenance', 'fuel_records',
+    'general_expenses', 'inventory', 'customers', 'bookings', 'documents',
+    'audit_log', 'leave_records', 'disciplinary_records', 'employee_performance',
+    'contract_templates', 'generated_contracts', 'payroll_periods', 'payroll_records',
+    'tax_brackets', 'system_settings', 'employee_loans', 'employee_deductions',
+    'cash_reconciliation', 'red_tickets', 'employee_requests', 'employee_complaints',
+    'bus_assignments', 'notifications', 'notification_recipients',
+}
+
+
+def validate_table_name(table_name):
+    """
+    Validate table name to prevent SQL injection.
+    Returns True if table name is safe, False otherwise.
+    """
+    if not table_name:
+        return False
+    
+    # Check against whitelist first
+    if table_name.lower() in VALID_TABLES:
+        return True
+    
+    # If not in whitelist, verify it's a valid identifier (alphanumeric + underscore only)
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', table_name):
+        return False
+    
+    # Additional check: verify table exists in database
+    try:
+        all_tables = get_all_tables()
+        return table_name in all_tables
+    except Exception as e:
+        return False
+
+
+def safe_table_query(table_name):
+    """
+    Return a safe table name for use in SQL queries.
+    Raises ValueError if table name is invalid.
+    """
+    if not validate_table_name(table_name):
+        raise ValueError(f"Invalid or unauthorized table name: {table_name}")
+    return table_name
 
 
 # =============================================================================
@@ -52,11 +104,18 @@ def get_all_tables():
 
 def get_table_row_count(table_name):
     """Get row count for a table"""
+    # SECURITY FIX: Validate table name
+    try:
+        safe_name = safe_table_query(table_name)
+    except ValueError as e:
+        print(f"Security warning: {e}")
+        return 0
+    
     conn = get_connection()
     cursor = conn.cursor()
     
     try:
-        cursor.execute(f"SELECT COUNT(*) as count FROM {table_name}")
+        cursor.execute(f"SELECT COUNT(*) as count FROM {safe_name}")
         result = cursor.fetchone()
         count = result['count'] if hasattr(result, 'keys') else result[0]
         return count
@@ -68,8 +127,15 @@ def get_table_row_count(table_name):
 
 def export_table_to_dataframe(table_name):
     """Export a single table to a pandas DataFrame"""
+    # SECURITY FIX: Validate table name
     try:
-        query = f"SELECT * FROM {table_name}"
+        safe_name = safe_table_query(table_name)
+    except ValueError as e:
+        st.error(f"Security error: {e}")
+        return pd.DataFrame()
+    
+    try:
+        query = f"SELECT * FROM {safe_name}"
         df = pd.read_sql_query(query, get_engine())
         return df
     except Exception as e:
@@ -114,14 +180,21 @@ def export_all_tables_to_excel():
 
 def export_filtered_data(table_name, start_date=None, end_date=None, date_column='date'):
     """Export table data with date filtering"""
+    # SECURITY FIX: Validate table name
+    try:
+        safe_name = safe_table_query(table_name)
+    except ValueError as e:
+        st.error(f"Security error: {e}")
+        return pd.DataFrame()
+    
     conn = get_connection()
     
-    query = f"SELECT * FROM {table_name}"
+    query = f"SELECT * FROM {safe_name}"
     params = []
     
     # Check if table has the date column
     try:
-        test_df = pd.read_sql_query(f"SELECT * FROM {table_name} LIMIT 1", get_engine())
+        test_df = pd.read_sql_query(f"SELECT * FROM {safe_name} LIMIT 1", get_engine())
         if date_column not in test_df.columns:
             # Try common date column names
             for col in ['date', 'created_at', 'timestamp', 'assignment_date', 'incident_date', 'start_date']:
@@ -130,9 +203,13 @@ def export_filtered_data(table_name, start_date=None, end_date=None, date_column
                     break
             else:
                 # No date column found, export all
-                return export_table_to_dataframe(table_name)
-    except:
-        return export_table_to_dataframe(table_name)
+                return export_table_to_dataframe(safe_name)
+    except Exception as e:
+        return export_table_to_dataframe(safe_name)
+    
+    # Validate date_column is alphanumeric to prevent injection
+    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', date_column):
+        return export_table_to_dataframe(safe_name)
     
     ph = '%s' if USE_POSTGRES else '?'
     
@@ -153,7 +230,7 @@ def export_filtered_data(table_name, start_date=None, end_date=None, date_column
         return df
     except Exception as e:
         st.warning(f"Could not filter by date: {e}")
-        return export_table_to_dataframe(table_name)
+        return export_table_to_dataframe(safe_name)
 
 
 def get_database_summary():
@@ -162,6 +239,7 @@ def get_database_summary():
     summary = []
     
     for table in tables:
+        # Tables from get_all_tables are already validated
         count = get_table_row_count(table)
         summary.append({
             'Table': table,
@@ -182,6 +260,10 @@ def generate_sql_backup():
     sql_statements.append("")
     
     for table in tables:
+        # SECURITY: Tables from get_all_tables are validated; validate again for safety
+        if not validate_table_name(table):
+            continue
+            
         df = export_table_to_dataframe(table)
         
         if df.empty:
@@ -230,7 +312,7 @@ def generate_financial_report(start_date, end_date):
             'count': len(income_df),
             'by_route': income_df.groupby('route')['amount'].sum().to_dict() if not income_df.empty else {}
         }
-    except:
+    except Exception as e:
         report['income'] = {'total': 0, 'count': 0, 'by_route': {}}
     
     # Maintenance
@@ -241,7 +323,7 @@ def generate_financial_report(start_date, end_date):
             'count': len(maint_df),
             'by_type': maint_df.groupby('maintenance_type')['cost'].sum().to_dict() if not maint_df.empty else {}
         }
-    except:
+    except Exception as e:
         report['maintenance'] = {'total': 0, 'count': 0, 'by_type': {}}
     
     # Fuel
@@ -252,7 +334,7 @@ def generate_financial_report(start_date, end_date):
             'liters': fuel_df['liters'].sum() if not fuel_df.empty else 0,
             'count': len(fuel_df)
         }
-    except:
+    except Exception as e:
         report['fuel'] = {'total': 0, 'liters': 0, 'count': 0}
     
     # Payroll
@@ -262,7 +344,7 @@ def generate_financial_report(start_date, end_date):
             'total': payroll_df['net_salary'].sum() if not payroll_df.empty else 0,
             'count': len(payroll_df)
         }
-    except:
+    except Exception as e:
         report['payroll'] = {'total': 0, 'count': 0}
     
     # Calculate totals
@@ -303,12 +385,12 @@ def generate_fleet_report():
                                 expired += 1
                             elif exp_date < today + timedelta(days=30):
                                 expiring_soon += 1
-                        except:
+                        except Exception as e:
                             pass
             
             report['expired_documents'] = expired
             report['expiring_soon'] = expiring_soon
-    except:
+    except Exception as e:
         report = {'total_buses': 0, 'active_buses': 0, 'inactive_buses': 0, 
                  'expired_documents': 0, 'expiring_soon': 0}
     
@@ -325,7 +407,7 @@ def generate_hr_report():
             report['total_employees'] = len(emp_df)
             report['active_employees'] = len(emp_df[emp_df['status'] == 'Active'])
             report['by_position'] = emp_df.groupby('position').size().to_dict()
-    except:
+    except Exception as e:
         report = {'total_employees': 0, 'active_employees': 0, 'by_position': {}}
     
     try:
@@ -333,7 +415,7 @@ def generate_hr_report():
         if not leave_df.empty:
             report['pending_leave'] = len(leave_df[leave_df['status'] == 'Pending'])
             report['approved_leave'] = len(leave_df[leave_df['status'] == 'Approved'])
-    except:
+    except Exception as e:
         report['pending_leave'] = 0
         report['approved_leave'] = 0
     

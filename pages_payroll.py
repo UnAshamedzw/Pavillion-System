@@ -31,8 +31,9 @@ def get_system_setting(key, default=None):
         result = cursor.fetchone()
         if result:
             return result['setting_value'] if hasattr(result, 'keys') else result[0]
-    except:
-        pass
+    except Exception as e:
+        # Log but don't fail - return default
+        print(f"Error getting system setting {key}: {e}")
     finally:
         conn.close()
     return default
@@ -44,7 +45,8 @@ def get_tax_brackets():
     try:
         query = "SELECT * FROM tax_brackets WHERE is_active = TRUE ORDER BY min_amount"
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
+        print(f"Error getting tax brackets: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
@@ -142,7 +144,8 @@ def get_pending_deductions(employee_id, start_date, end_date):
               AND date_incurred >= {ph} AND date_incurred <= {ph}
         """
         df = pd.read_sql_query(query, get_engine(), params=(employee_id, str(start_date), str(end_date)))
-    except:
+    except Exception as e:
+        print(f"Error getting pending deductions: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
@@ -158,7 +161,8 @@ def get_active_loans(employee_id):
             WHERE employee_id = {ph} AND status = 'active' AND balance > 0
         """
         df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
-    except:
+    except Exception as e:
+        print(f"Error getting active loans: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
@@ -334,7 +338,8 @@ def get_payroll_periods(status=None):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
+        print(f"Error getting payroll periods: {e}")
         df = pd.DataFrame()
     conn.close()
     return df
@@ -347,7 +352,8 @@ def get_payroll_records(period_id):
     try:
         query = f"SELECT * FROM payroll_records WHERE payroll_period_id = {ph} ORDER BY employee_name"
         df = pd.read_sql_query(query, get_engine(), params=(period_id,))
-    except:
+    except Exception as e:
+        print(f"Error getting payroll records: {e}")
         df = pd.DataFrame()
     conn.close()
     return df

@@ -36,7 +36,7 @@ def get_pending_payroll():
     
     try:
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -57,7 +57,7 @@ def get_pending_leave():
     
     try:
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -78,7 +78,7 @@ def get_pending_loan_requests():
     
     try:
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -99,7 +99,7 @@ def get_open_complaints():
     
     try:
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -119,7 +119,7 @@ def get_payroll_records(period_id):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=(period_id,))
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -580,7 +580,7 @@ def leave_approvals_tab(pending_leave):
             start = datetime.strptime(str(start_date), '%Y-%m-%d').date()
             end = datetime.strptime(str(end_date), '%Y-%m-%d').date()
             days = (end - start).days + 1
-        except:
+        except Exception as e:
             days = 'N/A'
         
         with st.expander(f"📅 {emp_name} - {leave_type} ({days} days)", expanded=True):

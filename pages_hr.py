@@ -623,7 +623,7 @@ def employee_management_page():
                                     doc_warnings.append(f"🟠 License expires in {days_left} days")
                                 else:
                                     doc_warnings.append(f"🟡 License expires in {days_left} days")
-                        except:
+                        except Exception as e:
                             pass
                     
                     # Check other documents similarly
@@ -637,7 +637,7 @@ def employee_management_page():
                                         doc_warnings.append(f"🔴 {doc_name} EXPIRED")
                                     elif days_left <= 7:
                                         doc_warnings.append(f"🟠 {doc_name} expires in {days_left} days")
-                            except:
+                            except Exception as e:
                                 pass
                 
                 # Build expander title
@@ -1463,7 +1463,7 @@ def employee_performance_page():
                 JOIN employees e ON p.employee_id = e.employee_id
                 ORDER BY p.evaluation_date DESC
             ''', conn)
-        except:
+        except Exception as e:
             perf_df = pd.DataFrame()
         
         conn.close()
@@ -1516,7 +1516,7 @@ def employee_performance_page():
         conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", get_engine())
-        except:
+        except Exception as e:
             employees_df = pd.DataFrame()
         conn.close()
         
@@ -1586,7 +1586,7 @@ def employee_performance_page():
                 JOIN employees e ON p.employee_id = e.employee_id
                 ORDER BY p.evaluation_date DESC
             ''', conn)
-        except:
+        except Exception as e:
             perf_export_df = pd.DataFrame()
         conn.close()
         
@@ -1677,7 +1677,7 @@ def payroll_management_page():
         
         try:
             payroll_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-        except:
+        except Exception as e:
             payroll_df = pd.DataFrame()
             
         conn.close()
@@ -1754,7 +1754,7 @@ def payroll_management_page():
         conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name, position, salary FROM employees WHERE status = 'Active'", get_engine())
-        except:
+        except Exception as e:
             employees_df = pd.DataFrame()
         conn.close()
         
@@ -1830,7 +1830,7 @@ def payroll_management_page():
                 JOIN employees e ON p.employee_id = e.employee_id
                 ORDER BY p.created_at DESC
             ''', conn)
-        except:
+        except Exception as e:
             payroll_export_df = pd.DataFrame()
         conn.close()
         
@@ -1921,7 +1921,7 @@ def leave_management_page():
         
         try:
             leave_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-        except:
+        except Exception as e:
             leave_df = pd.DataFrame()
             
         conn.close()
@@ -2026,7 +2026,7 @@ def leave_management_page():
         conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name FROM employees WHERE status = 'Active'", get_engine())
-        except:
+        except Exception as e:
             employees_df = pd.DataFrame()
         conn.close()
         
@@ -2093,7 +2093,7 @@ def leave_management_page():
                 JOIN employees e ON l.employee_id = e.employee_id
                 ORDER BY l.created_at DESC
             ''', conn)
-        except:
+        except Exception as e:
             leave_export_df = pd.DataFrame()
         conn.close()
         
@@ -2190,7 +2190,7 @@ def disciplinary_records_page():
         
         try:
             disc_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-        except:
+        except Exception as e:
             disc_df = pd.DataFrame()
             
         conn.close()
@@ -2298,7 +2298,7 @@ def disciplinary_records_page():
         conn = get_connection()
         try:
             employees_df = pd.read_sql_query("SELECT employee_id, full_name, position FROM employees WHERE status = 'Active'", get_engine())
-        except:
+        except Exception as e:
             employees_df = pd.DataFrame()
         conn.close()
         
@@ -2369,7 +2369,7 @@ def disciplinary_records_page():
                 JOIN employees e ON d.employee_id = e.employee_id
                 ORDER BY d.created_at DESC
             ''', conn)
-        except:
+        except Exception as e:
             disc_export_df = pd.DataFrame()
         conn.close()
         

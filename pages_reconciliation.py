@@ -89,7 +89,7 @@ def get_buses():
     try:
         query = "SELECT id, registration_number, bus_name FROM buses WHERE status = 'Active' ORDER BY registration_number"
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     conn.close()
     return df
@@ -101,7 +101,7 @@ def get_routes():
     try:
         query = "SELECT id, route_name, start_point, end_point FROM routes WHERE status = 'Active' ORDER BY route_name"
         df = pd.read_sql_query(query, get_engine())
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     conn.close()
     return df
@@ -177,7 +177,7 @@ def get_red_tickets(start_date=None, end_date=None, conductor_id=None, inspector
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     conn.close()
     return df
@@ -318,7 +318,7 @@ def get_reconciliations(start_date=None, end_date=None, employee_id=None, status
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     conn.close()
     return df
@@ -385,7 +385,7 @@ def get_employee_deductions(employee_id=None, status=None, start_date=None, end_
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     conn.close()
     return df
@@ -795,7 +795,7 @@ def penalties_tab():
             "SELECT id, employee_id, full_name, job_title FROM employees WHERE status = 'Active' ORDER BY full_name",
             get_engine()
         )
-    except:
+    except Exception as e:
         employees = pd.DataFrame()
     conn.close()
     
