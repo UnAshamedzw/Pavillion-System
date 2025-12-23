@@ -1195,63 +1195,72 @@ def employee_management_page():
         # Build query based on filters
         st.markdown("---")
         
-        query = """
-            SELECT id, employee_id, full_name, position as job_title, department, 
-                   hire_date, salary, phone, email, status, national_id,
-                   license_number, license_expiry, defensive_driving_expiry, medical_cert_expiry
-            FROM employees WHERE 1=1
-        """
-        params = []
-        ph = get_placeholder()
+        # Build base query - use direct string substitution for simplicity
+        # We'll sanitize inputs via the selectbox options
+        where_clauses = ["1=1"]
         
         # Apply job title filter
         if exp_job_title != "All Job Titles":
-            query += f" AND position = {ph}"
-            params.append(exp_job_title)
+            # Escape single quotes
+            safe_job = exp_job_title.replace("'", "''")
+            where_clauses.append(f"position = '{safe_job}'")
         
         # Apply department filter
         if exp_dept != "All Departments":
-            query += f" AND department = {ph}"
-            params.append(exp_dept)
+            safe_dept = exp_dept.replace("'", "''")
+            where_clauses.append(f"department = '{safe_dept}'")
         
         # Apply status filter
         if exp_status != "All Statuses":
-            query += f" AND status = {ph}"
-            params.append(exp_status)
+            safe_status = exp_status.replace("'", "''")
+            where_clauses.append(f"status = '{safe_status}'")
         
         # Apply date range filter
         if use_date_filter:
-            query += f" AND hire_date >= {ph} AND hire_date <= {ph}"
-            params.append(str(hire_from))
-            params.append(str(hire_to))
+            where_clauses.append(f"hire_date >= '{hire_from}'")
+            where_clauses.append(f"hire_date <= '{hire_to}'")
         
         # Apply quick filters
         if only_drivers and not only_conductors and not only_inspectors:
-            query += " AND (position LIKE '%Driver%' OR position LIKE '%driver%')"
+            where_clauses.append("(position LIKE '%Driver%' OR position LIKE '%driver%')")
         elif only_conductors and not only_drivers and not only_inspectors:
-            query += " AND (position LIKE '%Conductor%' OR position LIKE '%conductor%')"
+            where_clauses.append("(position LIKE '%Conductor%' OR position LIKE '%conductor%')")
         elif only_inspectors and not only_drivers and not only_conductors:
-            query += " AND (position LIKE '%Inspector%' OR department LIKE '%Risk%')"
+            where_clauses.append("(position LIKE '%Inspector%' OR department LIKE '%Risk%')")
         
         # Special report types
         if report_type == "Active Employees":
-            query += " AND status = 'Active'"
+            where_clauses.append("status = 'Active'")
         elif report_type == "Drivers Only":
-            query += " AND (position LIKE '%Driver%' OR position LIKE '%driver%')"
+            where_clauses.append("(position LIKE '%Driver%' OR position LIKE '%driver%')")
         elif report_type == "Conductors Only":
-            query += " AND (position LIKE '%Conductor%' OR position LIKE '%conductor%')"
+            where_clauses.append("(position LIKE '%Conductor%' OR position LIKE '%conductor%')")
         elif report_type == "Inspectors/Risk Management":
-            query += " AND (position LIKE '%Inspector%' OR department LIKE '%Risk%')"
+            where_clauses.append("(position LIKE '%Inspector%' OR department LIKE '%Risk%')")
         elif report_type == "New Hires Report":
             # Last 90 days
             if USE_POSTGRES:
-                query += " AND hire_date >= CURRENT_DATE - INTERVAL '90 days'"
+                where_clauses.append("hire_date >= CURRENT_DATE - INTERVAL '90 days'")
             else:
-                query += " AND hire_date >= date('now', '-90 days')"
+                where_clauses.append("hire_date >= date('now', '-90 days')")
         
-        query += " ORDER BY department, full_name"
+        where_sql = " AND ".join(where_clauses)
         
-        export_df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        query = f"""
+            SELECT id, employee_id, full_name, position as job_title, department, 
+                   hire_date, salary, phone, email, status, national_id,
+                   license_number, license_expiry, defensive_driving_expiry, medical_cert_expiry
+            FROM employees 
+            WHERE {where_sql}
+            ORDER BY department, full_name
+        """
+        
+        try:
+            export_df = pd.read_sql_query(query, get_engine())
+        except Exception as e:
+            st.error(f"Error loading data: {e}")
+            export_df = pd.DataFrame()
+        
         conn.close()
         
         # Display results
