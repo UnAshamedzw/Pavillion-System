@@ -14,6 +14,29 @@ from audit_logger import AuditLogger
 from auth import has_permission
 
 
+def validate_entry_date(entry_date, allow_future=False, max_past_days=90):
+    """
+    Validate that entry date is reasonable.
+    Returns tuple: (is_valid, error_message)
+    """
+    today = datetime.now().date()
+    
+    # Convert to date if datetime
+    if isinstance(entry_date, datetime):
+        entry_date = entry_date.date()
+    
+    # Check for future dates
+    if not allow_future and entry_date > today:
+        return False, f"Cannot enter records for future dates. Today is {today}."
+    
+    # Check for very old dates
+    oldest_allowed = today - timedelta(days=max_past_days)
+    if entry_date < oldest_allowed:
+        return False, f"Date too old. Maximum {max_past_days} days in the past allowed."
+    
+    return True, None
+
+
 # =============================================================================
 # DATABASE FUNCTIONS
 # =============================================================================
@@ -370,44 +393,49 @@ def fuel_entry_page():
                         if not selected_bus or total_cost <= 0 or cost_per_liter <= 0:
                             st.error("Please fill in all required fields (Bus, Amount Paid, Cost per Liter)")
                         else:
-                            # Calculate liters from amount
-                            liters = total_cost / cost_per_liter
-                            
-                            # Set odometer to None if 0
-                            odo = odometer_reading if odometer_reading > 0 else None
-                            
-                            record_id = add_fuel_record(
-                                bus_number=selected_bus,
-                                date=str(fuel_date),
-                                liters=liters,
-                                cost_per_liter=cost_per_liter,
-                                total_cost=total_cost,
-                                odometer_reading=odo,
-                                fuel_station=fuel_station,
-                                payment_method=payment_method,
-                                receipt_number=receipt_number,
-                                filled_by=filled_by,
-                                notes=notes,
-                                created_by=st.session_state['user']['username']
-                            )
-                            
-                            if record_id:
-                                AuditLogger.log_action(
-                                    "Create", "Fuel",
-                                    f"Added fuel record: {selected_bus} - {liters:.2f}L @ ${cost_per_liter}/L = ${total_cost:.2f}"
-                                )
-                                st.success(f"✅ Fuel record saved! (ID: {record_id}) - {liters:.2f} liters")
-                                
-                                # Show efficiency if calculated
-                                if odo and get_last_odometer(selected_bus):
-                                    last_odo = get_last_odometer(selected_bus)
-                                    # Note: last_odo is now the new reading, so we need to recalculate
-                                    # This is handled in the add_fuel_record function
-                                    st.info("📊 Fuel efficiency calculated and saved")
-                                
-                                st.rerun()
+                            # CRITICAL FIX: Validate date (no future dates)
+                            date_valid, date_error = validate_entry_date(fuel_date, allow_future=False, max_past_days=90)
+                            if not date_valid:
+                                st.error(f"⚠️ {date_error}")
                             else:
-                                st.error("Error saving fuel record")
+                                # Calculate liters from amount
+                                liters = total_cost / cost_per_liter
+                                
+                                # Set odometer to None if 0
+                                odo = odometer_reading if odometer_reading > 0 else None
+                                
+                                record_id = add_fuel_record(
+                                    bus_number=selected_bus,
+                                    date=str(fuel_date),
+                                    liters=liters,
+                                    cost_per_liter=cost_per_liter,
+                                    total_cost=total_cost,
+                                    odometer_reading=odo,
+                                    fuel_station=fuel_station,
+                                    payment_method=payment_method,
+                                    receipt_number=receipt_number,
+                                    filled_by=filled_by,
+                                    notes=notes,
+                                    created_by=st.session_state['user']['username']
+                                )
+                                
+                                if record_id:
+                                    AuditLogger.log_action(
+                                        "Create", "Fuel",
+                                        f"Added fuel record: {selected_bus} - {liters:.2f}L @ ${cost_per_liter}/L = ${total_cost:.2f}"
+                                    )
+                                    st.success(f"✅ Fuel record saved! (ID: {record_id}) - {liters:.2f} liters")
+                                    
+                                    # Show efficiency if calculated
+                                    if odo and get_last_odometer(selected_bus):
+                                        last_odo = get_last_odometer(selected_bus)
+                                        # Note: last_odo is now the new reading, so we need to recalculate
+                                        # This is handled in the add_fuel_record function
+                                        st.info("📊 Fuel efficiency calculated and saved")
+                                    
+                                    st.rerun()
+                                else:
+                                    st.error("Error saving fuel record")
     
     with tab2:
         st.subheader("📋 Fuel History")

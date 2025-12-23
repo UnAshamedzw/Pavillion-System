@@ -164,6 +164,58 @@ def get_active_loans(employee_id):
     return df
 
 
+def check_payroll_period_overlap(start_date, end_date, exclude_id=None):
+    """
+    Check if a payroll period overlaps with existing periods.
+    Returns tuple: (has_overlap, overlapping_period_info)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    ph = get_placeholder()
+    
+    try:
+        # Check for overlapping periods
+        # Overlap occurs when: existing_start <= new_end AND existing_end >= new_start
+        if USE_POSTGRES:
+            query = f"""
+                SELECT id, period_name, start_date, end_date, status
+                FROM payroll_periods 
+                WHERE start_date <= {ph} AND end_date >= {ph}
+                  AND status NOT IN ('cancelled', 'rejected')
+            """
+        else:
+            query = f"""
+                SELECT id, period_name, start_date, end_date, status
+                FROM payroll_periods 
+                WHERE start_date <= {ph} AND end_date >= {ph}
+                  AND status NOT IN ('cancelled', 'rejected')
+            """
+        
+        params = [str(end_date), str(start_date)]
+        
+        if exclude_id:
+            query += f" AND id != {ph}"
+            params.append(exclude_id)
+        
+        cursor.execute(query, tuple(params))
+        overlapping = cursor.fetchone()
+        
+        if overlapping:
+            if hasattr(overlapping, 'keys'):
+                info = f"{overlapping['period_name']} ({overlapping['start_date']} to {overlapping['end_date']}) - Status: {overlapping['status']}"
+            else:
+                info = f"{overlapping[1]} ({overlapping[2]} to {overlapping[3]}) - Status: {overlapping[4]}"
+            return True, info
+        
+        return False, None
+        
+    except Exception as e:
+        print(f"Overlap check error: {e}")
+        return False, None
+    finally:
+        conn.close()
+
+
 def create_payroll_period(period_name, period_type, start_date, end_date, 
                           driver_rate, conductor_rate, currency, created_by):
     """Create a new payroll period"""
@@ -590,23 +642,34 @@ def generate_payroll_section():
         st.dataframe(df, use_container_width=True, hide_index=True)
         
         if st.button("✅ Save Payroll", type="primary", use_container_width=True):
-            period_id = create_payroll_period(
-                period_info['period_name'], period_info['period_type'],
-                period_info['start_date'], period_info['end_date'],
-                period_info['driver_rate'], period_info['conductor_rate'],
-                period_info['currency'], st.session_state['user']['username']
+            # CRITICAL FIX: Check for overlapping payroll periods
+            has_overlap, overlap_info = check_payroll_period_overlap(
+                period_info['start_date'], 
+                period_info['end_date']
             )
             
-            if period_id:
-                for emp in preview:
-                    save_payroll_record(period_id, emp)
+            if has_overlap:
+                st.error("⚠️ **Overlapping Payroll Period Detected!**")
+                st.warning(f"📋 Existing period: {overlap_info}")
+                st.info("Please adjust the dates to avoid overlap, or cancel the existing period first.")
+            else:
+                period_id = create_payroll_period(
+                    period_info['period_name'], period_info['period_type'],
+                    period_info['start_date'], period_info['end_date'],
+                    period_info['driver_rate'], period_info['conductor_rate'],
+                    period_info['currency'], st.session_state['user']['username']
+                )
                 
-                update_period_status(period_id, 'processing', st.session_state['user']['username'])
-                AuditLogger.log_action("Create", "Payroll", f"Created payroll: {period_info['period_name']}")
-                st.success("✅ Payroll saved! Awaiting approval.")
-                del st.session_state['payroll_preview']
-                del st.session_state['period_info']
-                st.rerun()
+                if period_id:
+                    for emp in preview:
+                        save_payroll_record(period_id, emp)
+                    
+                    update_period_status(period_id, 'processing', st.session_state['user']['username'])
+                    AuditLogger.log_action("Create", "Payroll", f"Created payroll: {period_info['period_name']}")
+                    st.success("✅ Payroll saved! Awaiting approval.")
+                    del st.session_state['payroll_preview']
+                    del st.session_state['period_info']
+                    st.rerun()
 
 
 def payroll_history_section(can_approve):

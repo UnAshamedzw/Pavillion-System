@@ -14,6 +14,29 @@ from audit_logger import AuditLogger
 from auth import has_permission
 
 
+def validate_entry_date(entry_date, allow_future=False, max_past_days=90):
+    """
+    Validate that entry date is reasonable.
+    Returns tuple: (is_valid, error_message)
+    """
+    today = datetime.now().date()
+    
+    # Convert to date if datetime
+    if isinstance(entry_date, datetime):
+        entry_date = entry_date.date()
+    
+    # Check for future dates
+    if not allow_future and entry_date > today:
+        return False, f"Cannot enter records for future dates. Today is {today}."
+    
+    # Check for very old dates
+    oldest_allowed = today - timedelta(days=max_past_days)
+    if entry_date < oldest_allowed:
+        return False, f"Date too old. Maximum {max_past_days} days in the past allowed."
+    
+    return True, None
+
+
 # =============================================================================
 # DATABASE FUNCTIONS
 # =============================================================================
@@ -458,31 +481,36 @@ def general_expenses_page():
                     if not all([category, subcategory, description, amount > 0]):
                         st.error("Please fill in all required fields")
                     else:
-                        expense_id = add_expense(
-                            expense_date=str(expense_date),
-                            category=category,
-                            subcategory=subcategory,
-                            description=description,
-                            vendor=vendor,
-                            amount=amount,
-                            payment_method=payment_method,
-                            payment_status=payment_status,
-                            receipt_number=receipt_number,
-                            recurring=is_recurring,
-                            recurring_frequency=recurring_freq,
-                            notes=notes,
-                            created_by=st.session_state.get('user', {}).get('username', 'system')
-                        )
-                        
-                        if expense_id:
-                            AuditLogger.log_action(
-                                "Create", "Expenses",
-                                f"Added expense: {category}/{subcategory} - ${amount:.2f}"
-                            )
-                            st.success(f"✅ Expense added successfully! (ID: {expense_id})")
-                            st.rerun()
+                        # CRITICAL FIX: Validate date (no future dates)
+                        date_valid, date_error = validate_entry_date(expense_date, allow_future=False, max_past_days=90)
+                        if not date_valid:
+                            st.error(f"⚠️ {date_error}")
                         else:
-                            st.error("Error adding expense")
+                            expense_id = add_expense(
+                                expense_date=str(expense_date),
+                                category=category,
+                                subcategory=subcategory,
+                                description=description,
+                                vendor=vendor,
+                                amount=amount,
+                                payment_method=payment_method,
+                                payment_status=payment_status,
+                                receipt_number=receipt_number,
+                                recurring=is_recurring,
+                                recurring_frequency=recurring_freq,
+                                notes=notes,
+                                created_by=st.session_state.get('user', {}).get('username', 'system')
+                            )
+                            
+                            if expense_id:
+                                AuditLogger.log_action(
+                                    "Create", "Expenses",
+                                    f"Added expense: {category}/{subcategory} - ${amount:.2f}"
+                                )
+                                st.success(f"✅ Expense added successfully! (ID: {expense_id})")
+                                st.rerun()
+                            else:
+                                st.error("Error adding expense")
     
     with tab2:
         st.subheader("📋 Expense List")

@@ -36,6 +36,78 @@ from database import (
 from pages_fuel import add_fuel_record
 
 
+def get_placeholder():
+    """Return the correct placeholder for the current database"""
+    return '%s' if USE_POSTGRES else '?'
+
+
+def check_duplicate_trip(bus_number, route, trip_date, driver_employee_id=None):
+    """
+    Check if a similar trip already exists to prevent duplicates.
+    Returns tuple: (is_duplicate, existing_record_info)
+    """
+    conn = get_connection()
+    cursor = conn.cursor()
+    ph = get_placeholder()
+    
+    try:
+        # Check for same bus, route, date combination
+        query = f"""
+            SELECT id, bus_number, route, date, amount, driver_name 
+            FROM income 
+            WHERE bus_number = {ph} 
+              AND route = {ph} 
+              AND date = {ph}
+        """
+        params = [bus_number, route, trip_date]
+        
+        # Optionally also check driver if provided
+        if driver_employee_id:
+            query += f" AND driver_employee_id = {ph}"
+            params.append(driver_employee_id)
+        
+        cursor.execute(query, tuple(params))
+        existing = cursor.fetchone()
+        
+        if existing:
+            if hasattr(existing, 'keys'):
+                info = f"Trip ID #{existing['id']}: {existing['bus_number']} on {existing['route']} - ${existing['amount']}"
+            else:
+                info = f"Trip ID #{existing[0]}: {existing[1]} on {existing[2]} - ${existing[4]}"
+            return True, info
+        
+        return False, None
+        
+    except Exception as e:
+        print(f"Duplicate check error: {e}")
+        return False, None
+    finally:
+        conn.close()
+
+
+def validate_entry_date(entry_date, allow_future=False, max_past_days=365):
+    """
+    Validate that entry date is reasonable.
+    Returns tuple: (is_valid, error_message)
+    """
+    today = datetime.now().date()
+    
+    # Convert to date if datetime
+    if isinstance(entry_date, datetime):
+        entry_date = entry_date.date()
+    
+    # Check for future dates
+    if not allow_future and entry_date > today:
+        return False, f"Cannot enter records for future dates. Today is {today}."
+    
+    # Check for very old dates
+    oldest_allowed = today - timedelta(days=max_past_days)
+    if entry_date < oldest_allowed:
+        return False, f"Date too old. Maximum {max_past_days} days in the past allowed."
+    
+    return True, None
+
+
 def add_fuel_record_from_trip(bus_number, date, liters, cost_per_liter, total_cost,
                                odometer_reading=None, fuel_station=None, filled_by=None,
                                notes=None, created_by=None):
@@ -665,81 +737,99 @@ def income_entry_page():
             elif add_fuel and (fuel_total_cost <= 0 or fuel_cost_per_liter <= 0):
                 st.error("⚠️ Please enter valid fuel details (amount paid and cost per liter)")
             else:
-                # Format times
-                dep_time_str = departure_time.strftime("%H:%M") if departure_time else None
-                arr_time_str = arrival_time.strftime("%H:%M") if arrival_time else None
-                
-                # Determine route name
-                route_name = hire_destination if selected_route == "Charter/Hire" else selected_route
-                
-                # Insert income/trip record
-                record_id = add_income_record(
-                    bus_number=registration_number,
-                    route=route_name,
-                    hire_destination=hire_destination if selected_route == "Charter/Hire" else None,
-                    driver_name=driver_name,
-                    conductor_name=conductor_name,
-                    date=trip_date.strftime("%Y-%m-%d"),
-                    amount=amount,
-                    notes=notes,
-                    created_by=st.session_state['user']['username'],
-                    driver_employee_id=driver_employee_id,
-                    conductor_employee_id=conductor_employee_id,
-                    passengers=passengers,
-                    trip_type=trip_type,
-                    departure_time=dep_time_str,
-                    arrival_time=arr_time_str,
-                    driver_bonus=driver_bonus if add_bonus else 0,
-                    conductor_bonus=conductor_bonus if add_bonus else 0,
-                    bonus_reason=bonus_reason if add_bonus else None
-                )
-                
-                if record_id:
-                    AuditLogger.log_income_add(
+                # CRITICAL FIX #1: Validate date (no future dates)
+                date_valid, date_error = validate_entry_date(trip_date, allow_future=False, max_past_days=90)
+                if not date_valid:
+                    st.error(f"⚠️ {date_error}")
+                else:
+                    # Determine route name for duplicate check
+                    route_name = hire_destination if selected_route == "Charter/Hire" else selected_route
+                    
+                    # CRITICAL FIX #2: Check for duplicate trip
+                    is_duplicate, dup_info = check_duplicate_trip(
                         bus_number=registration_number,
                         route=route_name,
-                        amount=amount,
-                        date=trip_date.strftime("%Y-%m-%d")
+                        trip_date=trip_date.strftime("%Y-%m-%d"),
+                        driver_employee_id=driver_employee_id
                     )
-                    st.success(f"✅ Trip recorded successfully! (ID: {record_id})")
-                    if passengers > 0:
-                        st.info(f"📊 Revenue per passenger: ${amount/passengers:.2f}")
                     
-                    # Show bonus info if added
-                    if add_bonus and (driver_bonus > 0 or conductor_bonus > 0):
-                        bonus_msg = []
-                        if driver_bonus > 0:
-                            bonus_msg.append(f"Driver: ${driver_bonus:.2f}")
-                        if conductor_bonus > 0:
-                            bonus_msg.append(f"Conductor: ${conductor_bonus:.2f}")
-                        st.success(f"🎁 Bonuses recorded: {', '.join(bonus_msg)}")
-                    
-                    # Add fuel record if checkbox was checked
-                    if add_fuel and fuel_total_cost > 0:
-                        # Calculate liters from amount paid
-                        fuel_liters = fuel_total_cost / fuel_cost_per_liter if fuel_cost_per_liter > 0 else 0
+                    if is_duplicate:
+                        st.error(f"⚠️ **Duplicate Trip Detected!** A similar trip already exists:")
+                        st.warning(f"📋 {dup_info}")
+                        st.info("If this is a different trip (e.g., second trip same day), please add distinguishing notes or change the route name.")
+                    else:
+                        # Format times
+                        dep_time_str = departure_time.strftime("%H:%M") if departure_time else None
+                        arr_time_str = arrival_time.strftime("%H:%M") if arrival_time else None
                         
-                        fuel_record_id = add_fuel_record_from_trip(
+                        # Insert income/trip record
+                        record_id = add_income_record(
                             bus_number=registration_number,
+                            route=route_name,
+                            hire_destination=hire_destination if selected_route == "Charter/Hire" else None,
+                            driver_name=driver_name,
+                            conductor_name=conductor_name,
                             date=trip_date.strftime("%Y-%m-%d"),
-                            liters=fuel_liters,
-                            cost_per_liter=fuel_cost_per_liter,
-                            total_cost=fuel_total_cost,
-                            odometer_reading=fuel_odometer,
-                            fuel_station=fuel_station,
-                            filled_by=driver_name,
-                            notes=f"Fuel for trip ID: {record_id}" + (f" - {notes}" if notes else ""),
-                            created_by=st.session_state['user']['username']
+                            amount=amount,
+                            notes=notes,
+                            created_by=st.session_state['user']['username'],
+                            driver_employee_id=driver_employee_id,
+                            conductor_employee_id=conductor_employee_id,
+                            passengers=passengers,
+                            trip_type=trip_type,
+                            departure_time=dep_time_str,
+                            arrival_time=arr_time_str,
+                            driver_bonus=driver_bonus if add_bonus else 0,
+                            conductor_bonus=conductor_bonus if add_bonus else 0,
+                            bonus_reason=bonus_reason if add_bonus else None
                         )
                         
-                        if fuel_record_id:
-                            st.success(f"⛽ Fuel record added! (ID: {fuel_record_id}) - ${fuel_total_cost:.2f} for {fuel_liters:.2f}L")
+                        if record_id:
+                            AuditLogger.log_income_add(
+                                bus_number=registration_number,
+                                route=route_name,
+                                amount=amount,
+                                date=trip_date.strftime("%Y-%m-%d")
+                            )
+                            st.success(f"✅ Trip recorded successfully! (ID: {record_id})")
+                            if passengers > 0:
+                                st.info(f"📊 Revenue per passenger: ${amount/passengers:.2f}")
+                            
+                            # Show bonus info if added
+                            if add_bonus and (driver_bonus > 0 or conductor_bonus > 0):
+                                bonus_msg = []
+                                if driver_bonus > 0:
+                                    bonus_msg.append(f"Driver: ${driver_bonus:.2f}")
+                                if conductor_bonus > 0:
+                                    bonus_msg.append(f"Conductor: ${conductor_bonus:.2f}")
+                                st.success(f"🎁 Bonuses recorded: {', '.join(bonus_msg)}")
+                            
+                            # Add fuel record if checkbox was checked
+                            if add_fuel and fuel_total_cost > 0:
+                                # Calculate liters from amount paid
+                                fuel_liters = fuel_total_cost / fuel_cost_per_liter if fuel_cost_per_liter > 0 else 0
+                                
+                                fuel_record_id = add_fuel_record_from_trip(
+                                    bus_number=registration_number,
+                                    date=trip_date.strftime("%Y-%m-%d"),
+                                    liters=fuel_liters,
+                                    cost_per_liter=fuel_cost_per_liter,
+                                    total_cost=fuel_total_cost,
+                                    odometer_reading=fuel_odometer,
+                                    fuel_station=fuel_station,
+                                    filled_by=driver_name,
+                                    notes=f"Fuel for trip ID: {record_id}" + (f" - {notes}" if notes else ""),
+                                    created_by=st.session_state['user']['username']
+                                )
+                                
+                                if fuel_record_id:
+                                    st.success(f"⛽ Fuel record added! (ID: {fuel_record_id}) - ${fuel_total_cost:.2f} for {fuel_liters:.2f}L")
+                                else:
+                                    st.warning("⚠️ Trip saved but fuel record failed to save")
+                            
+                            st.balloons()
                         else:
-                            st.warning("⚠️ Trip saved but fuel record failed to save")
-                    
-                    st.balloons()
-                else:
-                    st.error("❌ Error saving trip record")
+                            st.error("❌ Error saving trip record")
     
     # Recent Entries Section
     st.markdown("---")
