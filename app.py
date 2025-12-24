@@ -64,6 +64,10 @@ def main():
     # Apply mobile-responsive styles
     apply_mobile_styles()
     
+    # Apply global table and metric styles
+    from table_styles import apply_global_styles
+    apply_global_styles()
+    
     # Initialize database only once per session
     if 'initialized' not in st.session_state:
         init_database()

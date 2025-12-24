@@ -968,163 +968,181 @@ def income_entry_page():
         
         st.markdown("---")
         
-        # Display records
-        for record in records:
-            # Handle both dict and tuple formats
-            if isinstance(record, dict):
-                record_id = record['id']
-                bus_num = record['bus_number']
-                route_name = record['route']
-                hire_dest = record.get('hire_destination')
-                driver = record.get('driver_name')
-                conductor = record.get('conductor_name')
-                date_str = record['date']
-                amt = record['amount']
-                notes_text = record.get('notes')
-                created_by = record.get('created_by')
-            else:
-                record_id, bus_num, route_name, hire_dest, driver, conductor, date_str, amt, notes_text, created_by = record
+        # View mode toggle
+        view_mode = st.radio("View Mode", ["Table View", "Card View"], horizontal=True, key="rev_view_mode")
+        
+        if view_mode == "Table View":
+            # Styled Table View
+            from table_styles import format_currency
             
-            # Format route display
-            route_display = route_name
-            if route_name == "Hire" and hire_dest:
-                route_display = f"Hire: {hire_dest}"
+            table_df = records_df[['date', 'bus_number', 'route', 'driver_name', 'conductor_name', 'amount']].copy()
+            table_df.columns = ['Date', 'Bus', 'Route', 'Driver', 'Conductor', 'Amount']
             
-            with st.expander(f"🚌 {bus_num} - {route_display} | ${amt:,.2f} | {date_str}"):
-                col_a, col_b = st.columns([3, 1])
+            # Format amount with currency
+            table_df['Amount'] = table_df['Amount'].apply(lambda x: format_currency(x))
+            
+            # Fill NA values
+            table_df = table_df.fillna('-')
+            
+            st.dataframe(table_df, use_container_width=True, hide_index=True)
+        else:
+            # Card View - Display records
+            for record in records:
+                # Handle both dict and tuple formats
+                if isinstance(record, dict):
+                    record_id = record['id']
+                    bus_num = record['bus_number']
+                    route_name = record['route']
+                    hire_dest = record.get('hire_destination')
+                    driver = record.get('driver_name')
+                    conductor = record.get('conductor_name')
+                    date_str = record['date']
+                    amt = record['amount']
+                    notes_text = record.get('notes')
+                    created_by = record.get('created_by')
+                else:
+                    record_id, bus_num, route_name, hire_dest, driver, conductor, date_str, amt, notes_text, created_by = record
                 
-                with col_a:
-                    st.write(f"**Registration:** {bus_num}")
-                    st.write(f"**Route:** {route_display}")
-                    st.write(f"**Driver:** {driver or 'N/A'}")
-                    st.write(f"**Conductor:** {conductor or 'N/A'}")
-                    st.write(f"**Amount:** ${amt:,.2f}")
-                    st.write(f"**Date:** {date_str}")
-                    if notes_text:
-                        st.write(f"**Notes:** {notes_text}")
-                    st.caption(f"Created by: {created_by}")
+                # Format route display
+                route_display = route_name
+                if route_name == "Hire" and hire_dest:
+                    route_display = f"Hire: {hire_dest}"
                 
-                with col_b:
-                    # Edit button
-                    if st.button("✏️ Edit", key=f"edit_{record_id}"):
-                        st.session_state[f'edit_mode_{record_id}'] = True
-                        st.rerun()
+                with st.expander(f"{bus_num} - {route_display} | ${amt:,.2f} | {date_str}"):
+                    col_a, col_b = st.columns([3, 1])
                     
-                    # Delete button
-                    if st.button("🗑️ Delete", key=f"delete_{record_id}"):
-                        if st.session_state.get(f'confirm_delete_{record_id}', False):
-                            delete_income_record(record_id)
-                            
-                            AuditLogger.log_income_delete(
-                                record_id=record_id,
-                                bus_number=bus_num,
-                                date=date_str
-                            )
-                            
-                            st.success("Record deleted")
+                    with col_a:
+                        st.write(f"**Registration:** {bus_num}")
+                        st.write(f"**Route:** {route_display}")
+                        st.write(f"**Driver:** {driver or 'N/A'}")
+                        st.write(f"**Conductor:** {conductor or 'N/A'}")
+                        st.write(f"**Amount:** ${amt:,.2f}")
+                        st.write(f"**Date:** {date_str}")
+                        if notes_text:
+                            st.write(f"**Notes:** {notes_text}")
+                        st.caption(f"Created by: {created_by}")
+                    
+                    with col_b:
+                        # Edit button
+                        if st.button("Edit", key=f"edit_{record_id}"):
+                            st.session_state[f'edit_mode_{record_id}'] = True
                             st.rerun()
-                        else:
-                            st.session_state[f'confirm_delete_{record_id}'] = True
-                            st.warning("Click again to confirm")
-                
-                # Edit mode
-                if st.session_state.get(f'edit_mode_{record_id}', False):
-                    st.markdown("---")
-                    st.markdown("**Edit Record:**")
-                    
-                    with st.form(f"edit_form_{record_id}"):
-                        edit_col1, edit_col2 = st.columns(2)
                         
-                        with edit_col1:
-                            # Bus dropdown for editing
-                            edit_buses = get_active_buses()
-                            edit_bus_options = [get_bus_display_option(bus) for bus in edit_buses]
-                            
-                            current_bus_idx = next((i for i, opt in enumerate(edit_bus_options) if bus_num in opt), 0)
-                            edit_selected_bus = st.selectbox("Select Bus", edit_bus_options, index=current_bus_idx)
-                            new_bus = extract_bus_number_from_option(edit_selected_bus)
-                            
-                            # Route dropdown for editing
-                            edit_routes = get_all_routes()
-                            edit_route_options = ["Hire"] + [r['name'] for r in edit_routes]
-                            current_route_idx = edit_route_options.index(route_name) if route_name in edit_route_options else 0
-                            edit_selected_route = st.selectbox("Route", edit_route_options, index=current_route_idx)
-                            
-                            # Hire destination if Hire is selected
-                            new_hire_dest = ""
-                            if edit_selected_route == "Hire":
-                                new_hire_dest = st.text_input("Hire Destination", value=hire_dest or "")
-                            
-                            new_driver = st.text_input("Driver", value=driver or "")
-                        
-                        with edit_col2:
-                            new_conductor = st.text_input("Conductor", value=conductor or "")
-                            new_amount = st.number_input("Amount", value=float(amt))
-                            new_date = st.date_input("Date", value=pd.to_datetime(date_str))
-                        
-                        new_notes = st.text_area("Notes", value=notes_text or "")
-                        
-                        col_save, col_cancel = st.columns(2)
-                        
-                        with col_save:
-                            save_btn = st.form_submit_button("💾 Save Changes", width="stretch")
-                        
-                        with col_cancel:
-                            cancel_btn = st.form_submit_button("❌ Cancel", width="stretch")
-                        
-                        if save_btn:
-                            # Validate hire destination
-                            if edit_selected_route == "Hire" and not new_hire_dest.strip():
-                                st.error("⚠️ Please describe the hire destination")
+                        # Delete button
+                        if st.button("Delete", key=f"delete_{record_id}"):
+                            if st.session_state.get(f'confirm_delete_{record_id}', False):
+                                delete_income_record(record_id)
+                                
+                                AuditLogger.log_income_delete(
+                                    record_id=record_id,
+                                    bus_number=bus_num,
+                                    date=date_str
+                                )
+                                
+                                st.success("Record deleted")
+                                st.rerun()
                             else:
-                                old_values = {
-                                    'bus_number': bus_num,
-                                    'route': route_name,
-                                    'hire_destination': hire_dest,
-                                    'driver_name': driver,
-                                    'conductor_name': conductor,
-                                    'amount': amt,
-                                    'date': date_str,
-                                    'notes': notes_text
-                                }
+                                st.session_state[f'confirm_delete_{record_id}'] = True
+                                st.warning("Click again to confirm")
+                    
+                    # Edit mode
+                    if st.session_state.get(f'edit_mode_{record_id}', False):
+                        st.markdown("---")
+                        st.markdown("**Edit Record:**")
+                        
+                        with st.form(f"edit_form_{record_id}"):
+                            edit_col1, edit_col2 = st.columns(2)
+                            
+                            with edit_col1:
+                                # Bus dropdown for editing
+                                edit_buses = get_active_buses()
+                                edit_bus_options = [get_bus_display_option(bus) for bus in edit_buses]
                                 
-                                new_values = {
-                                    'bus_number': new_bus,
-                                    'route': edit_selected_route,
-                                    'hire_destination': new_hire_dest if edit_selected_route == "Hire" else None,
-                                    'driver_name': new_driver,
-                                    'conductor_name': new_conductor,
-                                    'amount': new_amount,
-                                    'date': new_date.strftime("%Y-%m-%d"),
-                                    'notes': new_notes
-                                }
+                                current_bus_idx = next((i for i, opt in enumerate(edit_bus_options) if bus_num in opt), 0)
+                                edit_selected_bus = st.selectbox("Select Bus", edit_bus_options, index=current_bus_idx)
+                                new_bus = extract_bus_number_from_option(edit_selected_bus)
                                 
-                                update_income_record(
-                                    record_id=record_id,
-                                    bus_number=new_bus,
-                                    route=edit_selected_route,
-                                    hire_destination=new_values['hire_destination'],
-                                    driver_name=new_driver,
-                                    conductor_name=new_conductor,
-                                    date=new_date.strftime("%Y-%m-%d"),
-                                    amount=new_amount,
-                                    notes=new_notes
-                                )
+                                # Route dropdown for editing
+                                edit_routes = get_all_routes()
+                                edit_route_options = ["Hire"] + [r['name'] for r in edit_routes]
+                                current_route_idx = edit_route_options.index(route_name) if route_name in edit_route_options else 0
+                                edit_selected_route = st.selectbox("Route", edit_route_options, index=current_route_idx)
                                 
-                                AuditLogger.log_income_edit(
-                                    record_id=record_id,
-                                    bus_number=new_bus,
-                                    old_data=old_values,
-                                    new_data=new_values
-                                )
+                                # Hire destination if Hire is selected
+                                new_hire_dest = ""
+                                if edit_selected_route == "Hire":
+                                    new_hire_dest = st.text_input("Hire Destination", value=hire_dest or "")
                                 
-                                st.success("✅ Record updated successfully!")
+                                new_driver = st.text_input("Driver", value=driver or "")
+                            
+                            with edit_col2:
+                                new_conductor = st.text_input("Conductor", value=conductor or "")
+                                new_amount = st.number_input("Amount", value=float(amt))
+                                new_date = st.date_input("Date", value=pd.to_datetime(date_str))
+                            
+                            new_notes = st.text_area("Notes", value=notes_text or "")
+                            
+                            col_save, col_cancel = st.columns(2)
+                            
+                            with col_save:
+                                save_btn = st.form_submit_button("Save Changes", use_container_width=True)
+                            
+                            with col_cancel:
+                                cancel_btn = st.form_submit_button("Cancel", use_container_width=True)
+                            
+                            if save_btn:
+                                # Validate hire destination
+                                if edit_selected_route == "Hire" and not new_hire_dest.strip():
+                                    st.error("Please describe the hire destination")
+                                else:
+                                    old_values = {
+                                        'bus_number': bus_num,
+                                        'route': route_name,
+                                        'hire_destination': hire_dest,
+                                        'driver_name': driver,
+                                        'conductor_name': conductor,
+                                        'amount': amt,
+                                        'date': date_str,
+                                        'notes': notes_text
+                                    }
+                                    
+                                    new_values = {
+                                        'bus_number': new_bus,
+                                        'route': edit_selected_route,
+                                        'hire_destination': new_hire_dest if edit_selected_route == "Hire" else None,
+                                        'driver_name': new_driver,
+                                        'conductor_name': new_conductor,
+                                        'amount': new_amount,
+                                        'date': new_date.strftime("%Y-%m-%d"),
+                                        'notes': new_notes
+                                    }
+                                    
+                                    update_income_record(
+                                        record_id=record_id,
+                                        bus_number=new_bus,
+                                        route=edit_selected_route,
+                                        hire_destination=new_values['hire_destination'],
+                                        driver_name=new_driver,
+                                        conductor_name=new_conductor,
+                                        date=new_date.strftime("%Y-%m-%d"),
+                                        amount=new_amount,
+                                        notes=new_notes
+                                    )
+                                    
+                                    AuditLogger.log_income_edit(
+                                        record_id=record_id,
+                                        bus_number=new_bus,
+                                        old_data=old_values,
+                                        new_data=new_values
+                                    )
+                                    
+                                    st.success("Record updated successfully!")
+                                    st.session_state[f'edit_mode_{record_id}'] = False
+                                    st.rerun()
+                            
+                            if cancel_btn:
                                 st.session_state[f'edit_mode_{record_id}'] = False
                                 st.rerun()
-                        
-                        if cancel_btn:
-                            st.session_state[f'edit_mode_{record_id}'] = False
-                            st.rerun()
     else:
         st.info("No income records found. Add your first record above!")
 

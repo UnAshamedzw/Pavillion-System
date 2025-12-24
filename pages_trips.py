@@ -939,17 +939,17 @@ def trip_analysis_page():
         st.metric("👥 Total Passengers", f"{total_passengers:,}")
         st.caption(f"{total_passengers/days_in_period:.0f}/day avg")
     with col3:
-        st.metric("💰 Total Revenue", f"${total_revenue:,.2f}")
+        st.metric("Total Revenue", f"${total_revenue:,.2f}")
         st.caption(f"${total_revenue/days_in_period:.2f}/day avg")
     with col4:
-        st.metric("👥 Avg Passengers/Trip", f"{avg_passengers:.1f}")
+        st.metric("Avg Passengers/Trip", f"{avg_passengers:.1f}")
     with col5:
-        st.metric("💰 Avg Revenue/Trip", f"${avg_revenue:.2f}")
+        st.metric("Avg Revenue/Trip", f"${avg_revenue:.2f}")
     
     st.markdown("---")
     
     # Tabs for different analyses
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(["📊 By Bus", "🛣️ By Route", "👤 By Driver", "📈 Trends", "⏰ Time Analysis"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["By Bus", "By Route", "By Driver", "Trends", "Time Analysis"])
     
     with tab1:
         st.subheader("Trips by Bus")
@@ -981,12 +981,19 @@ def trip_analysis_page():
             )
             st.plotly_chart(fig2, use_container_width=True)
             
-            # Table
+            # Styled Table
             st.markdown("### Detailed Summary")
+            from table_styles import style_dataframe
             display_df = bus_summary.copy()
-            display_df.columns = ['Bus', 'Trips', 'Passengers', 'Revenue ($)', 
+            display_df.columns = ['Bus', 'Trips', 'Passengers', 'Revenue', 
                                  'Avg Pass/Trip', 'Avg Rev/Trip', 'Avg Rev/Pass']
-            st.dataframe(display_df.round(2), use_container_width=True, hide_index=True)
+            # Format currency columns
+            for col in ['Revenue', 'Avg Rev/Trip', 'Avg Rev/Pass']:
+                display_df[col] = display_df[col].apply(lambda x: f"${x:,.2f}")
+            display_df['Passengers'] = display_df['Passengers'].apply(lambda x: f"{int(x):,}")
+            display_df['Trips'] = display_df['Trips'].apply(lambda x: f"{int(x):,}")
+            display_df['Avg Pass/Trip'] = display_df['Avg Pass/Trip'].apply(lambda x: f"{x:.1f}")
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
     
     with tab2:
         st.subheader("Trips by Route")
