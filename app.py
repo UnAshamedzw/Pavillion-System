@@ -2,6 +2,7 @@
 app.py - Main Application Entry Point
 Pavillion Coaches Bus Management System
 WITH ROLE-BASED PERMISSIONS - Menu items filtered by user permissions
+SIMPLIFIED MENU - Consolidated pages for easier navigation
 """
 
 import streamlit as st
@@ -11,47 +12,29 @@ from auth import (
     initialize_predefined_roles, login_page, logout, restore_session,
     has_permission, can_access_page, get_accessible_menu_items, get_user_role
 )
-from pages_operations import (
-    income_entry_page, 
-    maintenance_entry_page, 
-    revenue_history_page,
-    import_data_page,
-    dashboard_page,
-    routes_assignments_page
-)
-from pages_hr import (
-    employee_management_page,
-    employee_performance_page,
-    payroll_management_page,
-    leave_management_page,
-    disciplinary_records_page,
-    get_expiring_documents, 
-    display_document_expiry_alerts
-)
-from pages_users import user_management_page, my_profile_page, role_management_page
-from pages_audit import activity_log_page, user_activity_dashboard
-from pages_bus_analysis import bus_analysis_page
-from pages_performance_metrics import performance_metrics_page
-from fleet_management_page import fleet_management_page, show_expiry_alerts
-from pages_fuel import fuel_entry_page, fuel_analysis_page
+
+# Original page imports (still needed for some direct access)
+from pages_operations import dashboard_page
+from pages_hr import get_expiring_documents, display_document_expiry_alerts
+from pages_users import my_profile_page
 from pages_backup import backup_export_page
-from pages_trips import trip_analysis_page
-from pages_route_profitability import route_profitability_page
-from pages_driver_performance import driver_scoring_page
-from pages_documents import document_management_page
 from pages_customers import customer_management_page
-from pages_inventory import inventory_management_page
-from pages_alerts import alerts_dashboard_page, get_dashboard_alerts_widget
-from pages_expenses import general_expenses_page
-from pages_profit_loss import profit_loss_page
 from pages_contracts import contract_generator_page
-from pages_notifications import notification_settings_page
 from pages_landing import show_landing_page, can_see_full_dashboard, FULL_DASHBOARD_ROLES
-from pages_payroll import payroll_processing_page
-from pages_reconciliation import daily_reconciliation_page
 from pages_employee_portal import employee_portal_page
 from pages_approvals import approvals_center_page
-from pages_cash_left import cash_left_page
+from pages_alerts import alerts_dashboard_page
+
+# NEW: Consolidated page imports
+from pages_daily_ops import daily_operations_page
+from pages_fleet_maintenance import fleet_maintenance_page
+from pages_expenses_inventory import expenses_inventory_page
+from pages_docs_import import documents_import_page
+from pages_employees_consolidated import employees_consolidated_page
+from pages_payroll_consolidated import payroll_consolidated_page
+from pages_reports import reports_analytics_page
+from pages_admin import user_management_consolidated_page, system_settings_page
+
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -237,60 +220,43 @@ def main():
     # Only show full dashboard to authorized roles
     user_role = get_user_role()
     
+    # ==========================================================================
+    # SIMPLIFIED MENU STRUCTURE
+    # Consolidated from 30+ items to ~15 logical groupings
+    # ==========================================================================
+    
     operations_items = []
     if user_role in FULL_DASHBOARD_ROLES:
-        operations_items.append("📈 Operations Dashboard")
+        operations_items.append("Dashboard")
     
     operations_items.extend([
-        "🔔 Alerts",
-        "🚌 Trip & Income Entry",
-        "💵 Cash Left at Rank",
-        "📋 Daily Reconciliation",
-        "👥 Customers & Bookings",
-        "🔧 Maintenance Entry",
-        "⛽ Fuel Entry",
-        "💸 General Expenses",
-        "📦 Inventory",
-        "📄 Documents",
-        "📥 Import from Excel",
-        "💰 Revenue History",
-        "🚌 Fleet Management",
-        "🛣️ Routes & Assignments"
+        "Daily Operations",      # Combines: Trip Entry, Cash Left, Reconciliation
+        "Fleet & Maintenance",   # Combines: Fleet Management, Maintenance, Fuel
+        "Expenses & Inventory",  # Combines: Expenses, Inventory
+        "Customers & Bookings",
+        "Documents & Import",    # Combines: Documents, Import from Excel
     ])
     
     hr_items = [
-        "✅ Approvals Center",
-        "👥 Employee Management",
-        "📝 Contract Generator",
-        "📊 Employee Performance",
-        "💰 Payroll & Payslips",
-        "📅 Leave Management",
-        "⚠️ Disciplinary Records"
+        "Approvals",             # Approvals Center
+        "Employees",             # Combines: Employee Management, Performance, Disciplinary
+        "Payroll",               # Combines: Payroll, Leave Management
+        "Contracts",
     ]
     
     analytics_items = [
-        "🚌 Bus-by-Bus Analysis",
-        "📈 Performance Metrics",
-        "⛽ Fuel Analysis",
-        "🚌 Trip Analysis",
-        "💰 Route Profitability",
-        "🏆 Driver Scoring",
-        "📊 Profit & Loss"
+        "Reports & Analytics",   # Combines: All analytics into one page with tabs
     ]
     
-    system_items = ["👤 My Profile", "📊 My Activity"]
+    system_items = ["My Profile"]
     
     # Add admin-only items if user has permissions
     if has_permission('export_income') or has_permission('generate_reports'):
-        system_items.append("💾 Backup & Export")
-    if has_permission('view_users'):
-        system_items.append("👥 User Management")
+        system_items.append("Backup & Export")
+    if has_permission('view_users') or has_permission('manage_roles'):
+        system_items.append("User Management")  # Combines: Users, Roles, Activity Log
     if has_permission('manage_roles'):
-        system_items.append("🔐 Role Management")
-    if has_permission('view_audit_logs'):
-        system_items.append("📜 Activity Log")
-    if has_permission('manage_roles'):  # Admin only
-        system_items.append("🔔 Notification Settings")
+        system_items.append("System Settings")  # Combines: Notifications, Settings
     
     # Filter menu items based on permissions
     if menu_section == "🚌 Operations":
@@ -397,193 +363,79 @@ def main():
         st.markdown("---")
     
     # Route to appropriate page with permission check
-    if page == "🚌 Trip & Income Entry":
-        if can_access_page(page):
-            income_entry_page()
-        else:
-            show_access_denied(page)
-    elif page == "💵 Cash Left at Rank":
-        if can_access_page(page):
-            cash_left_page()
-        else:
-            show_access_denied(page)
-    elif page == "📋 Daily Reconciliation":
-        if can_access_page(page):
-            daily_reconciliation_page()
-        else:
-            show_access_denied(page)
-    elif page == "🔧 Maintenance Entry":
-        if can_access_page(page):
-            maintenance_entry_page()
-        else:
-            show_access_denied(page)
-    elif page == "📥 Import from Excel":
-        if can_access_page(page):
-            import_data_page()
-        else:
-            show_access_denied(page)
-    elif page == "💰 Revenue History":
-        if can_access_page(page):
-            revenue_history_page()
-        else:
-            show_access_denied(page)
-    elif page == "📈 Operations Dashboard":
-        # Only authorized roles can see full dashboard
-        if get_user_role() in FULL_DASHBOARD_ROLES and can_access_page(page):
+    # ==========================================================================
+    # SIMPLIFIED ROUTING - Consolidated Pages
+    # ==========================================================================
+    
+    if page == "Dashboard":
+        if get_user_role() in FULL_DASHBOARD_ROLES:
             dashboard_page()
         else:
             show_access_denied(page)
-    elif page == "🔔 Alerts":
-        if can_access_page(page):
-            alerts_dashboard_page()
-        else:
-            show_access_denied(page)
-    elif page == "🚌 Fleet Management":
-        if can_access_page(page):
-            fleet_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "🛣️ Routes & Assignments":
-        if can_access_page(page):
-            routes_assignments_page()
-        else:
-            show_access_denied(page)
-    elif page == "👥 Employee Management":
-        if can_access_page(page):
-            employee_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "✅ Approvals Center":
-        if can_access_page(page):
-            approvals_center_page()
-        else:
-            show_access_denied(page)
-    elif page == "📝 Contract Generator":
-        if can_access_page(page):
-            contract_generator_page()
-        else:
-            show_access_denied(page)
-    elif page == "📊 Employee Performance":
-        if can_access_page(page):
-            employee_performance_page()
-        else:
-            show_access_denied(page)
-    elif page == "💰 Payroll & Payslips":
-        if can_access_page(page):
-            payroll_processing_page()
-        else:
-            show_access_denied(page)
-    elif page == "📅 Leave Management":
-        if can_access_page(page):
-            leave_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "⚠️ Disciplinary Records":
-        if can_access_page(page):
-            disciplinary_records_page()
-        else:
-            show_access_denied(page)
-    elif page == "🚌 Bus-by-Bus Analysis":
-        if can_access_page(page):
-            bus_analysis_page()
-        else:
-            show_access_denied(page)
-    elif page == "📈 Performance Metrics":
-        if can_access_page(page):
-            performance_metrics_page()
-        else:
-            show_access_denied(page)
-    elif page == "⛽ Fuel Entry":
-        if can_access_page(page):
-            fuel_entry_page()
-        else:
-            show_access_denied(page)
-    elif page == "⛽ Fuel Analysis":
-        if can_access_page(page):
-            fuel_analysis_page()
-        else:
-            show_access_denied(page)
-    elif page == "💸 General Expenses":
-        if can_access_page(page):
-            general_expenses_page()
-        else:
-            show_access_denied(page)
-    elif page == "📄 Documents":
-        if can_access_page(page):
-            document_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "📦 Inventory":
-        if can_access_page(page):
-            inventory_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "👥 Customers & Bookings":
-        if can_access_page(page):
-            customer_management_page()
-        else:
-            show_access_denied(page)
-    elif page == "🚌 Trip Analysis":
-        if can_access_page(page):
-            trip_analysis_page()
-        else:
-            show_access_denied(page)
-    elif page == "💰 Route Profitability":
-        if can_access_page(page):
-            route_profitability_page()
-        else:
-            show_access_denied(page)
-    elif page == "🏆 Driver Scoring":
-        if can_access_page(page):
-            driver_scoring_page()
-        else:
-            show_access_denied(page)
-    elif page == "📊 Profit & Loss":
-        if can_access_page(page):
-            profit_loss_page()
-        else:
-            show_access_denied(page)
-    elif page == "👤 My Profile":
+    
+    elif page == "Daily Operations":
+        daily_operations_page()
+    
+    elif page == "Fleet & Maintenance":
+        fleet_maintenance_page()
+    
+    elif page == "Expenses & Inventory":
+        expenses_inventory_page()
+    
+    elif page == "Customers & Bookings":
+        customer_management_page()
+    
+    elif page == "Documents & Import":
+        documents_import_page()
+    
+    elif page == "Approvals":
+        approvals_center_page()
+    
+    elif page == "Employees":
+        employees_consolidated_page()
+    
+    elif page == "Payroll":
+        payroll_consolidated_page()
+    
+    elif page == "Contracts":
+        contract_generator_page()
+    
+    elif page == "Reports & Analytics":
+        reports_analytics_page()
+    
+    elif page == "My Profile":
         my_profile_page()
-    elif page == "📊 My Activity":
-        user_activity_dashboard()
-    elif page == "💾 Backup & Export":
+    
+    elif page == "Backup & Export":
         if has_permission('export_income') or has_permission('generate_reports'):
             backup_export_page()
         else:
             show_access_denied(page)
-    elif page == "👥 User Management":
-        if has_permission('view_users'):
-            user_management_page()
+    
+    elif page == "User Management":
+        if has_permission('view_users') or has_permission('manage_roles'):
+            user_management_consolidated_page()
         else:
             show_access_denied(page)
-    elif page == "🔐 Role Management":
+    
+    elif page == "System Settings":
         if has_permission('manage_roles'):
-            role_management_page()
+            system_settings_page()
         else:
             show_access_denied(page)
-    elif page == "📜 Activity Log":
-        if has_permission('view_audit_logs'):
-            activity_log_page()
-        else:
-            show_access_denied(page)
-    elif page == "🔔 Notification Settings":
-        if has_permission('manage_roles'):
-            notification_settings_page()
-        else:
-            show_access_denied(page)
+    
+    else:
+        st.info("Select a page from the menu")
 
 
 def show_access_denied(page_name: str):
     """Display access denied message"""
-    st.error("🚫 Access Denied")
+    st.error("Access Denied")
     st.markdown(f"""
-        <div class="access-denied">
-            <h3>You don't have permission to access this page</h3>
-            <p><strong>Page:</strong> {page_name}</p>
-            <p>Please contact your administrator if you need access to this feature.</p>
-        </div>
-    """, unsafe_allow_html=True)
+        You don't have permission to access **{page_name}**.
+        
+        Please contact your administrator if you need access to this feature.
+    """)
 
 
 if __name__ == "__main__":
