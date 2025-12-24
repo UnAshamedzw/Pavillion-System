@@ -332,42 +332,52 @@ def create_staff_performance_comparison(income_df):
     
     # Driver performance
     if 'driver_name' in income_df.columns:
-        driver_perf = income_df.groupby('driver_name')['amount'].agg(['sum', 'count', 'mean']).reset_index()
-        driver_perf.columns = ['driver', 'total_revenue', 'trips', 'avg_revenue']
-        driver_perf = driver_perf.sort_values('total_revenue', ascending=True).tail(10)
+        # Filter out NULL/empty driver names and convert amount to numeric
+        driver_df = income_df[income_df['driver_name'].notna() & (income_df['driver_name'] != '')].copy()
+        driver_df['amount'] = pd.to_numeric(driver_df['amount'], errors='coerce').fillna(0)
         
-        driver_fig = go.Figure(data=[
-            go.Bar(
-                x=driver_perf['total_revenue'],
-                y=driver_perf['driver'],
-                orientation='h',
-                marker=dict(color='steelblue'),
-                text=driver_perf['total_revenue'].round(2),
-                textposition='auto'
+        if not driver_df.empty:
+            driver_perf = driver_df.groupby('driver_name')['amount'].agg(['sum', 'count', 'mean']).reset_index()
+            driver_perf.columns = ['driver', 'total_revenue', 'trips', 'avg_revenue']
+            driver_perf = driver_perf.sort_values('total_revenue', ascending=True).tail(10)
+            
+            driver_fig = go.Figure(data=[
+                go.Bar(
+                    x=driver_perf['total_revenue'],
+                    y=driver_perf['driver'],
+                    orientation='h',
+                    marker=dict(color='steelblue'),
+                    text=driver_perf['total_revenue'].round(2),
+                    textposition='auto'
+                )
+            ])
+            
+            driver_fig.update_layout(
+                title='Top 10 Drivers by Revenue',
+                xaxis_title='Total Revenue ($)',
+                yaxis_title='Driver',
+                template='plotly_white',
+                height=400
             )
-        ])
-        
-        driver_fig.update_layout(
-            title='Top 10 Drivers by Revenue',
-            xaxis_title='Total Revenue ($)',
-            yaxis_title='Driver',
-            template='plotly_white',
-            height=400
-        )
     
     # Conductor performance
     if 'conductor_name' in income_df.columns:
-        conductor_perf = income_df.groupby('conductor_name')['amount'].agg(['sum', 'count', 'mean']).reset_index()
-        conductor_perf.columns = ['conductor', 'total_revenue', 'trips', 'avg_revenue']
-        conductor_perf = conductor_perf.sort_values('total_revenue', ascending=True).tail(10)
+        # Filter out NULL/empty conductor names and convert amount to numeric
+        conductor_df = income_df[income_df['conductor_name'].notna() & (income_df['conductor_name'] != '')].copy()
+        conductor_df['amount'] = pd.to_numeric(conductor_df['amount'], errors='coerce').fillna(0)
         
-        conductor_fig = go.Figure(data=[
-            go.Bar(
-                x=conductor_perf['total_revenue'],
-                y=conductor_perf['conductor'],
-                orientation='h',
-                marker=dict(color='darkorange'),
-                text=conductor_perf['total_revenue'].round(2),
+        if not conductor_df.empty:
+            conductor_perf = conductor_df.groupby('conductor_name')['amount'].agg(['sum', 'count', 'mean']).reset_index()
+            conductor_perf.columns = ['conductor', 'total_revenue', 'trips', 'avg_revenue']
+            conductor_perf = conductor_perf.sort_values('total_revenue', ascending=True).tail(10)
+            
+            conductor_fig = go.Figure(data=[
+                go.Bar(
+                    x=conductor_perf['total_revenue'],
+                    y=conductor_perf['conductor'],
+                    orientation='h',
+                    marker=dict(color='darkorange'),
+                    text=conductor_perf['total_revenue'].round(2),
                 textposition='auto'
             )
         ])

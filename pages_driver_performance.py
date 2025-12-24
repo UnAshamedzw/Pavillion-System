@@ -36,25 +36,53 @@ def get_all_drivers():
 
 
 def get_driver_trips(driver_name=None, start_date=None, end_date=None):
-    """Get trips for a driver or all drivers"""
+    """
+    Get trips for a driver or all drivers.
+    Queries from income table for maximum compatibility with Excel imports.
+    """
     conn = get_connection()
     
+    # Query from income table which is the primary trip data source
     query = """
         SELECT 
             driver_name,
-            trip_date,
+            date as trip_date,
             bus_number,
-            route_name,
+            route as route_name,
             departure_time,
             arrival_time,
-            duration_minutes,
-            passengers,
-            revenue,
-            revenue_per_passenger,
-            trip_type
-        FROM trips
-        WHERE driver_name IS NOT NULL
+            CASE 
+                WHEN departure_time IS NOT NULL AND arrival_time IS NOT NULL 
+                THEN EXTRACT(EPOCH FROM (arrival_time::time - departure_time::time))/60
+                ELSE 0
+            END as duration_minutes,
+            COALESCE(passengers, 0) as passengers,
+            COALESCE(amount, 0) as revenue,
+            CASE WHEN passengers > 0 THEN amount / passengers ELSE 0 END as revenue_per_passenger,
+            COALESCE(trip_type, 'Regular') as trip_type
+        FROM income
+        WHERE driver_name IS NOT NULL AND driver_name != ''
     """
+    
+    # Simpler version for SQLite
+    if not USE_POSTGRES:
+        query = """
+            SELECT 
+                driver_name,
+                date as trip_date,
+                bus_number,
+                route as route_name,
+                departure_time,
+                arrival_time,
+                0 as duration_minutes,
+                COALESCE(passengers, 0) as passengers,
+                COALESCE(amount, 0) as revenue,
+                CASE WHEN passengers > 0 THEN amount / passengers ELSE 0 END as revenue_per_passenger,
+                COALESCE(trip_type, 'Regular') as trip_type
+            FROM income
+            WHERE driver_name IS NOT NULL AND driver_name != ''
+        """
+    
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
@@ -63,16 +91,24 @@ def get_driver_trips(driver_name=None, start_date=None, end_date=None):
         params.append(driver_name)
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
-    query += " ORDER BY trip_date DESC, departure_time DESC"
+    query += " ORDER BY date DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+    try:
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        # Ensure numeric columns
+        df['passengers'] = pd.to_numeric(df['passengers'], errors='coerce').fillna(0)
+        df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error getting driver trips: {e}")
+        df = pd.DataFrame()
+    
     conn.close()
     return df
 
@@ -112,7 +148,7 @@ def get_driver_incidents(driver_name=None, start_date=None, end_date=None):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -154,7 +190,7 @@ def get_driver_leave_records(driver_name=None, start_date=None, end_date=None):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -194,7 +230,7 @@ def get_maintenance_issues_by_driver(start_date=None, end_date=None):
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+    except Exception as e:
         df = pd.DataFrame()
     
     conn.close()
@@ -234,7 +270,7 @@ def get_fuel_efficiency_by_driver(start_date=None, end_date=None):
     
     try:
         trip_df = pd.read_sql_query(trip_query, get_engine(), params=params)
-    except:
+    except Exception as e:
         trip_df = pd.DataFrame()
     
     # Get fuel efficiency per bus
@@ -259,7 +295,7 @@ def get_fuel_efficiency_by_driver(start_date=None, end_date=None):
     
     try:
         fuel_df = pd.read_sql_query(fuel_query, get_engine(), params=fuel_params)
-    except:
+    except Exception as e:
         fuel_df = pd.DataFrame()
     
     conn.close()

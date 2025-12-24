@@ -102,22 +102,36 @@ def update_employee_last_login(employee_id):
 # DATA RETRIEVAL FUNCTIONS
 # =============================================================================
 
-def get_employee_trips(employee_id, start_date=None, end_date=None):
-    """Get trip history for an employee"""
+def get_employee_trips(employee_id, start_date=None, end_date=None, employee_name=None):
+    """
+    Get trip history for an employee.
+    Matches by employee_id OR employee_name for compatibility with Excel imports.
+    """
     conn = get_connection()
     ph = get_placeholder()
     
+    # Build query that matches by ID or Name for maximum compatibility
     query = f"""
         SELECT date, bus_number, route, amount, passengers,
                driver_bonus, conductor_bonus,
                CASE 
-                   WHEN driver_employee_id = {ph} THEN 'Driver'
-                   WHEN conductor_employee_id = {ph} THEN 'Conductor'
+                   WHEN driver_employee_id = {ph} OR LOWER(driver_name) = LOWER({ph}) THEN 'Driver'
+                   WHEN conductor_employee_id = {ph} OR LOWER(conductor_name) = LOWER({ph}) THEN 'Conductor'
                END as role
         FROM income
-        WHERE driver_employee_id = {ph} OR conductor_employee_id = {ph}
+        WHERE (driver_employee_id = {ph} OR conductor_employee_id = {ph}
+               OR LOWER(driver_name) = LOWER({ph}) OR LOWER(conductor_name) = LOWER({ph}))
     """
-    params = [str(employee_id), str(employee_id), str(employee_id), str(employee_id)]
+    
+    # Use employee_name if provided, otherwise use employee_id as fallback for name matching
+    name_match = employee_name if employee_name else str(employee_id)
+    
+    params = [
+        str(employee_id), name_match,  # For CASE driver
+        str(employee_id), name_match,  # For CASE conductor
+        str(employee_id), str(employee_id),  # For WHERE employee_id matches
+        name_match, name_match  # For WHERE name matches
+    ]
     
     if start_date:
         query += f" AND date >= {ph}"
@@ -132,40 +146,52 @@ def get_employee_trips(employee_id, start_date=None, end_date=None):
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params))
     except Exception as e:
+        print(f"Error getting employee trips: {e}")
         df = pd.DataFrame()
     
     conn.close()
     return df
 
 
-def get_employee_payslips(employee_id):
-    """Get payroll records for payslip generation"""
+def get_employee_payslips(employee_id, employee_name=None):
+    """
+    Get payroll records for payslip generation.
+    Matches by employee_id OR employee_name for compatibility with Excel imports.
+    """
     conn = get_connection()
     ph = get_placeholder()
     
+    # Build query that matches by ID or Name
     query = f"""
         SELECT pr.*, pp.period_name, pp.start_date, pp.end_date, pp.status as period_status
         FROM payroll_records pr
         JOIN payroll_periods pp ON pr.payroll_period_id = pp.id
-        WHERE pr.employee_id = {ph}
+        WHERE (pr.employee_id = {ph} OR LOWER(pr.employee_name) = LOWER({ph}))
           AND pp.status IN ('approved', 'paid')
         ORDER BY pp.start_date DESC
     """
     
+    name_match = employee_name if employee_name else str(employee_id)
+    
     try:
-        df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
+        df = pd.read_sql_query(query, get_engine(), params=(str(employee_id), name_match))
     except Exception as e:
+        print(f"Error getting payslips: {e}")
         df = pd.DataFrame()
     
     conn.close()
     return df
 
 
-def get_employee_loans(employee_id):
-    """Get active loans for an employee"""
+def get_employee_loans(employee_id, employee_name=None):
+    """
+    Get active loans for an employee.
+    Matches by employee_id OR employee_name for compatibility with Excel imports.
+    """
     conn = get_connection()
     ph = get_placeholder()
     
+    # Build query that matches by ID or Name (if employee_name column exists)
     query = f"""
         SELECT * FROM employee_loans
         WHERE employee_id = {ph}
@@ -173,8 +199,9 @@ def get_employee_loans(employee_id):
     """
     
     try:
-        df = pd.read_sql_query(query, get_engine(), params=(employee_id,))
+        df = pd.read_sql_query(query, get_engine(), params=(str(employee_id),))
     except Exception as e:
+        print(f"Error getting loans: {e}")
         df = pd.DataFrame()
     
     conn.close()
@@ -626,9 +653,10 @@ def portal_dashboard(employee):
     today = datetime.now().date()
     month_start = today.replace(day=1)
     
-    trips_df = get_employee_trips(employee['id'], start_date=month_start, end_date=today)
-    loans_df = get_employee_loans(employee['id'])
-    deductions_df = get_employee_deductions(employee['id'])
+    # Pass employee name for compatibility with Excel imports that may not have employee_id
+    trips_df = get_employee_trips(employee['employee_id'], start_date=month_start, end_date=today, employee_name=employee['full_name'])
+    loans_df = get_employee_loans(employee['employee_id'])
+    deductions_df = get_employee_deductions(employee['employee_id'])
     
     with col1:
         month_trips = len(trips_df) if not trips_df.empty else 0
@@ -679,7 +707,7 @@ def portal_dashboard(employee):
     # Recent Activity
     st.markdown("### 📋 Recent Trips")
     
-    recent_trips = get_employee_trips(employee['id'])
+    recent_trips = get_employee_trips(employee['employee_id'], employee_name=employee['full_name'])
     
     if not recent_trips.empty:
         display_df = recent_trips.head(5)[['date', 'bus_number', 'route', 'amount', 'role']].copy()
@@ -695,7 +723,7 @@ def portal_payslips(employee):
     
     st.subheader("📄 My Payslips")
     
-    payslips = get_employee_payslips(employee['id'])
+    payslips = get_employee_payslips(employee['employee_id'], employee_name=employee['full_name'])
     
     if payslips.empty:
         st.info("No payslips available yet. Payslips will appear here after payroll is processed.")
@@ -753,7 +781,7 @@ def portal_trips(employee):
     with col2:
         end_date = st.date_input("To", value=datetime.now().date(), key="trip_end")
     
-    trips = get_employee_trips(employee['id'], start_date=start_date, end_date=end_date)
+    trips = get_employee_trips(employee['employee_id'], start_date=start_date, end_date=end_date, employee_name=employee['full_name'])
     
     if trips.empty:
         st.info("No trips recorded for the selected period")
@@ -804,7 +832,7 @@ def portal_loans_deductions(employee):
     tab_loans, tab_deductions, tab_red_tickets = st.tabs(["💳 Loans", "⚠️ Deductions", "🎫 Red Tickets"])
     
     with tab_loans:
-        loans = get_employee_loans(employee['id'])
+        loans = get_employee_loans(employee['employee_id'], employee_name=employee['full_name'])
         
         if loans.empty:
             st.success("✅ No loans on record")
@@ -834,7 +862,7 @@ def portal_loans_deductions(employee):
                             use_container_width=True, hide_index=True)
     
     with tab_deductions:
-        deductions = get_employee_deductions(employee['id'])
+        deductions = get_employee_deductions(employee['employee_id'])
         
         if deductions.empty:
             st.success("✅ No deductions on record")
