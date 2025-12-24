@@ -7,6 +7,7 @@ Handles user login, registration, session management, and permissions
 import streamlit as st
 import hashlib
 import secrets
+import re
 from datetime import datetime, timedelta
 
 # Import database abstraction layer
@@ -14,6 +15,139 @@ from database import get_connection, USE_POSTGRES
 
 # Session duration in days
 SESSION_DURATION_DAYS = 7
+
+# Password complexity requirements
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+PASSWORD_REQUIRE_UPPERCASE = True
+PASSWORD_REQUIRE_LOWERCASE = True
+PASSWORD_REQUIRE_DIGIT = True
+PASSWORD_REQUIRE_SPECIAL = True
+PASSWORD_SPECIAL_CHARS = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+
+
+# =============================================================================
+# PASSWORD VALIDATION
+# =============================================================================
+
+def validate_password_complexity(password: str) -> tuple:
+    """
+    Validate password meets complexity requirements.
+    Returns: (is_valid, list_of_errors)
+    """
+    errors = []
+    
+    # Check length
+    if len(password) < PASSWORD_MIN_LENGTH:
+        errors.append(f"Password must be at least {PASSWORD_MIN_LENGTH} characters long")
+    
+    if len(password) > PASSWORD_MAX_LENGTH:
+        errors.append(f"Password must be no more than {PASSWORD_MAX_LENGTH} characters")
+    
+    # Check for uppercase
+    if PASSWORD_REQUIRE_UPPERCASE and not re.search(r'[A-Z]', password):
+        errors.append("Password must contain at least one uppercase letter (A-Z)")
+    
+    # Check for lowercase
+    if PASSWORD_REQUIRE_LOWERCASE and not re.search(r'[a-z]', password):
+        errors.append("Password must contain at least one lowercase letter (a-z)")
+    
+    # Check for digit
+    if PASSWORD_REQUIRE_DIGIT and not re.search(r'\d', password):
+        errors.append("Password must contain at least one number (0-9)")
+    
+    # Check for special character
+    if PASSWORD_REQUIRE_SPECIAL:
+        special_pattern = f'[{re.escape(PASSWORD_SPECIAL_CHARS)}]'
+        if not re.search(special_pattern, password):
+            errors.append(f"Password must contain at least one special character ({PASSWORD_SPECIAL_CHARS[:10]}...)")
+    
+    # Check for common weak passwords
+    weak_passwords = [
+        'password', 'password1', 'password123', '12345678', '123456789',
+        'qwerty123', 'admin123', 'letmein', 'welcome1', 'monkey123',
+        'abc12345', 'pass1234', 'master123', 'hello123', 'shadow123'
+    ]
+    if password.lower() in weak_passwords:
+        errors.append("Password is too common. Please choose a stronger password")
+    
+    # Check for sequential characters
+    if re.search(r'(012|123|234|345|456|567|678|789|890)', password):
+        errors.append("Password should not contain sequential numbers")
+    
+    if re.search(r'(abc|bcd|cde|def|efg|fgh|ghi|hij|ijk|jkl|klm|lmn|mno|nop|opq|pqr|qrs|rst|stu|tuv|uvw|vwx|wxy|xyz)', password.lower()):
+        errors.append("Password should not contain sequential letters")
+    
+    return len(errors) == 0, errors
+
+
+def get_password_strength(password: str) -> tuple:
+    """
+    Calculate password strength score.
+    Returns: (score 0-100, strength_label, color)
+    """
+    if not password:
+        return 0, "None", "gray"
+    
+    score = 0
+    
+    # Length scoring (up to 30 points)
+    length = len(password)
+    if length >= 8:
+        score += 10
+    if length >= 12:
+        score += 10
+    if length >= 16:
+        score += 10
+    
+    # Character variety (up to 40 points)
+    if re.search(r'[a-z]', password):
+        score += 10
+    if re.search(r'[A-Z]', password):
+        score += 10
+    if re.search(r'\d', password):
+        score += 10
+    if re.search(r'[^a-zA-Z0-9]', password):
+        score += 10
+    
+    # Complexity bonus (up to 30 points)
+    unique_chars = len(set(password))
+    if unique_chars >= 6:
+        score += 10
+    if unique_chars >= 10:
+        score += 10
+    if unique_chars >= 14:
+        score += 10
+    
+    # Determine label and color
+    if score < 30:
+        return score, "Weak", "red"
+    elif score < 50:
+        return score, "Fair", "orange"
+    elif score < 70:
+        return score, "Good", "yellow"
+    elif score < 90:
+        return score, "Strong", "lightgreen"
+    else:
+        return score, "Very Strong", "green"
+
+
+def get_password_requirements_text() -> str:
+    """Get formatted password requirements text"""
+    requirements = [
+        f"• At least {PASSWORD_MIN_LENGTH} characters long"
+    ]
+    
+    if PASSWORD_REQUIRE_UPPERCASE:
+        requirements.append("• At least one uppercase letter (A-Z)")
+    if PASSWORD_REQUIRE_LOWERCASE:
+        requirements.append("• At least one lowercase letter (a-z)")
+    if PASSWORD_REQUIRE_DIGIT:
+        requirements.append("• At least one number (0-9)")
+    if PASSWORD_REQUIRE_SPECIAL:
+        requirements.append(f"• At least one special character ({PASSWORD_SPECIAL_CHARS[:10]}...)")
+    
+    return "\n".join(requirements)
 
 
 # =============================================================================
@@ -922,8 +1056,16 @@ def authenticate_user(username: str, password: str) -> dict:
     return None
 
 
-def register_user(username: str, password: str, full_name: str, role: str, email: str = None) -> bool:
-    """Register a new user"""
+def register_user(username: str, password: str, full_name: str, role: str, email: str = None) -> tuple:
+    """
+    Register a new user with password validation.
+    Returns: (success: bool, error_message: str or None)
+    """
+    # Validate password complexity
+    is_valid, errors = validate_password_complexity(password)
+    if not is_valid:
+        return False, errors[0]  # Return first error
+    
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -942,14 +1084,24 @@ def register_user(username: str, password: str, full_name: str, role: str, email
         
         conn.commit()
         conn.close()
-        return True
-    except Exception:
+        return True, None
+    except Exception as e:
         conn.close()
-        return False
+        if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+            return False, "Username already exists"
+        return False, f"Registration failed: {str(e)}"
 
 
-def change_password(user_id: int, old_password: str, new_password: str) -> bool:
-    """Change user password"""
+def change_password(user_id: int, old_password: str, new_password: str) -> tuple:
+    """
+    Change user password with validation.
+    Returns: (success: bool, error_message: str or None)
+    """
+    # Validate new password complexity
+    is_valid, errors = validate_password_complexity(new_password)
+    if not is_valid:
+        return False, errors[0]
+    
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -967,6 +1119,11 @@ def change_password(user_id: int, old_password: str, new_password: str) -> bool:
             password_hash, salt = result[0], result[1]
         
         if verify_password(old_password, password_hash, salt):
+            # Check new password is different from old
+            if old_password == new_password:
+                conn.close()
+                return False, "New password must be different from current password"
+            
             new_hash, new_salt = hash_password(new_password)
             if USE_POSTGRES:
                 cursor.execute('UPDATE users SET password_hash = %s, salt = %s WHERE id = %s', (new_hash, new_salt, user_id))
@@ -974,14 +1131,25 @@ def change_password(user_id: int, old_password: str, new_password: str) -> bool:
                 cursor.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?', (new_hash, new_salt, user_id))
             conn.commit()
             conn.close()
-            return True
+            return True, None
+        else:
+            conn.close()
+            return False, "Current password is incorrect"
     
     conn.close()
-    return False
+    return False, "User not found"
 
 
-def reset_user_password(user_id: int, new_password: str) -> bool:
-    """Admin function to reset a user's password"""
+def reset_user_password(user_id: int, new_password: str) -> tuple:
+    """
+    Admin function to reset a user's password with validation.
+    Returns: (success: bool, error_message: str or None)
+    """
+    # Validate new password complexity
+    is_valid, errors = validate_password_complexity(new_password)
+    if not is_valid:
+        return False, errors[0]
+    
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -993,10 +1161,10 @@ def reset_user_password(user_id: int, new_password: str) -> bool:
             cursor.execute('UPDATE users SET password_hash = ?, salt = ? WHERE id = ?', (new_hash, new_salt, user_id))
         conn.commit()
         conn.close()
-        return True
-    except Exception:
+        return True, None
+    except Exception as e:
         conn.close()
-        return False
+        return False, f"Password reset failed: {str(e)}"
 
 
 def get_all_users():

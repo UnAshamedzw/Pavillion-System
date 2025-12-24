@@ -13,7 +13,8 @@ from auth import (
     create_custom_role, delete_role, update_role_permissions, get_role_permissions,
     grant_user_permission, revoke_user_permission, get_user_permission_overrides,
     clear_user_permission_overrides,
-    ALL_PERMISSIONS, PERMISSION_CATEGORIES, PREDEFINED_ROLES
+    ALL_PERMISSIONS, PERMISSION_CATEGORIES, PREDEFINED_ROLES,
+    validate_password_complexity, get_password_strength, get_password_requirements_text
 )
 from audit_logger import AuditLogger
 from datetime import datetime
@@ -263,17 +264,26 @@ def user_management_page():
                 if new_role in PREDEFINED_ROLES:
                     st.info(f"**{new_role}:** {PREDEFINED_ROLES[new_role]['description']}")
                 
+                # Show password requirements
+                st.markdown("##### Password Requirements")
+                st.caption(get_password_requirements_text())
+                
+                # Show password strength indicator
+                if new_password:
+                    score, label, color = get_password_strength(new_password)
+                    st.progress(score / 100)
+                    st.markdown(f"Password Strength: **:{color}[{label}]** ({score}/100)")
+                
                 submitted = st.form_submit_button("➕ Create User", type="primary", use_container_width=True)
                 
                 if submitted:
                     if not new_username or not new_password or not new_full_name:
                         st.error("Please fill in all required fields")
-                    elif len(new_password) < 6:
-                        st.error("Password must be at least 6 characters")
                     elif new_password != confirm_password:
                         st.error("Passwords do not match")
                     else:
-                        if register_user(new_username, new_password, new_full_name, new_role, new_email):
+                        success, error_msg = register_user(new_username, new_password, new_full_name, new_role, new_email)
+                        if success:
                             AuditLogger.log_action(
                                 "Create", "User Management",
                                 f"Created new user: {new_username} with role {new_role}"
@@ -281,7 +291,7 @@ def user_management_page():
                             st.success(f"✅ User '{new_username}' created successfully!")
                             st.rerun()
                         else:
-                            st.error("Username already exists or error creating user")
+                            st.error(f"❌ {error_msg}")
     
     with tab3:
         st.subheader("🔑 Reset User Password")
@@ -299,25 +309,34 @@ def user_management_page():
                         new_password = st.text_input("New Password", type="password")
                         confirm_password = st.text_input("Confirm New Password", type="password")
                         
+                        # Show password requirements
+                        st.markdown("##### Password Requirements")
+                        st.caption(get_password_requirements_text())
+                        
+                        # Show password strength indicator
+                        if new_password:
+                            score, label, color = get_password_strength(new_password)
+                            st.progress(score / 100)
+                            st.markdown(f"Password Strength: **:{color}[{label}]** ({score}/100)")
+                        
                         submitted = st.form_submit_button("🔑 Reset Password", type="primary")
                         
                         if submitted:
                             if not new_password:
                                 st.error("Please enter a new password")
-                            elif len(new_password) < 6:
-                                st.error("Password must be at least 6 characters")
                             elif new_password != confirm_password:
                                 st.error("Passwords do not match")
                             else:
                                 user_id = user_options[selected_user]
-                                if reset_user_password(user_id, new_password):
+                                success, error_msg = reset_user_password(user_id, new_password)
+                                if success:
                                     AuditLogger.log_action(
                                         "Update", "User Management",
                                         f"Reset password for user: {selected_user}"
                                     )
                                     st.success(f"✅ Password reset successfully for {selected_user}")
                                 else:
-                                    st.error("Failed to reset password")
+                                    st.error(f"❌ {error_msg}")
     
     with tab4:
         st.subheader("🔒 User Permission Overrides")
@@ -520,24 +539,33 @@ def my_profile_page():
             new_password = st.text_input("New Password", type="password")
             confirm_password = st.text_input("Confirm New Password", type="password")
             
+            # Show password requirements
+            st.markdown("##### Password Requirements")
+            st.caption(get_password_requirements_text())
+            
+            # Show password strength indicator
+            if new_password:
+                score, label, color = get_password_strength(new_password)
+                st.progress(score / 100)
+                st.markdown(f"Password Strength: **:{color}[{label}]** ({score}/100)")
+            
             submitted = st.form_submit_button("🔐 Change Password", type="primary")
             
             if submitted:
                 if not current_password or not new_password:
                     st.error("Please fill in all fields")
-                elif len(new_password) < 6:
-                    st.error("New password must be at least 6 characters")
                 elif new_password != confirm_password:
                     st.error("New passwords do not match")
                 else:
-                    if change_password(user['id'], current_password, new_password):
+                    success, error_msg = change_password(user['id'], current_password, new_password)
+                    if success:
                         AuditLogger.log_action(
                             "Update", "Profile",
                             f"User changed their password"
                         )
                         st.success("✅ Password changed successfully!")
                     else:
-                        st.error("Current password is incorrect")
+                        st.error(f"❌ {error_msg}")
     
     st.markdown("---")
     
