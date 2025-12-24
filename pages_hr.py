@@ -331,7 +331,7 @@ def display_document_expiry_alerts():
         header_icon = "🚨"
         header_text = f"Employee Documents: {len(expired)} Expired, {len(critical)} Critical, {len(warning)} Warning"
     elif critical:
-        header_icon = "⚠️"
+        header_icon = ⚠️"
         header_text = f"Employee Documents: {len(critical)} Critical, {len(warning)} Warning"
     elif warning:
         header_icon = "📋"
@@ -1469,6 +1469,9 @@ def employee_performance_page():
         conn.close()
         
         if not perf_df.empty:
+            # Convert rating to numeric, handling any string values
+            perf_df['rating'] = pd.to_numeric(perf_df['rating'], errors='coerce').fillna(0)
+            
             # Summary
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -1484,7 +1487,8 @@ def employee_performance_page():
             
             # Display records
             for idx, row in perf_df.iterrows():
-                rating_stars = "⭐" * int(row['rating'])
+                rating_val = int(row['rating']) if row['rating'] > 0 else 0
+                rating_stars = "⭐" * rating_val if rating_val > 0 else "No rating"
                 
                 with st.expander(f"{rating_stars} {row['full_name']} - {row['evaluation_period']} ({row['evaluation_date']})"):
                     col_a, col_b = st.columns(2)
