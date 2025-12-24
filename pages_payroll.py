@@ -83,40 +83,45 @@ def calculate_nssa(gross_amount):
 
 
 def aggregate_employee_trips(start_date, end_date):
-    """Aggregate trip data for employees"""
+    """
+    Aggregate trip data for employees.
+    Matches by employee_id OR employee_name for compatibility with Excel imports.
+    """
     conn = get_connection()
     ph = get_placeholder()
     
+    # Query for drivers - match by ID or Name
     driver_query = f"""
         SELECT 
-            driver_employee_id as employee_id,
+            COALESCE(driver_employee_id, driver_name) as employee_id,
             driver_name as employee_name,
             'Driver' as role,
             COUNT(*) as total_trips,
             COUNT(DISTINCT date) as days_worked,
-            SUM(amount) as total_revenue,
-            SUM(COALESCE(passengers, 0)) as total_passengers,
-            SUM(COALESCE(driver_bonus, 0)) as total_bonuses
+            COALESCE(SUM(amount), 0) as total_revenue,
+            COALESCE(SUM(COALESCE(passengers, 0)), 0) as total_passengers,
+            COALESCE(SUM(COALESCE(driver_bonus, 0)), 0) as total_bonuses
         FROM income
         WHERE date >= {ph} AND date <= {ph}
-          AND driver_employee_id IS NOT NULL
-        GROUP BY driver_employee_id, driver_name
+          AND (driver_employee_id IS NOT NULL OR (driver_name IS NOT NULL AND driver_name != ''))
+        GROUP BY COALESCE(driver_employee_id, driver_name), driver_name
     """
     
+    # Query for conductors - match by ID or Name
     conductor_query = f"""
         SELECT 
-            conductor_employee_id as employee_id,
+            COALESCE(conductor_employee_id, conductor_name) as employee_id,
             conductor_name as employee_name,
             'Conductor' as role,
             COUNT(*) as total_trips,
             COUNT(DISTINCT date) as days_worked,
-            SUM(amount) as total_revenue,
-            SUM(COALESCE(passengers, 0)) as total_passengers,
-            SUM(COALESCE(conductor_bonus, 0)) as total_bonuses
+            COALESCE(SUM(amount), 0) as total_revenue,
+            COALESCE(SUM(COALESCE(passengers, 0)), 0) as total_passengers,
+            COALESCE(SUM(COALESCE(conductor_bonus, 0)), 0) as total_bonuses
         FROM income
         WHERE date >= {ph} AND date <= {ph}
-          AND conductor_employee_id IS NOT NULL
-        GROUP BY conductor_employee_id, conductor_name
+          AND (conductor_employee_id IS NOT NULL OR (conductor_name IS NOT NULL AND conductor_name != ''))
+        GROUP BY COALESCE(conductor_employee_id, conductor_name), conductor_name
     """
     
     params = (str(start_date), str(end_date))
@@ -124,7 +129,22 @@ def aggregate_employee_trips(start_date, end_date):
     try:
         driver_df = pd.read_sql_query(driver_query, get_engine(), params=params)
         conductor_df = pd.read_sql_query(conductor_query, get_engine(), params=params)
+        
+        # Convert numeric columns
+        for df in [driver_df, conductor_df]:
+            if not df.empty:
+                df['total_revenue'] = pd.to_numeric(df['total_revenue'], errors='coerce').fillna(0)
+                df['total_passengers'] = pd.to_numeric(df['total_passengers'], errors='coerce').fillna(0)
+                df['total_bonuses'] = pd.to_numeric(df['total_bonuses'], errors='coerce').fillna(0)
+                df['total_trips'] = pd.to_numeric(df['total_trips'], errors='coerce').fillna(0)
+                df['days_worked'] = pd.to_numeric(df['days_worked'], errors='coerce').fillna(0)
+        
         combined = pd.concat([driver_df, conductor_df], ignore_index=True)
+        
+        # Remove any rows with empty names
+        if not combined.empty:
+            combined = combined[combined['employee_name'].notna() & (combined['employee_name'] != '')]
+        
     except Exception as e:
         print(f"Aggregation error: {e}")
         combined = pd.DataFrame()
@@ -634,20 +654,102 @@ def generate_payroll_section():
     if 'payroll_preview' in st.session_state:
         preview = st.session_state['payroll_preview']
         period_info = st.session_state['period_info']
+        currency = period_info.get('currency', 'USD')
+        symbol = '$' if currency == 'USD' else 'ZiG '
         
-        st.markdown(f"### 📋 Preview: {period_info['period_name']}")
+        st.markdown(f"### Preview: {period_info['period_name']}")
         
+        total_gross = sum(p['gross_earnings'] for p in preview)
+        total_deductions = sum(p['total_deductions'] for p in preview)
         total_net = sum(p['net_pay'] for p in preview)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Employees", len(preview))
-        col2.metric("Total Gross", f"${sum(p['gross_earnings'] for p in preview):,.2f}")
-        col3.metric("Total Net", f"${total_net:,.2f}")
         
+        # Styled summary cards
+        st.markdown("""
+            <style>
+            .payroll-summary {
+                display: flex;
+                gap: 15px;
+                margin: 15px 0;
+            }
+            .payroll-card {
+                flex: 1;
+                padding: 20px;
+                border-radius: 10px;
+                text-align: center;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            .payroll-card.employees { background: linear-gradient(135deg, #667eea, #764ba2); color: white; }
+            .payroll-card.gross { background: linear-gradient(135deg, #11998e, #38ef7d); color: white; }
+            .payroll-card.deductions { background: linear-gradient(135deg, #ff6b6b, #ee5a5a); color: white; }
+            .payroll-card.net { background: linear-gradient(135deg, #4facfe, #00f2fe); color: white; }
+            .payroll-card h2 { margin: 0; font-size: 28px; }
+            .payroll-card p { margin: 5px 0 0 0; opacity: 0.9; }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.markdown(f'<div class="payroll-card employees"><h2>{len(preview)}</h2><p>Employees</p></div>', unsafe_allow_html=True)
+        with col2:
+            st.markdown(f'<div class="payroll-card gross"><h2>{symbol}{total_gross:,.2f}</h2><p>Total Gross</p></div>', unsafe_allow_html=True)
+        with col3:
+            st.markdown(f'<div class="payroll-card deductions"><h2>{symbol}{total_deductions:,.2f}</h2><p>Total Deductions</p></div>', unsafe_allow_html=True)
+        with col4:
+            st.markdown(f'<div class="payroll-card net"><h2>{symbol}{total_net:,.2f}</h2><p>Total Net Pay</p></div>', unsafe_allow_html=True)
+        
+        # Styled table
         df = pd.DataFrame(preview)[['employee_name', 'role', 'total_trips', 'commission_amount', 'bonuses', 'gross_earnings', 'total_deductions', 'net_pay']]
-        df.columns = ['Employee', 'Role', 'Trips', 'Commission', 'Bonuses', 'Gross', 'Deductions', 'Net']
-        st.dataframe(df, use_container_width=True, hide_index=True)
         
-        if st.button("✅ Save Payroll", type="primary", use_container_width=True):
+        # Format currency columns
+        for col in ['commission_amount', 'bonuses', 'gross_earnings', 'total_deductions', 'net_pay']:
+            df[col] = df[col].apply(lambda x: f"{symbol}{x:,.2f}")
+        
+        df.columns = ['Employee', 'Role', 'Trips', 'Commission', 'Bonuses', 'Gross', 'Deductions', 'Net Pay']
+        
+        # Custom styled table
+        st.markdown("""
+            <style>
+            .payroll-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 15px 0;
+                font-size: 14px;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            }
+            .payroll-table thead tr {
+                background: linear-gradient(135deg, #1e3a5f, #2d5a87);
+                color: white;
+            }
+            .payroll-table th, .payroll-table td {
+                padding: 12px 15px;
+                text-align: left;
+                border-bottom: 1px solid #ddd;
+            }
+            .payroll-table tbody tr:nth-child(even) { background-color: #f8f9fa; }
+            .payroll-table tbody tr:hover { background-color: #e3f2fd; }
+            .payroll-table .currency { font-weight: 600; color: #2e7d32; }
+            </style>
+        """, unsafe_allow_html=True)
+        
+        # Build HTML table
+        html = '<table class="payroll-table"><thead><tr>'
+        for col in df.columns:
+            html += f'<th>{col}</th>'
+        html += '</tr></thead><tbody>'
+        
+        for _, row in df.iterrows():
+            html += '<tr>'
+            for i, val in enumerate(row):
+                cell_class = 'currency' if i >= 3 else ''
+                html += f'<td class="{cell_class}">{val}</td>'
+            html += '</tr>'
+        html += '</tbody></table>'
+        
+        st.markdown(html, unsafe_allow_html=True)
+        
+        if st.button("Save Payroll", type="primary", use_container_width=True):
             # CRITICAL FIX: Check for overlapping payroll periods
             has_overlap, overlap_info = check_payroll_period_overlap(
                 period_info['start_date'], 
