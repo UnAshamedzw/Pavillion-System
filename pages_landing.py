@@ -10,6 +10,13 @@ from datetime import datetime, timedelta
 from database import get_connection, get_engine, USE_POSTGRES
 from auth import has_permission, get_user_role
 
+# Import cash left functions
+try:
+    from pages_cash_left import get_cash_left_summary, get_pending_cash_left
+    CASH_LEFT_AVAILABLE = True
+except ImportError:
+    CASH_LEFT_AVAILABLE = False
+
 
 # =============================================================================
 # ROLE-TO-LANDING PAGE MAPPING
@@ -85,7 +92,7 @@ def get_user_stats(employee_id=None):
             """, get_engine())
             stats['today_entries'] = int(df['count'].iloc[0]) if not df.empty else 0
             stats['today_total'] = float(df['total'].iloc[0]) if not df.empty else 0
-    except:
+    except Exception as e:
         pass
     finally:
         conn.close()
@@ -126,7 +133,7 @@ def executive_dashboard():
                 FROM bookings WHERE trip_date >= '{month_start}' AND status IN ('Confirmed', 'Completed')
             """, get_engine())
             booking_revenue = float(booking_df['total'].iloc[0]) if not booking_df.empty else 0
-        except:
+        except Exception as e:
             booking_revenue = 0
         
         month_revenue = route_revenue + booking_revenue
@@ -144,7 +151,7 @@ def executive_dashboard():
                 FROM general_expenses WHERE expense_date >= '{month_start}'
             """, get_engine())
             month_expenses = float(expense_df['total'].iloc[0]) if not expense_df.empty else 0
-        except:
+        except Exception as e:
             month_expenses = 0
         
         total_expenses = month_maintenance + month_expenses
@@ -251,7 +258,7 @@ def operations_dashboard():
     """Landing page for Operations Managers - Fleet and route focus"""
     
     user = st.session_state.get('user', {})
-    st.title(f"🚌 {get_greeting()}, {user.get('full_name', 'Manager')}")
+    st.title(f"Operations Dashboard - {get_greeting()}, {user.get('full_name', 'Manager')}")
     st.markdown("### Operations Overview")
     
     conn = get_connection()
@@ -279,7 +286,7 @@ def operations_dashboard():
         """, get_engine())
         pending_maint = int(maint_df['count'].iloc[0]) if not maint_df.empty else 0
         
-    except:
+    except Exception as e:
         today_revenue = today_trips = active_buses = pending_maint = 0
     finally:
         conn.close()
@@ -288,36 +295,69 @@ def operations_dashboard():
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        st.metric("📈 Today's Revenue", f"${today_revenue:,.0f}")
+        st.metric("Today's Revenue", f"${today_revenue:,.0f}")
     
     with col2:
-        st.metric("🚌 Active Buses", f"{active_buses}")
+        st.metric("Active Buses", f"{active_buses}")
     
     with col3:
-        st.metric("🚗 Today's Trips", f"{today_trips}")
+        st.metric("Today's Trips", f"{today_trips}")
     
     with col4:
-        st.metric("🔧 Pending Maintenance", f"{pending_maint}")
+        st.metric("Pending Maintenance", f"{pending_maint}")
+    
+    # CASH LEFT AT RANK SECTION
+    if CASH_LEFT_AVAILABLE:
+        cash_summary = get_cash_left_summary()
+        if cash_summary['count'] > 0:
+            st.markdown("---")
+            st.subheader("Cash Left at Rank")
+            
+            col_cash1, col_cash2 = st.columns(2)
+            with col_cash1:
+                st.metric("Pending Records", cash_summary['count'], delta="Needs Collection")
+            with col_cash2:
+                st.metric("Total Amount", f"${cash_summary['amount']:,.2f}")
+            
+            # Show pending details
+            pending_cash = get_pending_cash_left()
+            if not pending_cash.empty:
+                st.markdown("**Pending Cash Details:**")
+                for _, row in pending_cash.head(5).iterrows():
+                    bus = row.get('bus_number', 'N/A')
+                    amount = row.get('amount', 0)
+                    driver = row.get('driver_name', 'Unknown')
+                    date_left = row.get('date_left', 'N/A')
+                    supervisor = row.get('supervisor_name', 'N/A')
+                    
+                    st.warning(f"**{bus}**: ${amount:,.2f} - {driver} (Left: {date_left}) - Supervisor: {supervisor}")
+                
+                if len(pending_cash) > 5:
+                    st.info(f"... and {len(pending_cash) - 5} more pending records")
+                
+                if st.button("Manage Cash Left", type="primary"):
+                    st.session_state['navigate_to'] = 'Cash Left'
+                    st.rerun()
     
     st.markdown("---")
     
     # Quick Actions
-    st.subheader("⚡ Quick Actions")
+    st.subheader("Quick Actions")
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
-        if st.button("➕ Add Income", width="stretch"):
-            st.session_state['navigate_to'] = '🚌 Trip & Income Entry'
+        if st.button("Add Income", use_container_width=True):
+            st.session_state['navigate_to'] = 'Trip & Income Entry'
             st.rerun()
     
     with col2:
-        if st.button("🔧 Add Maintenance", width="stretch"):
-            st.session_state['navigate_to'] = '🔧 Maintenance Entry'
+        if st.button("Add Maintenance", use_container_width=True):
+            st.session_state['navigate_to'] = 'Maintenance Entry'
             st.rerun()
     
     with col3:
-        if st.button("⛽ Add Fuel", width="stretch"):
-            st.session_state['navigate_to'] = '⛽ Fuel Entry'
+        if st.button("Add Fuel", use_container_width=True):
+            st.session_state['navigate_to'] = 'Fuel Entry'
             st.rerun()
     
     with col4:
@@ -357,7 +397,7 @@ def hr_dashboard():
                 SELECT COUNT(*) as count FROM leave_requests WHERE status = 'Pending'
             """, get_engine())
             pending_leave = int(leave_df['count'].iloc[0]) if not leave_df.empty else 0
-        except:
+        except Exception as e:
             pending_leave = 0
         
         # Expiring documents
@@ -373,7 +413,7 @@ def hr_dashboard():
         """, get_engine())
         expiring_docs = int(doc_df['count'].iloc[0]) if not doc_df.empty else 0
         
-    except:
+    except Exception as e:
         active_employees = pending_leave = expiring_docs = 0
     finally:
         conn.close()
@@ -456,7 +496,7 @@ def finance_dashboard():
                 FROM bookings WHERE trip_date >= '{month_start}' AND status IN ('Confirmed', 'Completed')
             """, get_engine())
             booking_revenue = float(booking_df['total'].iloc[0]) if not booking_df.empty else 0
-        except:
+        except Exception as e:
             booking_revenue = 0
         
         month_revenue = route_revenue + booking_revenue
@@ -474,7 +514,7 @@ def finance_dashboard():
                 FROM general_expenses WHERE expense_date >= '{month_start}'
             """, get_engine())
             month_expenses = float(expense_df['total'].iloc[0]) if not expense_df.empty else 0
-        except:
+        except Exception as e:
             month_expenses = 0
         
         # Unpaid expenses
@@ -485,13 +525,13 @@ def finance_dashboard():
             """, get_engine())
             unpaid_count = int(unpaid_df['count'].iloc[0]) if not unpaid_df.empty else 0
             unpaid_total = float(unpaid_df['total'].iloc[0]) if not unpaid_df.empty else 0
-        except:
+        except Exception as e:
             unpaid_count = unpaid_total = 0
         
         total_expenses = month_maintenance + month_expenses
         month_profit = month_revenue - total_expenses
         
-    except:
+    except Exception as e:
         month_revenue = route_revenue = booking_revenue = month_maintenance = month_expenses = month_profit = 0
         unpaid_count = unpaid_total = 0
     finally:
@@ -588,7 +628,7 @@ def supervisor_dashboard():
         """, get_engine())
         today_assignments = int(assign_df['count'].iloc[0]) if not assign_df.empty else 0
         
-    except:
+    except Exception as e:
         today_trips = today_revenue = today_assignments = 0
     finally:
         conn.close()
@@ -650,10 +690,10 @@ def workshop_dashboard():
                 SELECT COUNT(*) as count FROM inventory WHERE quantity <= minimum_stock
             """, get_engine())
             low_stock = int(inv_df['count'].iloc[0]) if not inv_df.empty else 0
-        except:
+        except Exception as e:
             low_stock = 0
         
-    except:
+    except Exception as e:
         scheduled = in_progress = low_stock = 0
     finally:
         conn.close()
@@ -712,7 +752,7 @@ def stores_dashboard():
                 SELECT COUNT(*) as count FROM inventory
             """, get_engine())
             total_items = int(total_df['count'].iloc[0]) if not total_df.empty else 0
-        except:
+        except Exception as e:
             total_items = 0
         
         # Low stock items
@@ -721,7 +761,7 @@ def stores_dashboard():
                 SELECT COUNT(*) as count FROM inventory WHERE quantity <= minimum_stock AND quantity > 0
             """, get_engine())
             low_stock = int(low_df['count'].iloc[0]) if not low_df.empty else 0
-        except:
+        except Exception as e:
             low_stock = 0
         
         # Out of stock items
@@ -730,7 +770,7 @@ def stores_dashboard():
                 SELECT COUNT(*) as count FROM inventory WHERE quantity = 0
             """, get_engine())
             out_of_stock = int(out_df['count'].iloc[0]) if not out_df.empty else 0
-        except:
+        except Exception as e:
             out_of_stock = 0
         
         # Total stock value
@@ -739,10 +779,10 @@ def stores_dashboard():
                 SELECT COALESCE(SUM(quantity * unit_cost), 0) as total FROM inventory
             """, get_engine())
             stock_value = float(value_df['total'].iloc[0]) if not value_df.empty else 0
-        except:
+        except Exception as e:
             stock_value = 0
         
-    except:
+    except Exception as e:
         total_items = low_stock = out_of_stock = 0
         stock_value = 0
     finally:
@@ -852,7 +892,7 @@ def payroll_dashboard():
             SELECT COUNT(*) as count FROM employees WHERE status = 'Active'
         """, get_engine())
         active_employees = int(emp_df['count'].iloc[0]) if not emp_df.empty else 0
-    except:
+    except Exception as e:
         active_employees = 0
     finally:
         conn.close()
@@ -941,7 +981,7 @@ def admin_dashboard():
         """, get_engine())
         active_buses = int(buses_df['count'].iloc[0]) if not buses_df.empty else 0
         
-    except:
+    except Exception as e:
         active_users = active_employees = active_buses = 0
     finally:
         conn.close()
@@ -1032,10 +1072,10 @@ def show_critical_alerts_summary():
                 SELECT COUNT(*) as count FROM inventory WHERE quantity <= minimum_stock
             """, get_engine())
             inv_alerts = int(inv['count'].iloc[0]) if not inv.empty else 0
-        except:
+        except Exception as e:
             inv_alerts = 0
         
-    except:
+    except Exception as e:
         bus_alerts = emp_alerts = inv_alerts = 0
     finally:
         conn.close()

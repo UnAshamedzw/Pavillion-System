@@ -492,6 +492,32 @@ def init_database():
                 )
             ''')
             
+            # CASH_LEFT TABLE - Track cash left at rank before trips
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cash_left (
+                    id SERIAL PRIMARY KEY,
+                    date_left TEXT NOT NULL,
+                    bus_number TEXT NOT NULL,
+                    driver_name TEXT,
+                    driver_employee_id TEXT,
+                    conductor_name TEXT,
+                    conductor_employee_id TEXT,
+                    amount REAL NOT NULL,
+                    supervisor_name TEXT NOT NULL,
+                    route TEXT,
+                    reason TEXT,
+                    status TEXT DEFAULT 'pending',
+                    date_collected TEXT,
+                    collected_by TEXT,
+                    collection_notes TEXT,
+                    linked_income_id INTEGER,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
             # CONTRACT_TEMPLATES TABLE
             cursor.execute('''
                 CREATE TABLE IF NOT EXISTS contract_templates (
@@ -959,6 +985,32 @@ def init_database():
                     receipt_number TEXT,
                     recurring INTEGER DEFAULT 0,
                     recurring_frequency TEXT,
+                    notes TEXT,
+                    created_by TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # CASH_LEFT TABLE (SQLite) - Track cash left at rank before trips
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS cash_left (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date_left TEXT NOT NULL,
+                    bus_number TEXT NOT NULL,
+                    driver_name TEXT,
+                    driver_employee_id TEXT,
+                    conductor_name TEXT,
+                    conductor_employee_id TEXT,
+                    amount REAL NOT NULL,
+                    supervisor_name TEXT NOT NULL,
+                    route TEXT,
+                    reason TEXT,
+                    status TEXT DEFAULT 'pending',
+                    date_collected TEXT,
+                    collected_by TEXT,
+                    collection_notes TEXT,
+                    linked_income_id INTEGER,
                     notes TEXT,
                     created_by TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

@@ -51,6 +51,7 @@ from pages_payroll import payroll_processing_page
 from pages_reconciliation import daily_reconciliation_page
 from pages_employee_portal import employee_portal_page
 from pages_approvals import approvals_center_page
+from pages_cash_left import cash_left_page
 from mobile_styles import apply_mobile_styles
 import base64
 from pathlib import Path
@@ -243,6 +244,7 @@ def main():
     operations_items.extend([
         "🔔 Alerts",
         "🚌 Trip & Income Entry",
+        "💵 Cash Left at Rank",
         "📋 Daily Reconciliation",
         "👥 Customers & Bookings",
         "🔧 Maintenance Entry",
@@ -398,6 +400,11 @@ def main():
     if page == "🚌 Trip & Income Entry":
         if can_access_page(page):
             income_entry_page()
+        else:
+            show_access_denied(page)
+    elif page == "💵 Cash Left at Rank":
+        if can_access_page(page):
+            cash_left_page()
         else:
             show_access_denied(page)
     elif page == "📋 Daily Reconciliation":
