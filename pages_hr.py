@@ -328,36 +328,36 @@ def display_document_expiry_alerts():
     
     # Determine header based on severity
     if expired:
-        header_icon = "🚨"
+        header_icon = "RED ALERT"
         header_text = f"Employee Documents: {len(expired)} Expired, {len(critical)} Critical, {len(warning)} Warning"
     elif critical:
-        header_icon = ⚠️"
+        header_icon = "WARNING"
         header_text = f"Employee Documents: {len(critical)} Critical, {len(warning)} Warning"
     elif warning:
-        header_icon = "📋"
+        header_icon = "NOTICE"
         header_text = f"Employee Documents: {len(warning)} Expiring Soon"
     else:
-        header_icon = "ℹ️"
+        header_icon = "INFO"
         header_text = f"Employee Documents: {len(info)} Upcoming Renewals"
     
     # Single collapsed expander with all alerts
-    with st.expander(f"{header_icon} {header_text}", expanded=False):
+    with st.expander(f"[{header_icon}] {header_text}", expanded=False):
         # Summary metrics row
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            st.metric("🔴 Expired", len(expired))
+            st.metric("Expired", len(expired))
         with col2:
-            st.metric("🟠 Critical", len(critical))
+            st.metric("Critical", len(critical))
         with col3:
-            st.metric("🟡 Warning", len(warning))
+            st.metric("Warning", len(warning))
         with col4:
-            st.metric("ℹ️ Upcoming", len(info))
+            st.metric("Upcoming", len(info))
         
         st.markdown("---")
         
         # Display alerts by category
         if expired:
-            st.markdown("#### 🔴 Expired Documents")
+            st.markdown("#### Expired Documents")
             for alert in expired:
                 st.error(f"❌ **{alert['name']}** ({alert['position']}) - {alert['document']}: Expired {abs(alert['days_until'])} days ago")
         
