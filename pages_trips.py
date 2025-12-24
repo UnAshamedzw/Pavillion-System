@@ -98,7 +98,7 @@ def add_trip(bus_number, route_id, route_name, driver_id, driver_name,
             duration_minutes = int(duration.total_seconds() / 60)
             if duration_minutes < 0:  # Handle overnight trips
                 duration_minutes += 24 * 60
-        except:
+        except Exception as e:
             pass
     
     # Calculate revenue per passenger
@@ -145,10 +145,32 @@ def add_trip(bus_number, route_id, route_name, driver_id, driver_name,
 
 def get_trips(bus_number=None, route_name=None, driver_name=None, 
               start_date=None, end_date=None, trip_type=None):
-    """Get trips with optional filters"""
+    """
+    Get trips with optional filters.
+    Queries from INCOME table for compatibility with Excel imports.
+    """
     conn = get_connection()
     
-    query = "SELECT * FROM trips WHERE 1=1"
+    # Query from INCOME table (where Excel data is imported)
+    query = """
+        SELECT 
+            id,
+            date as trip_date,
+            bus_number,
+            route as route_name,
+            driver_name,
+            conductor_name,
+            COALESCE(passengers, 0) as passengers,
+            COALESCE(amount, 0) as revenue,
+            CASE WHEN passengers > 0 THEN amount / passengers ELSE 0 END as revenue_per_passenger,
+            COALESCE(trip_type, 'Regular') as trip_type,
+            notes,
+            departure_time,
+            arrival_time,
+            created_by
+        FROM income 
+        WHERE 1=1
+    """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
@@ -157,28 +179,37 @@ def get_trips(bus_number=None, route_name=None, driver_name=None,
         params.append(bus_number)
     
     if route_name:
-        query += f" AND route_name = {ph}"
+        query += f" AND route = {ph}"
         params.append(route_name)
     
     if driver_name:
-        query += f" AND driver_name = {ph}"
+        query += f" AND (driver_name = {ph} OR driver_name LIKE {ph})"
         params.append(driver_name)
+        params.append(f"%{driver_name}%")
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
     if trip_type:
         query += f" AND trip_type = {ph}"
         params.append(trip_type)
     
-    query += " ORDER BY trip_date DESC, departure_time DESC"
+    query += " ORDER BY date DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+    try:
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        # Ensure numeric columns
+        df['passengers'] = pd.to_numeric(df['passengers'], errors='coerce').fillna(0)
+        df['revenue'] = pd.to_numeric(df['revenue'], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error getting trips: {e}")
+        df = pd.DataFrame()
+    
     conn.close()
     return df
 
@@ -235,139 +266,172 @@ def delete_trip(trip_id):
 
 
 def get_trip_summary_by_bus(start_date=None, end_date=None):
-    """Get trip summary by bus"""
+    """Get trip summary by bus from INCOME table"""
     conn = get_connection()
     
     query = """
         SELECT 
             bus_number,
             COUNT(*) as trip_count,
-            SUM(passengers) as total_passengers,
-            SUM(revenue) as total_revenue,
-            AVG(passengers) as avg_passengers,
-            AVG(revenue) as avg_revenue_per_trip,
-            AVG(revenue_per_passenger) as avg_revenue_per_passenger
-        FROM trips
-        WHERE 1=1
+            COALESCE(SUM(passengers), 0) as total_passengers,
+            COALESCE(SUM(amount), 0) as total_revenue,
+            COALESCE(AVG(passengers), 0) as avg_passengers,
+            COALESCE(AVG(amount), 0) as avg_revenue_per_trip,
+            CASE WHEN SUM(passengers) > 0 THEN SUM(amount) / SUM(passengers) ELSE 0 END as avg_revenue_per_passenger
+        FROM income
+        WHERE bus_number IS NOT NULL AND bus_number != ''
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
     query += " GROUP BY bus_number ORDER BY total_revenue DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+    try:
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        # Ensure numeric columns
+        for col in ['trip_count', 'total_passengers', 'total_revenue', 'avg_passengers', 'avg_revenue_per_trip']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error in bus summary: {e}")
+        df = pd.DataFrame()
+    
     conn.close()
     return df
 
 
 def get_trip_summary_by_route(start_date=None, end_date=None):
-    """Get trip summary by route"""
+    """Get trip summary by route from INCOME table"""
     conn = get_connection()
     
     query = """
         SELECT 
-            route_name,
+            route as route_name,
             COUNT(*) as trip_count,
-            SUM(passengers) as total_passengers,
-            SUM(revenue) as total_revenue,
-            AVG(passengers) as avg_passengers,
-            AVG(revenue) as avg_revenue_per_trip,
-            AVG(duration_minutes) as avg_duration
-        FROM trips
-        WHERE 1=1
+            COALESCE(SUM(passengers), 0) as total_passengers,
+            COALESCE(SUM(amount), 0) as total_revenue,
+            COALESCE(AVG(passengers), 0) as avg_passengers,
+            COALESCE(AVG(amount), 0) as avg_revenue_per_trip,
+            0 as avg_duration
+        FROM income
+        WHERE route IS NOT NULL AND route != ''
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
-    query += " GROUP BY route_name ORDER BY total_revenue DESC"
+    query += " GROUP BY route ORDER BY total_revenue DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+    try:
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        for col in ['trip_count', 'total_passengers', 'total_revenue', 'avg_passengers', 'avg_revenue_per_trip']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error in route summary: {e}")
+        df = pd.DataFrame()
+    
     conn.close()
     return df
 
 
 def get_trip_summary_by_driver(start_date=None, end_date=None):
-    """Get trip summary by driver"""
+    """Get trip summary by driver from INCOME table"""
     conn = get_connection()
     
     query = """
         SELECT 
             driver_name,
             COUNT(*) as trip_count,
-            SUM(passengers) as total_passengers,
-            SUM(revenue) as total_revenue,
-            AVG(passengers) as avg_passengers,
-            AVG(revenue) as avg_revenue_per_trip
-        FROM trips
-        WHERE driver_name IS NOT NULL
+            COALESCE(SUM(passengers), 0) as total_passengers,
+            COALESCE(SUM(amount), 0) as total_revenue,
+            COALESCE(AVG(passengers), 0) as avg_passengers,
+            COALESCE(AVG(amount), 0) as avg_revenue_per_trip
+        FROM income
+        WHERE driver_name IS NOT NULL AND driver_name != ''
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
     query += " GROUP BY driver_name ORDER BY total_revenue DESC"
     
-    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+    try:
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        for col in ['trip_count', 'total_passengers', 'total_revenue', 'avg_passengers', 'avg_revenue_per_trip']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error in driver summary: {e}")
+        df = pd.DataFrame()
+    
     conn.close()
     return df
 
 
 def get_daily_trip_summary(start_date=None, end_date=None):
-    """Get daily trip summary"""
+    """Get daily trip summary from INCOME table"""
     conn = get_connection()
     
     query = """
         SELECT 
-            trip_date,
+            date as trip_date,
             COUNT(*) as trip_count,
-            SUM(passengers) as total_passengers,
-            SUM(revenue) as total_revenue
-        FROM trips
+            COALESCE(SUM(passengers), 0) as total_passengers,
+            COALESCE(SUM(amount), 0) as total_revenue
+        FROM income
         WHERE 1=1
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
-    query += " GROUP BY trip_date ORDER BY trip_date"
+    query += " GROUP BY date ORDER BY date"
     
-    df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+    try:
+        df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
+        for col in ['trip_count', 'total_passengers', 'total_revenue']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error in daily summary: {e}")
+        df = pd.DataFrame()
+    
     conn.close()
     return df
 
 
 def get_hourly_distribution(start_date=None, end_date=None):
-    """Get trip distribution by hour of day"""
+    """Get trip distribution by hour of day from INCOME table"""
     conn = get_connection()
     
     if USE_POSTGRES:
@@ -375,9 +439,9 @@ def get_hourly_distribution(start_date=None, end_date=None):
             SELECT 
                 EXTRACT(HOUR FROM departure_time::time) as hour,
                 COUNT(*) as trip_count,
-                SUM(passengers) as total_passengers,
-                SUM(revenue) as total_revenue
-            FROM trips
+                COALESCE(SUM(passengers), 0) as total_passengers,
+                COALESCE(SUM(amount), 0) as total_revenue
+            FROM income
             WHERE departure_time IS NOT NULL
         """
     else:
@@ -385,9 +449,9 @@ def get_hourly_distribution(start_date=None, end_date=None):
             SELECT 
                 CAST(SUBSTR(departure_time, 1, 2) AS INTEGER) as hour,
                 COUNT(*) as trip_count,
-                SUM(passengers) as total_passengers,
-                SUM(revenue) as total_revenue
-            FROM trips
+                COALESCE(SUM(passengers), 0) as total_passengers,
+                COALESCE(SUM(amount), 0) as total_revenue
+            FROM income
             WHERE departure_time IS NOT NULL
         """
     
@@ -395,18 +459,22 @@ def get_hourly_distribution(start_date=None, end_date=None):
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
     query += " GROUP BY hour ORDER BY hour"
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+        for col in ['trip_count', 'total_passengers', 'total_revenue']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error in hourly distribution: {e}")
         df = pd.DataFrame()
     
     conn.close()

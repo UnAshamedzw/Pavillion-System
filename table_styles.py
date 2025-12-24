@@ -8,21 +8,157 @@ import pandas as pd
 
 
 # =============================================================================
+# GLOBAL STYLES - Call this once at app startup
+# =============================================================================
+
+def apply_global_styles():
+    """Apply global CSS styles for tables and metrics throughout the app"""
+    st.markdown("""
+    <style>
+    /* ===== DATAFRAME STYLING ===== */
+    .stDataFrame {
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    
+    .stDataFrame [data-testid="stDataFrameResizable"] {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    /* Header styling */
+    .stDataFrame thead tr th {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%) !important;
+        color: white !important;
+        font-weight: 600 !important;
+        padding: 12px 15px !important;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+    }
+    
+    /* Row styling */
+    .stDataFrame tbody tr {
+        transition: background-color 0.2s ease;
+    }
+    
+    .stDataFrame tbody tr:hover {
+        background-color: #e3f2fd !important;
+    }
+    
+    .stDataFrame tbody tr:nth-child(even) {
+        background-color: #f8f9fa;
+    }
+    
+    /* Cell styling */
+    .stDataFrame tbody td {
+        padding: 10px 15px !important;
+        border-bottom: 1px solid #e9ecef !important;
+        font-size: 14px;
+    }
+    
+    /* ===== METRIC CARDS ===== */
+    [data-testid="metric-container"] {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px;
+        padding: 15px 20px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+    }
+    
+    [data-testid="metric-container"] label {
+        color: rgba(255,255,255,0.9) !important;
+        font-size: 14px !important;
+    }
+    
+    [data-testid="metric-container"] [data-testid="stMetricValue"] {
+        color: white !important;
+        font-weight: 700 !important;
+    }
+    
+    [data-testid="metric-container"] [data-testid="stMetricDelta"] {
+        color: rgba(255,255,255,0.85) !important;
+    }
+    
+    /* Different metric colors */
+    [data-testid="metric-container"]:nth-of-type(4n+1) {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        box-shadow: 0 4px 15px rgba(17, 153, 142, 0.3);
+    }
+    
+    [data-testid="metric-container"]:nth-of-type(4n+2) {
+        background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
+        box-shadow: 0 4px 15px rgba(252, 74, 26, 0.3);
+    }
+    
+    [data-testid="metric-container"]:nth-of-type(4n+3) {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        box-shadow: 0 4px 15px rgba(79, 172, 254, 0.3);
+    }
+    
+    /* ===== EXPANDER STYLING ===== */
+    .streamlit-expanderHeader {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background-color: #e9ecef;
+    }
+    
+    /* ===== TAB STYLING ===== */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #f8f9fa;
+        border-radius: 10px;
+        padding: 5px;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 10px 20px;
+        font-weight: 500;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background-color: #1e3a5f !important;
+        color: white !important;
+    }
+    
+    /* ===== BUTTON STYLING ===== */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    
+    .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+    }
+    
+    /* ===== FORM STYLING ===== */
+    .stForm {
+        background-color: #f8f9fa;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #e9ecef;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
+# =============================================================================
 # CURRENCY FORMATTING
 # =============================================================================
 
 def format_currency(value, currency='USD', show_symbol=True):
-    """
-    Format a number as currency.
-    
-    Args:
-        value: Number to format
-        currency: 'USD' or 'ZiG'
-        show_symbol: Whether to show currency symbol
-    
-    Returns:
-        Formatted string like "$1,234.56" or "ZiG 1,234.56"
-    """
+    """Format a number as currency with proper symbol and commas"""
     try:
         num = float(value) if value is not None else 0
     except (ValueError, TypeError):
@@ -58,366 +194,308 @@ def format_percentage(value, decimals=1):
 
 
 # =============================================================================
-# DATAFRAME STYLING
+# DATAFRAME FORMATTING
 # =============================================================================
 
-def style_dataframe(df, currency_columns=None, number_columns=None, 
-                    percentage_columns=None, date_columns=None,
-                    currency='USD', highlight_max=None, highlight_min=None):
+def style_dataframe(df, currency_cols=None, number_cols=None, pct_cols=None, date_cols=None):
     """
-    Apply consistent styling to a dataframe.
-    
-    Args:
-        df: Pandas DataFrame
-        currency_columns: List of columns to format as currency
-        number_columns: List of columns to format with thousand separators
-        percentage_columns: List of columns to format as percentages
-        date_columns: List of columns to format as dates
-        currency: Default currency symbol
-        highlight_max: Column name to highlight max value (green)
-        highlight_min: Column name to highlight min value (red)
-    
-    Returns:
-        Styled DataFrame ready for display
+    Format a dataframe for display with proper currency, number, and percentage formatting.
+    Returns a new dataframe with formatted string values.
     """
     if df.empty:
         return df
     
     styled_df = df.copy()
     
+    # Auto-detect currency columns if not specified
+    if currency_cols is None:
+        currency_cols = []
+        currency_keywords = ['amount', 'revenue', 'cost', 'price', 'salary', 'pay', 'total', 
+                            'gross', 'net', 'deduction', 'commission', 'bonus', 'expense',
+                            'income', 'profit', 'loss', 'balance', 'fee', 'wage']
+        for col in styled_df.columns:
+            col_lower = col.lower().replace('_', ' ')
+            if any(kw in col_lower for kw in currency_keywords):
+                currency_cols.append(col)
+    
+    # Auto-detect number columns
+    if number_cols is None:
+        number_cols = []
+        number_keywords = ['count', 'trips', 'passengers', 'quantity', 'qty', 'number', 'num', 'days']
+        for col in styled_df.columns:
+            col_lower = col.lower().replace('_', ' ')
+            if any(kw in col_lower for kw in number_keywords) and col not in currency_cols:
+                number_cols.append(col)
+    
+    # Auto-detect percentage columns
+    if pct_cols is None:
+        pct_cols = []
+        pct_keywords = ['percent', 'pct', 'rate', '%', 'ratio', 'efficiency']
+        for col in styled_df.columns:
+            col_lower = col.lower().replace('_', ' ')
+            if any(kw in col_lower for kw in pct_keywords):
+                pct_cols.append(col)
+    
     # Format currency columns
-    if currency_columns:
-        for col in currency_columns:
-            if col in styled_df.columns:
-                styled_df[col] = styled_df[col].apply(
-                    lambda x: format_currency(x, currency)
-                )
+    for col in currency_cols:
+        if col in styled_df.columns:
+            styled_df[col] = styled_df[col].apply(lambda x: format_currency(x))
     
     # Format number columns
-    if number_columns:
-        for col in number_columns:
-            if col in styled_df.columns:
-                styled_df[col] = styled_df[col].apply(format_number)
+    for col in number_cols:
+        if col in styled_df.columns:
+            styled_df[col] = styled_df[col].apply(lambda x: format_number(x))
     
     # Format percentage columns
-    if percentage_columns:
-        for col in percentage_columns:
-            if col in styled_df.columns:
-                styled_df[col] = styled_df[col].apply(format_percentage)
+    for col in pct_cols:
+        if col in styled_df.columns:
+            styled_df[col] = styled_df[col].apply(lambda x: format_percentage(x))
     
     # Format date columns
-    if date_columns:
-        for col in date_columns:
+    if date_cols:
+        for col in date_cols:
             if col in styled_df.columns:
                 styled_df[col] = pd.to_datetime(styled_df[col], errors='coerce').dt.strftime('%d %b %Y')
     
     return styled_df
 
 
-def get_table_style():
-    """Return CSS for styled tables"""
-    return """
-    <style>
-    .styled-table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 15px 0;
-        font-size: 14px;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    }
-    
-    .styled-table thead tr {
-        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
-        color: white;
-        text-align: left;
-        font-weight: 600;
-    }
-    
-    .styled-table th,
-    .styled-table td {
-        padding: 12px 15px;
-        border-bottom: 1px solid #e0e0e0;
-    }
-    
-    .styled-table tbody tr {
-        background-color: #ffffff;
-        transition: background-color 0.2s;
-    }
-    
-    .styled-table tbody tr:nth-of-type(even) {
-        background-color: #f8f9fa;
-    }
-    
-    .styled-table tbody tr:hover {
-        background-color: #e8f4f8;
-    }
-    
-    .styled-table tbody tr:last-of-type {
-        border-bottom: 2px solid #1e3a5f;
-    }
-    
-    /* Currency styling */
-    .currency-positive {
-        color: #28a745;
-        font-weight: 600;
-    }
-    
-    .currency-negative {
-        color: #dc3545;
-        font-weight: 600;
-    }
-    
-    /* Status badges */
-    .status-badge {
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 12px;
-        font-weight: 600;
-        display: inline-block;
-    }
-    
-    .status-active, .status-approved, .status-paid, .status-completed {
-        background-color: #d4edda;
-        color: #155724;
-    }
-    
-    .status-pending, .status-processing {
-        background-color: #fff3cd;
-        color: #856404;
-    }
-    
-    .status-inactive, .status-rejected, .status-cancelled {
-        background-color: #f8d7da;
-        color: #721c24;
-    }
-    
-    /* Totals row */
-    .totals-row {
-        background-color: #1e3a5f !important;
-        color: white !important;
-        font-weight: bold;
-    }
-    
-    .totals-row td {
-        border-bottom: none !important;
-    }
-    </style>
-    """
-
-
-def render_styled_table(df, title=None, show_index=False, currency_columns=None,
-                        number_columns=None, percentage_columns=None,
-                        status_column=None, totals_row=False, currency='USD'):
-    """
-    Render a beautifully styled HTML table.
-    
-    Args:
-        df: Pandas DataFrame
-        title: Optional table title
-        show_index: Whether to show row index
-        currency_columns: Columns to format as currency
-        number_columns: Columns to format with commas
-        percentage_columns: Columns to format as percentages
-        status_column: Column containing status values (for badge styling)
-        totals_row: Whether last row is a totals row
-        currency: Currency symbol to use
-    """
+def display_styled_dataframe(df, title=None, currency_cols=None, number_cols=None, 
+                             hide_index=True, use_container_width=True):
+    """Display a styled dataframe with automatic formatting"""
     if df.empty:
         st.info("No data to display")
         return
     
-    # Apply styling
-    st.markdown(get_table_style(), unsafe_allow_html=True)
+    if title:
+        st.subheader(title)
     
-    # Build HTML table
-    html = '<table class="styled-table">'
+    # Format the dataframe
+    styled_df = style_dataframe(df, currency_cols=currency_cols, number_cols=number_cols)
     
-    # Header
-    html += '<thead><tr>'
-    if show_index:
-        html += '<th>#</th>'
-    for col in df.columns:
-        html += f'<th>{col}</th>'
-    html += '</tr></thead>'
+    # Rename columns to be more readable
+    renamed_cols = {}
+    for col in styled_df.columns:
+        new_name = col.replace('_', ' ').title()
+        renamed_cols[col] = new_name
+    styled_df = styled_df.rename(columns=renamed_cols)
     
-    # Body
-    html += '<tbody>'
-    for idx, row in df.iterrows():
-        row_class = 'totals-row' if totals_row and idx == len(df) - 1 else ''
-        html += f'<tr class="{row_class}">'
-        
-        if show_index:
-            html += f'<td>{idx + 1}</td>'
-        
-        for col in df.columns:
-            value = row[col]
-            cell_content = format_cell(value, col, currency_columns, number_columns, 
-                                       percentage_columns, status_column, currency)
-            html += f'<td>{cell_content}</td>'
-        
-        html += '</tr>'
-    html += '</tbody></table>'
+    st.dataframe(styled_df, hide_index=hide_index, use_container_width=use_container_width)
+
+
+# =============================================================================
+# HTML TABLE RENDERING
+# =============================================================================
+
+def render_html_table(df, title=None, currency_cols=None, status_col=None):
+    """Render a beautiful HTML table with custom styling"""
+    if df.empty:
+        st.info("No data to display")
+        return
+    
+    # Apply formatting
+    styled_df = style_dataframe(df, currency_cols=currency_cols)
+    
+    # Custom CSS
+    st.markdown("""
+    <style>
+    .custom-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 15px 0;
+        font-size: 14px;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    
+    .custom-table thead tr {
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d5a87 100%);
+        color: white;
+        text-align: left;
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 12px;
+        letter-spacing: 0.5px;
+    }
+    
+    .custom-table th, .custom-table td {
+        padding: 14px 18px;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .custom-table tbody tr {
+        background-color: #ffffff;
+        transition: all 0.2s ease;
+    }
+    
+    .custom-table tbody tr:nth-of-type(even) {
+        background-color: #f8f9fa;
+    }
+    
+    .custom-table tbody tr:hover {
+        background-color: #e3f2fd;
+        transform: scale(1.001);
+    }
+    
+    .custom-table .currency {
+        font-weight: 600;
+        color: #28a745;
+    }
+    
+    .custom-table .currency.negative {
+        color: #dc3545;
+    }
+    
+    .status-badge {
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        display: inline-block;
+    }
+    
+    .status-active, .status-paid, .status-approved, .status-completed {
+        background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+        color: #155724;
+    }
+    
+    .status-pending, .status-processing, .status-scheduled {
+        background: linear-gradient(135deg, #fff3cd 0%, #ffeeba 100%);
+        color: #856404;
+    }
+    
+    .status-inactive, .status-cancelled, .status-rejected, .status-overdue {
+        background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
+        color: #721c24;
+    }
+    </style>
+    """, unsafe_allow_html=True)
     
     if title:
         st.markdown(f"**{title}**")
     
+    # Build HTML table
+    html = '<table class="custom-table"><thead><tr>'
+    for col in styled_df.columns:
+        display_col = col.replace('_', ' ').title()
+        html += f'<th>{display_col}</th>'
+    html += '</tr></thead><tbody>'
+    
+    for _, row in styled_df.iterrows():
+        html += '<tr>'
+        for col in styled_df.columns:
+            val = row[col]
+            cell_class = ''
+            
+            # Check if currency column
+            if currency_cols and col in currency_cols:
+                cell_class = 'currency'
+                if isinstance(val, str) and val.startswith('-'):
+                    cell_class += ' negative'
+            
+            # Check if status column
+            if status_col and col == status_col:
+                status_class = str(val).lower().replace(' ', '-')
+                val = f'<span class="status-badge status-{status_class}">{val}</span>'
+            
+            html += f'<td class="{cell_class}">{val}</td>'
+        html += '</tr>'
+    
+    html += '</tbody></table>'
     st.markdown(html, unsafe_allow_html=True)
 
 
-def format_cell(value, column, currency_columns, number_columns, 
-                percentage_columns, status_column, currency):
-    """Format individual cell based on column type"""
+# =============================================================================
+# SUMMARY CARDS
+# =============================================================================
+
+def render_summary_cards(metrics):
+    """
+    Render beautiful summary metric cards.
     
-    # Handle None/NaN
-    if pd.isna(value) or value is None:
-        return '-'
+    Args:
+        metrics: List of dicts with keys: label, value, prefix (optional), delta (optional)
+    """
+    st.markdown("""
+    <style>
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin: 20px 0;
+    }
     
-    # Currency formatting
-    if currency_columns and column in currency_columns:
-        try:
-            num = float(value)
-            formatted = format_currency(num, currency)
-            if num >= 0:
-                return f'<span class="currency-positive">{formatted}</span>'
+    .summary-card {
+        border-radius: 12px;
+        padding: 20px;
+        color: white;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: transform 0.2s ease;
+    }
+    
+    .summary-card:hover {
+        transform: translateY(-3px);
+    }
+    
+    .summary-card.purple { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .summary-card.green { background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); }
+    .summary-card.orange { background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%); }
+    .summary-card.blue { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+    .summary-card.red { background: linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%); }
+    .summary-card.teal { background: linear-gradient(135deg, #0cebeb 0%, #20e3b2 100%); }
+    
+    .summary-card h2 {
+        margin: 0;
+        font-size: 32px;
+        font-weight: 700;
+    }
+    
+    .summary-card p {
+        margin: 8px 0 0 0;
+        opacity: 0.9;
+        font-size: 14px;
+    }
+    
+    .summary-card .delta {
+        font-size: 13px;
+        margin-top: 5px;
+        opacity: 0.85;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    colors = ['green', 'blue', 'orange', 'purple', 'teal', 'red']
+    
+    html = '<div class="summary-grid">'
+    for i, metric in enumerate(metrics):
+        color = colors[i % len(colors)]
+        prefix = metric.get('prefix', '')
+        value = metric.get('value', 0)
+        label = metric.get('label', '')
+        delta = metric.get('delta', '')
+        
+        # Format value
+        if isinstance(value, (int, float)):
+            if prefix == '$':
+                formatted_value = f"${value:,.2f}"
+            elif prefix == '%':
+                formatted_value = f"{value:.1f}%"
             else:
-                return f'<span class="currency-negative">{formatted}</span>'
-        except (ValueError, TypeError):
-            return str(value)
+                formatted_value = f"{prefix}{value:,}"
+        else:
+            formatted_value = f"{prefix}{value}"
+        
+        delta_html = f'<div class="delta">{delta}</div>' if delta else ''
+        
+        html += f'''
+        <div class="summary-card {color}">
+            <h2>{formatted_value}</h2>
+            <p>{label}</p>
+            {delta_html}
+        </div>
+        '''
     
-    # Number formatting
-    if number_columns and column in number_columns:
-        return format_number(value)
-    
-    # Percentage formatting
-    if percentage_columns and column in percentage_columns:
-        return format_percentage(value)
-    
-    # Status badge formatting
-    if status_column and column == status_column:
-        status = str(value).lower().replace(' ', '-')
-        return f'<span class="status-badge status-{status}">{value}</span>'
-    
-    return str(value)
-
-
-# =============================================================================
-# METRIC CARDS
-# =============================================================================
-
-def render_metric_card(label, value, delta=None, delta_color="normal", 
-                       icon=None, is_currency=True, currency='USD'):
-    """
-    Render an enhanced metric card.
-    
-    Args:
-        label: Metric label
-        value: Metric value
-        delta: Change value (optional)
-        delta_color: "normal", "inverse", or "off"
-        icon: Emoji icon (optional)
-        is_currency: Whether to format as currency
-        currency: Currency type
-    """
-    if is_currency:
-        formatted_value = format_currency(value, currency)
-    else:
-        formatted_value = format_number(value) if isinstance(value, (int, float)) else str(value)
-    
-    if icon:
-        label = f"{icon} {label}"
-    
-    if delta is not None:
-        st.metric(label, formatted_value, delta=delta, delta_color=delta_color)
-    else:
-        st.metric(label, formatted_value)
-
-
-def render_summary_cards(metrics, columns=4, currency='USD'):
-    """
-    Render a row of summary metric cards.
-    
-    Args:
-        metrics: List of dicts with keys: label, value, delta (optional), 
-                 icon (optional), is_currency (default True)
-        columns: Number of columns
-        currency: Currency type
-    """
-    cols = st.columns(columns)
-    
-    for idx, metric in enumerate(metrics):
-        with cols[idx % columns]:
-            render_metric_card(
-                label=metric.get('label', ''),
-                value=metric.get('value', 0),
-                delta=metric.get('delta'),
-                delta_color=metric.get('delta_color', 'normal'),
-                icon=metric.get('icon'),
-                is_currency=metric.get('is_currency', True),
-                currency=currency
-            )
-
-
-# =============================================================================
-# QUICK DISPLAY FUNCTIONS
-# =============================================================================
-
-def display_income_table(df, title="Income Records"):
-    """Display income/revenue table with proper formatting"""
-    if df.empty:
-        st.info("No income records to display")
-        return
-    
-    render_styled_table(
-        df,
-        title=title,
-        currency_columns=['amount', 'Amount', 'revenue', 'Revenue', 'total', 'Total'],
-        number_columns=['passengers', 'Passengers', 'trips', 'Trips'],
-        status_column='status' if 'status' in df.columns else None
-    )
-
-
-def display_expense_table(df, title="Expenses"):
-    """Display expense table with proper formatting"""
-    if df.empty:
-        st.info("No expense records to display")
-        return
-    
-    render_styled_table(
-        df,
-        title=title,
-        currency_columns=['amount', 'Amount', 'cost', 'Cost', 'total', 'Total'],
-        status_column='status' if 'status' in df.columns else None
-    )
-
-
-def display_employee_table(df, title="Employees"):
-    """Display employee table with proper formatting"""
-    if df.empty:
-        st.info("No employee records to display")
-        return
-    
-    render_styled_table(
-        df,
-        title=title,
-        currency_columns=['salary', 'Salary', 'net_pay', 'Net Pay', 'gross', 'Gross'],
-        status_column='status' if 'status' in df.columns else None
-    )
-
-
-def display_payroll_table(df, title="Payroll"):
-    """Display payroll table with proper formatting"""
-    if df.empty:
-        st.info("No payroll records to display")
-        return
-    
-    render_styled_table(
-        df,
-        title=title,
-        currency_columns=['base_salary', 'commission_amount', 'bonuses', 'gross_earnings', 
-                         'total_deductions', 'net_pay', 'Base Salary', 'Commission',
-                         'Bonuses', 'Gross', 'Deductions', 'Net Pay'],
-        number_columns=['total_trips', 'Trips', 'days_worked', 'Days'],
-        status_column='status' if 'status' in df.columns else None
-    )
+    html += '</div>'
+    st.markdown(html, unsafe_allow_html=True)

@@ -244,33 +244,38 @@ def get_fuel_efficiency_by_driver(start_date=None, end_date=None):
     """
     conn = get_connection()
     
-    # Get trips per driver per bus
+    # Get trips per driver per bus from INCOME table
     trip_query = """
         SELECT 
             driver_name,
             bus_number,
             COUNT(*) as trip_count,
-            SUM(passengers) as total_passengers,
-            SUM(revenue) as total_revenue
-        FROM trips
-        WHERE driver_name IS NOT NULL
+            COALESCE(SUM(passengers), 0) as total_passengers,
+            COALESCE(SUM(amount), 0) as total_revenue
+        FROM income
+        WHERE driver_name IS NOT NULL AND driver_name != ''
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        trip_query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        trip_query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        trip_query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        trip_query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
     trip_query += " GROUP BY driver_name, bus_number"
     
     try:
         trip_df = pd.read_sql_query(trip_query, get_engine(), params=params)
+        # Ensure numeric columns
+        for col in ['trip_count', 'total_passengers', 'total_revenue']:
+            if col in trip_df.columns:
+                trip_df[col] = pd.to_numeric(trip_df[col], errors='coerce').fillna(0)
     except Exception as e:
+        print(f"Error in driver trips: {e}")
         trip_df = pd.DataFrame()
     
     # Get fuel efficiency per bus

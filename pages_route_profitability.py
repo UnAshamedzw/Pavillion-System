@@ -67,30 +67,38 @@ def get_trip_revenue_by_route(start_date=None, end_date=None):
         SELECT 
             route_name as route,
             COUNT(*) as trip_count,
-            SUM(passengers) as total_passengers,
-            SUM(revenue) as total_revenue,
-            AVG(passengers) as avg_passengers,
-            AVG(revenue) as avg_revenue_per_trip,
-            AVG(revenue_per_passenger) as avg_revenue_per_passenger
-        FROM trips
-        WHERE route_name IS NOT NULL
+            COALESCE(SUM(passengers), 0) as total_passengers,
+            COALESCE(SUM(amount), 0) as total_revenue,
+            COALESCE(AVG(passengers), 0) as avg_passengers,
+            COALESCE(AVG(amount), 0) as avg_revenue_per_trip,
+            CASE WHEN SUM(passengers) > 0 THEN SUM(amount) / SUM(passengers) ELSE 0 END as avg_revenue_per_passenger
+        FROM income
+        WHERE route IS NOT NULL AND route != ''
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
-    query += " GROUP BY route_name ORDER BY total_revenue DESC"
+    query += " GROUP BY route ORDER BY total_revenue DESC"
     
     try:
         df = pd.read_sql_query(query, get_engine(), params=tuple(params) if params else None)
-    except:
+        # Rename route to route_name for compatibility
+        if 'route' in df.columns:
+            df = df.rename(columns={'route': 'route_name'})
+        # Ensure numeric columns
+        for col in ['total_passengers', 'total_revenue', 'avg_passengers', 'avg_revenue_per_trip']:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+    except Exception as e:
+        print(f"Error in route revenue: {e}")
         df = pd.DataFrame()
     
     conn.close()
@@ -127,33 +135,33 @@ def get_maintenance_by_route(start_date=None, end_date=None):
     
     try:
         maint_df = pd.read_sql_query(maint_query, get_engine(), params=params)
-    except:
+    except Exception as e:
         maint_df = pd.DataFrame()
     
-    # Get trip distribution per bus per route
+    # Get trip distribution per bus per route from INCOME table
     trip_query = """
         SELECT 
             bus_number,
-            route_name,
+            route as route_name,
             COUNT(*) as trip_count
-        FROM trips
-        WHERE route_name IS NOT NULL
+        FROM income
+        WHERE route IS NOT NULL AND route != ''
     """
     
     trip_params = []
     if start_date:
-        trip_query += f" AND trip_date >= {ph}"
-        trip_params.append(start_date)
+        trip_query += f" AND date >= {ph}"
+        trip_params.append(str(start_date))
     
     if end_date:
-        trip_query += f" AND trip_date <= {ph}"
-        trip_params.append(end_date)
+        trip_query += f" AND date <= {ph}"
+        trip_params.append(str(end_date))
     
     trip_query += " GROUP BY bus_number, route_name"
     
     try:
         trip_dist_df = pd.read_sql_query(trip_query, get_engine(), params=trip_params)
-    except:
+    except Exception as e:
         trip_dist_df = pd.DataFrame()
     
     conn.close()
@@ -219,33 +227,33 @@ def get_fuel_by_route(start_date=None, end_date=None):
     
     try:
         fuel_df = pd.read_sql_query(fuel_query, get_engine(), params=params)
-    except:
+    except Exception as e:
         fuel_df = pd.DataFrame()
     
-    # Get trip distribution
+    # Get trip distribution from INCOME table
     trip_query = """
         SELECT 
             bus_number,
-            route_name,
+            route as route_name,
             COUNT(*) as trip_count
-        FROM trips
-        WHERE route_name IS NOT NULL
+        FROM income
+        WHERE route IS NOT NULL AND route != ''
     """
     
     trip_params = []
     if start_date:
-        trip_query += f" AND trip_date >= {ph}"
-        trip_params.append(start_date)
+        trip_query += f" AND date >= {ph}"
+        trip_params.append(str(start_date))
     
     if end_date:
-        trip_query += f" AND trip_date <= {ph}"
-        trip_params.append(end_date)
+        trip_query += f" AND date <= {ph}"
+        trip_params.append(str(end_date))
     
-    trip_query += " GROUP BY bus_number, route_name"
+    trip_query += " GROUP BY bus_number, route"
     
     try:
         trip_dist_df = pd.read_sql_query(trip_query, get_engine(), params=trip_params)
-    except:
+    except Exception as e:
         trip_dist_df = pd.DataFrame()
     
     conn.close()
@@ -294,36 +302,36 @@ def get_driver_costs_by_route(start_date=None, end_date=None):
         avg_monthly_salary = payroll_df['avg_salary'].values[0] if not payroll_df.empty else 500
         if pd.isna(avg_monthly_salary):
             avg_monthly_salary = 500  # Default estimate
-    except:
+    except Exception as e:
         avg_monthly_salary = 500
     
     # Estimate daily wage (assuming 26 working days)
     daily_wage = avg_monthly_salary / 26
     
-    # Get trip counts per route
+    # Get trip counts per route from INCOME table
     trip_query = """
         SELECT 
-            route_name as route,
+            route as route,
             COUNT(*) as trip_count
-        FROM trips
-        WHERE route_name IS NOT NULL
+        FROM income
+        WHERE route IS NOT NULL AND route != ''
     """
     params = []
     ph = '%s' if USE_POSTGRES else '?'
     
     if start_date:
-        trip_query += f" AND trip_date >= {ph}"
-        params.append(start_date)
+        trip_query += f" AND date >= {ph}"
+        params.append(str(start_date))
     
     if end_date:
-        trip_query += f" AND trip_date <= {ph}"
-        params.append(end_date)
+        trip_query += f" AND date <= {ph}"
+        params.append(str(end_date))
     
-    trip_query += " GROUP BY route_name"
+    trip_query += " GROUP BY route"
     
     try:
         trip_df = pd.read_sql_query(trip_query, get_engine(), params=params)
-    except:
+    except Exception as e:
         trip_df = pd.DataFrame()
     
     conn.close()
@@ -426,19 +434,19 @@ def get_monthly_route_trends(route_name, months=6):
                 month_end = (month_end.replace(day=1) - timedelta(days=1))
             month_start = month_end.replace(day=1)
         
-        # Get trip revenue for this month
+        # Get trip revenue for this month from INCOME table
         ph = '%s' if USE_POSTGRES else '?'
         
         try:
             query = f"""
                 SELECT 
-                    SUM(revenue) as revenue,
-                    SUM(passengers) as passengers,
+                    COALESCE(SUM(amount), 0) as revenue,
+                    COALESCE(SUM(passengers), 0) as passengers,
                     COUNT(*) as trips
-                FROM trips
-                WHERE route_name = {ph}
-                AND trip_date >= {ph}
-                AND trip_date <= {ph}
+                FROM income
+                WHERE route = {ph}
+                AND date >= {ph}
+                AND date <= {ph}
             """
             
             cursor = conn.cursor()
