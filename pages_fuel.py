@@ -452,7 +452,7 @@ def fuel_entry_page():
             filter_start = st.date_input("From Date", value=datetime.now().date() - timedelta(days=30), key="fuel_history_start")
         
         with col3:
-            filter_end = st.date_input("To Date", value=datetime.now().date(), key="history_end")
+            filter_end = st.date_input("To Date", value=datetime.now().date(), key="fuel_history_end")
         
         # Get bus number for filter
         filter_bus_number = None
