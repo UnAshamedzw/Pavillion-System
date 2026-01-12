@@ -1076,7 +1076,7 @@ def trip_analysis_page():
         daily_summary = get_daily_trip_summary(str(start_date), str(end_date))
         
         if not daily_summary.empty:
-            daily_summary['trip_date'] = pd.to_datetime(daily_summary['trip_date'])
+            daily_summary['trip_date'] = pd.to_datetime(daily_summary['trip_date'], format='mixed')
             
             # Revenue trend
             fig = px.line(
